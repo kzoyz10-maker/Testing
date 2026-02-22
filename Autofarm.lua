@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.25) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.30) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.25 (Sapling Priority)" 
+getgenv().ScriptVersion = "Auto Farm v8.30 (Deep Sapling Scanner)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -23,15 +23,13 @@ LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickBu
 
 getgenv().MasterAutoFarm = false; 
 getgenv().AutoCollect = false; 
-getgenv().AutoSaplingMode = false; -- Variabel Baru
+getgenv().AutoSaplingMode = false; 
 getgenv().HitCount = 3;
 getgenv().BreakDelayMs = 150; 
 getgenv().WaitDropMs = 250;  
 getgenv().WalkSpeedMs = 100; 
 
--- Menyimpan daftar tile yang dipilih (Default: 1 blok di atas player)
 getgenv().SelectedTiles = {{x = 0, y = 1}}
-
 getgenv().IsGhosting = false
 getgenv().HoldCFrame = nil
 
@@ -116,7 +114,7 @@ end
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
 CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
-CreateToggle(TargetPage, "🌱 Auto Sapling Mode", "AutoSaplingMode") -- Toggle Baru
+CreateToggle(TargetPage, "🌱 Only Collect Sapling", "AutoSaplingMode") -- Toggle Prioritas
 CreateInput(TargetPage, "Wait Drop (ms)", 250, "WaitDropMs") 
 CreateInput(TargetPage, "Walk Speed (ms)", 100, "WalkSpeedMs") 
 CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs") 
@@ -155,19 +153,15 @@ local function GetPlayerGridPosition()
     return nil, nil
 end
 
+-- 🌟 SISTEM DEEP SCAN: Cek sampai ke akar untuk mencari kata "Sapling"
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
+    local foundSapling = false
+    local foundAny = false
+
     for _, folder in ipairs(TargetFolders) do
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
-                
-                -- 🌟 FILTER SAPLING: Jika aktif, abaikan drop yang bukan Sapling
-                if getgenv().AutoSaplingMode and typeof(obj.Name) == "string" then
-                    if not string.match(string.lower(obj.Name), "sapling") then
-                        continue -- Lewati objek ini, cari yang lain
-                    end
-                end
-
                 local pos = nil
                 if obj:IsA("BasePart") then pos = obj.Position
                 elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
@@ -179,12 +173,41 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                 if pos then
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
-                    if dX == TargetGridX and dY == TargetGridY then return true end
+                    
+                    if dX == TargetGridX and dY == TargetGridY then
+                        foundAny = true
+                        
+                        -- Cek apakah objek ini adalah sapling (Cek nama dan isinya)
+                        local isSapling = false
+                        if string.find(string.lower(obj.Name), "sapling") then
+                            isSapling = true
+                        else
+                            for _, child in ipairs(obj:GetDescendants()) do
+                                if string.find(string.lower(child.Name), "sapling") then
+                                    isSapling = true
+                                    break
+                                elseif child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then
+                                    isSapling = true
+                                    break
+                                end
+                            end
+                        end
+
+                        if isSapling then
+                            foundSapling = true
+                        end
+                    end
                 end
             end
         end
     end
-    return false
+    
+    -- Kalau mode Only Sapling nyala, kembalikan TRUE hanya jika ada sapling
+    if getgenv().AutoSaplingMode then
+        return foundSapling
+    else
+        return foundAny
+    end
 end
 
 local function WalkGridSync(TargetX, TargetY)
@@ -242,6 +265,7 @@ task.spawn(function()
                     if getgenv().AutoCollect then
                         task.wait(getgenv().WaitDropMs / 1000) 
                         
+                        -- Pengecekan krusial: Jika Only Sapling aktif, fungsi ini hanya True saat ada Sapling
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
                             
                             local char = LP.Character
