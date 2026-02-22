@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.20) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.25) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.20 (Tile Selector Update)" 
+getgenv().ScriptVersion = "Auto Farm v8.25 (Sapling Priority)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -23,12 +23,13 @@ LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickBu
 
 getgenv().MasterAutoFarm = false; 
 getgenv().AutoCollect = false; 
+getgenv().AutoSaplingMode = false; -- Variabel Baru
 getgenv().HitCount = 3;
 getgenv().BreakDelayMs = 150; 
 getgenv().WaitDropMs = 250;  
 getgenv().WalkSpeedMs = 100; 
 
--- VARIABEL BARU: Menyimpan daftar tile yang dipilih (Default: 1 blok di atas player)
+-- Menyimpan daftar tile yang dipilih (Default: 1 blok di atas player)
 getgenv().SelectedTiles = {{x = 0, y = 1}}
 
 getgenv().IsGhosting = false
@@ -51,10 +52,10 @@ local Theme = {
     Item = Color3.fromRGB(45, 45, 45), 
     Text = Color3.fromRGB(255, 255, 255), 
     Purple = Color3.fromRGB(140, 80, 255),
-    DarkBlue = Color3.fromRGB(25, 30, 45),    -- Warna modal background
-    TileOff = Color3.fromRGB(45, 55, 80),     -- Warna tile belum dipilih
-    TileOn = Color3.fromRGB(240, 160, 60),    -- Warna tile terpilih (Orange)
-    TileYou = Color3.fromRGB(100, 200, 100),  -- Warna YOU (Green)
+    DarkBlue = Color3.fromRGB(25, 30, 45),    
+    TileOff = Color3.fromRGB(45, 55, 80),     
+    TileOn = Color3.fromRGB(240, 160, 60),    
+    TileYou = Color3.fromRGB(100, 200, 100),  
 }
 
 function CreateToggle(Parent, Text, Var) 
@@ -65,95 +66,62 @@ function CreateToggle(Parent, Text, Var)
     Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end end) 
 end
 
--- 🌟 FUNGSI BARU: Create Input 🌟
 function CreateInput(Parent, Text, Default, Var)
     local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
     local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.6, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; 
-    
     local InputBg = Instance.new("Frame"); InputBg.Parent = Frame; InputBg.BackgroundColor3 = Color3.fromRGB(25, 25, 25); InputBg.Size = UDim2.new(0.3, 0, 0, 25); InputBg.Position = UDim2.new(1, -10, 0.5, 0); InputBg.AnchorPoint = Vector2.new(1, 0.5); Instance.new("UICorner", InputBg).CornerRadius = UDim.new(0, 4)
     local TextBox = Instance.new("TextBox"); TextBox.Parent = InputBg; TextBox.BackgroundTransparency = 1; TextBox.Size = UDim2.new(1, 0, 1, 0); TextBox.Font = Enum.Font.GothamSemibold; TextBox.TextSize = 12; TextBox.TextColor3 = Color3.new(1,1,1); TextBox.Text = tostring(Default)
-    
     TextBox.FocusLost:Connect(function()
         local num = tonumber(TextBox.Text)
         if num then getgenv()[Var] = math.floor(num) else TextBox.Text = tostring(getgenv()[Var]) end
     end)
 end
 
--- 🌟 FUNGSI BARU: Buka Modal Grid 🌟
 function CreateTileSelectorButton(Parent)
     local Btn = Instance.new("TextButton"); Btn.Parent = Parent; Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 40); Btn.Text = "📝 Select Farm Tiles"; Btn.TextColor3 = Theme.Text; Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.AutoButtonColor = true; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    
     Btn.MouseButton1Click:Connect(function()
-        local ScreenGui = Instance.new("ScreenGui")
-        ScreenGui.Name = "KzoyzTileModal"
-        ScreenGui.Parent = game:GetService("CoreGui") or LP.PlayerGui
+        local ScreenGui = Instance.new("ScreenGui"); ScreenGui.Name = "KzoyzTileModal"; ScreenGui.Parent = game:GetService("CoreGui") or LP.PlayerGui
+        local Overlay = Instance.new("TextButton"); Overlay.Parent = ScreenGui; Overlay.Size = UDim2.new(1, 0, 1, 0); Overlay.BackgroundColor3 = Color3.new(0,0,0); Overlay.BackgroundTransparency = 0.6; Overlay.Text = ""; Overlay.AutoButtonColor = false
+        local Panel = Instance.new("Frame"); Panel.Parent = Overlay; Panel.BackgroundColor3 = Theme.DarkBlue; Panel.Size = UDim2.new(0, 260, 0, 340); Panel.Position = UDim2.new(0.5, 0, 0.5, 0); Panel.AnchorPoint = Vector2.new(0.5, 0.5); Instance.new("UICorner", Panel).CornerRadius = UDim.new(0, 10)
+        local Title = Instance.new("TextLabel"); Title.Parent = Panel; Title.Text = "Select Farm Tiles"; Title.TextColor3 = Color3.new(1,1,1); Title.Font = Enum.Font.GothamBold; Title.TextSize = 16; Title.Size = UDim2.new(1, 0, 0, 40); Title.BackgroundTransparency = 1
+        local GridContainer = Instance.new("Frame"); GridContainer.Parent = Panel; GridContainer.Size = UDim2.new(0, 220, 0, 220); GridContainer.Position = UDim2.new(0.5, 0, 0, 45); GridContainer.AnchorPoint = Vector2.new(0.5, 0); GridContainer.BackgroundTransparency = 1
+        local UIGrid = Instance.new("UIGridLayout"); UIGrid.Parent = GridContainer; UIGrid.CellSize = UDim2.new(0, 40, 0, 40); UIGrid.CellPadding = UDim2.new(0, 5, 0, 5); UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
         
-        local Overlay = Instance.new("TextButton")
-        Overlay.Parent = ScreenGui; Overlay.Size = UDim2.new(1, 0, 1, 0); Overlay.BackgroundColor3 = Color3.new(0,0,0); Overlay.BackgroundTransparency = 0.6; Overlay.Text = ""; Overlay.AutoButtonColor = false
-        
-        local Panel = Instance.new("Frame")
-        Panel.Parent = Overlay; Panel.BackgroundColor3 = Theme.DarkBlue; Panel.Size = UDim2.new(0, 260, 0, 340); Panel.Position = UDim2.new(0.5, 0, 0.5, 0); Panel.AnchorPoint = Vector2.new(0.5, 0.5); Instance.new("UICorner", Panel).CornerRadius = UDim.new(0, 10)
-        
-        local Title = Instance.new("TextLabel")
-        Title.Parent = Panel; Title.Text = "Select Farm Tiles"; Title.TextColor3 = Color3.new(1,1,1); Title.Font = Enum.Font.GothamBold; Title.TextSize = 16; Title.Size = UDim2.new(1, 0, 0, 40); Title.BackgroundTransparency = 1
-        
-        local GridContainer = Instance.new("Frame")
-        GridContainer.Parent = Panel; GridContainer.Size = UDim2.new(0, 220, 0, 220); GridContainer.Position = UDim2.new(0.5, 0, 0, 45); GridContainer.AnchorPoint = Vector2.new(0.5, 0); GridContainer.BackgroundTransparency = 1
-        
-        local UIGrid = Instance.new("UIGridLayout")
-        UIGrid.Parent = GridContainer; UIGrid.CellSize = UDim2.new(0, 40, 0, 40); UIGrid.CellPadding = UDim2.new(0, 5, 0, 5); UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
-        
-        local yLevels = {3, 2, 1, 0, -1} -- Kordinat Y: 3(Paling atas) s/d -1(Bawah)
-        local xLevels = {-2, -1, 0, 1, 2} -- Kordinat X: -2(Kiri) s/d 2(Kanan)
+        local yLevels = {3, 2, 1, 0, -1} 
+        local xLevels = {-2, -1, 0, 1, 2} 
         
         for _, y in ipairs(yLevels) do
             for _, x in ipairs(xLevels) do
-                local Tile = Instance.new("TextButton")
-                Tile.Parent = GridContainer; Tile.Text = ""; Tile.Font = Enum.Font.GothamBold; Tile.TextSize = 10; Tile.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Tile).CornerRadius = UDim.new(0, 8)
-                
+                local Tile = Instance.new("TextButton"); Tile.Parent = GridContainer; Tile.Text = ""; Tile.Font = Enum.Font.GothamBold; Tile.TextSize = 10; Tile.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Tile).CornerRadius = UDim.new(0, 8)
                 local isSelected = false
-                for _, v in ipairs(getgenv().SelectedTiles) do
-                    if v.x == x and v.y == y then isSelected = true; break end
-                end
-                
+                for _, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then isSelected = true; break end end
                 if x == 0 and y == 0 then
-                    Tile.Text = "I'm Here"
-                    Tile.BackgroundColor3 = Theme.TileYou
-                    Tile.AutoButtonColor = false
+                    Tile.Text = "YOU"; Tile.BackgroundColor3 = Theme.TileYou; Tile.AutoButtonColor = false
                 else
                     Tile.BackgroundColor3 = isSelected and Theme.TileOn or Theme.TileOff
                     Tile.MouseButton1Click:Connect(function()
                         local foundIdx = nil
-                        for i, v in ipairs(getgenv().SelectedTiles) do
-                            if v.x == x and v.y == y then foundIdx = i; break end
-                        end
-                        if foundIdx then
-                            table.remove(getgenv().SelectedTiles, foundIdx)
-                            Tile.BackgroundColor3 = Theme.TileOff
-                        else
-                            table.insert(getgenv().SelectedTiles, {x=x, y=y})
-                            Tile.BackgroundColor3 = Theme.TileOn
-                        end
+                        for i, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then foundIdx = i; break end end
+                        if foundIdx then table.remove(getgenv().SelectedTiles, foundIdx); Tile.BackgroundColor3 = Theme.TileOff
+                        else table.insert(getgenv().SelectedTiles, {x=x, y=y}); Tile.BackgroundColor3 = Theme.TileOn end
                     end)
                 end
             end
         end
-        
-        local DoneBtn = Instance.new("TextButton")
-        DoneBtn.Parent = Panel; DoneBtn.BackgroundColor3 = Theme.TileYou; DoneBtn.Size = UDim2.new(0, 150, 0, 40); DoneBtn.Position = UDim2.new(0.5, 0, 1, -20); DoneBtn.AnchorPoint = Vector2.new(0.5, 1); DoneBtn.Text = "Done"; DoneBtn.TextColor3 = Color3.new(1,1,1); DoneBtn.Font = Enum.Font.GothamBold; DoneBtn.TextSize = 14; Instance.new("UICorner", DoneBtn).CornerRadius = UDim.new(0, 8)
-        
+        local DoneBtn = Instance.new("TextButton"); DoneBtn.Parent = Panel; DoneBtn.BackgroundColor3 = Theme.TileYou; DoneBtn.Size = UDim2.new(0, 150, 0, 40); DoneBtn.Position = UDim2.new(0.5, 0, 1, -20); DoneBtn.AnchorPoint = Vector2.new(0.5, 1); DoneBtn.Text = "Done"; DoneBtn.TextColor3 = Color3.new(1,1,1); DoneBtn.Font = Enum.Font.GothamBold; DoneBtn.TextSize = 14; Instance.new("UICorner", DoneBtn).CornerRadius = UDim.new(0, 8)
         DoneBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
     end)
 end
 
 -- Inject elemen ke UI
-CreateToggle(TargetPage, "Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "Auto Collect", "AutoCollect") 
-CreateInput(TargetPage, "Scan Speed (ms)", 350, "WaitDropMs") 
-CreateInput(TargetPage, "Collect Speed (ms)", 100, "WalkSpeedMs") 
+CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
+CreateToggle(TargetPage, "🌱 Auto Sapling Mode", "AutoSaplingMode") -- Toggle Baru
+CreateInput(TargetPage, "Wait Drop (ms)", 250, "WaitDropMs") 
+CreateInput(TargetPage, "Walk Speed (ms)", 100, "WalkSpeedMs") 
 CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs") 
 CreateInput(TargetPage, "Hit Count", 3, "HitCount") 
-CreateTileSelectorButton(TargetPage) -- Tombol Panggil Modal 5x5
+CreateTileSelectorButton(TargetPage) 
 
 local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
@@ -192,6 +160,14 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     for _, folder in ipairs(TargetFolders) do
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
+                
+                -- 🌟 FILTER SAPLING: Jika aktif, abaikan drop yang bukan Sapling
+                if getgenv().AutoSaplingMode and typeof(obj.Name) == "string" then
+                    if not string.match(string.lower(obj.Name), "sapling") then
+                        continue -- Lewati objek ini, cari yang lain
+                    end
+                end
+
                 local pos = nil
                 if obj:IsA("BasePart") then pos = obj.Position
                 elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
@@ -233,7 +209,6 @@ local function WalkGridSync(TargetX, TargetY)
     end
 end
 
--- 🌟 LOOP SINKRONISASI UTAMA (MENGGUNAKAN SELECTED TILES) 🌟
 task.spawn(function() 
     while true do 
         if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
@@ -250,7 +225,6 @@ task.spawn(function()
                     _, ItemIndex = getgenv().GameInventoryModule.GetSelectedItem() 
                 end 
                 
-                -- LOOP KE SETIAP TILE YANG DIPILIH DARI MODAL --
                 for _, offset in ipairs(getgenv().SelectedTiles) do 
                     if not getgenv().MasterAutoFarm then break end 
                     
