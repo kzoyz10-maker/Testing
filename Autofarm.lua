@@ -99,7 +99,7 @@ function CreateTileSelectorButton(Parent)
                 local Tile = Instance.new("TextButton"); Tile.Parent = GridContainer; Tile.Text = ""; Tile.Font = Enum.Font.GothamBold; Tile.TextSize = 10; Tile.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Tile).CornerRadius = UDim.new(0, 8)
                 
                 -- Tetap berikan teks "YOU" di posisi tengah (0,0) agar user tau posisi karakternya
-                if x == 0 and y == 0 then Tile.Text = "YOU" end 
+                if x == 0 and y == 0 then Tile.Text = "I'm Here" end 
 
                 local isSelected = false
                 for _, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then isSelected = true; break end end
@@ -121,12 +121,12 @@ function CreateTileSelectorButton(Parent)
 end
 
 -- Inject elemen ke UI
-CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
-CreateToggle(TargetPage, "🌱 Only Collect Sapling", "AutoSaplingMode") 
-CreateToggle(TargetPage, "🛡️ Anti-AFK", "AntiAFK")
-CreateInput(TargetPage, "Wait Drop (ms)", 250, "WaitDropMs") 
-CreateInput(TargetPage, "Walk Speed (ms)", 100, "WalkSpeedMs") 
+CreateToggle(TargetPage, "Auto Farm", "MasterAutoFarm") 
+CreateToggle(TargetPage, "Auto Collect", "AutoCollect") 
+CreateToggle(TargetPage, "Only Collect Sapling", "AutoSaplingMode") 
+CreateToggle(TargetPage, "Anti-AFK", "AntiAFK")
+CreateInput(TargetPage, "Delay Collect (ms)", 250, "WaitDropMs") 
+CreateInput(TargetPage, "Collect Speed (ms)", 100, "WalkSpeedMs") 
 CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs") 
 CreateInput(TargetPage, "Hit Count", 3, "HitCount") 
 CreateTileSelectorButton(TargetPage) 
