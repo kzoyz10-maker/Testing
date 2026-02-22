@@ -1,16 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.35) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.60) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.35 (Attribute Sapling Scanner)" 
-
--- ========================================== --
-getgenv().ActionDelay = 0.15 
-getgenv().GridSize = 4.5 
--- ========================================== --
+getgenv().ScriptVersion = "Auto Farm v8.60 (Mass Phase & Anti-AFK)" 
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -19,11 +14,23 @@ local UIS = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser") 
 local RunService = game:GetService("RunService")
 
-LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
+-- [[ ========================================================= ]] --
+-- [[ 🧹 CLEANUP SYSTEM (ANTI-STACKING / ANTI-NGEBUT)           ]] --
+-- [[ ========================================================= ]] --
+if getgenv().KzoyzFarmLoop then task.cancel(getgenv().KzoyzFarmLoop); getgenv().KzoyzFarmLoop = nil end
+if getgenv().KzoyzHeartbeat then getgenv().KzoyzHeartbeat:Disconnect(); getgenv().KzoyzHeartbeat = nil end
+if getgenv().KzoyzAntiAFK then getgenv().KzoyzAntiAFK:Disconnect(); getgenv().KzoyzAntiAFK = nil end
+-- [[ ========================================================= ]] --
+
+-- ========================================== --
+getgenv().ActionDelay = 0.15 
+getgenv().GridSize = 4.5 
+-- ========================================== --
 
 getgenv().MasterAutoFarm = false; 
 getgenv().AutoCollect = false; 
 getgenv().AutoSaplingMode = false; 
+getgenv().AntiAFK = true; 
 getgenv().HitCount = 3;
 getgenv().BreakDelayMs = 150; 
 getgenv().WaitDropMs = 250;  
@@ -47,21 +54,25 @@ getgenv().GameInventoryModule = FindInventoryModule()
 
 -- UI Theme
 local Theme = { 
-    Item = Color3.fromRGB(45, 45, 45), 
-    Text = Color3.fromRGB(255, 255, 255), 
-    Purple = Color3.fromRGB(140, 80, 255),
-    DarkBlue = Color3.fromRGB(25, 30, 45),    
-    TileOff = Color3.fromRGB(45, 55, 80),     
-    TileOn = Color3.fromRGB(240, 160, 60),    
-    TileYou = Color3.fromRGB(100, 200, 100),  
+    Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), 
+    Purple = Color3.fromRGB(140, 80, 255), DarkBlue = Color3.fromRGB(25, 30, 45),    
+    TileOff = Color3.fromRGB(45, 55, 80), TileOn = Color3.fromRGB(240, 160, 60), TileYou = Color3.fromRGB(100, 200, 100),  
 }
 
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton"); Btn.Parent = Parent; Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
     local T = Instance.new("TextLabel"); T.Parent = Btn; T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left; 
-    local IndBg = Instance.new("Frame"); IndBg.Parent = Btn; IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
-    local Dot = Instance.new("Frame"); Dot.Parent = IndBg; Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
-    Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end end) 
+    local IndBg = Instance.new("Frame"); IndBg.Parent = Btn; IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30); Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
+    local Dot = Instance.new("Frame"); Dot.Parent = IndBg; Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
+    
+    Btn.MouseButton1Click:Connect(function() 
+        getgenv()[Var] = not getgenv()[Var]; 
+        if getgenv()[Var] then 
+            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
+        else 
+            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
+        end 
+    end) 
 end
 
 function CreateInput(Parent, Text, Default, Var)
@@ -69,10 +80,7 @@ function CreateInput(Parent, Text, Default, Var)
     local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.6, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; 
     local InputBg = Instance.new("Frame"); InputBg.Parent = Frame; InputBg.BackgroundColor3 = Color3.fromRGB(25, 25, 25); InputBg.Size = UDim2.new(0.3, 0, 0, 25); InputBg.Position = UDim2.new(1, -10, 0.5, 0); InputBg.AnchorPoint = Vector2.new(1, 0.5); Instance.new("UICorner", InputBg).CornerRadius = UDim.new(0, 4)
     local TextBox = Instance.new("TextBox"); TextBox.Parent = InputBg; TextBox.BackgroundTransparency = 1; TextBox.Size = UDim2.new(1, 0, 1, 0); TextBox.Font = Enum.Font.GothamSemibold; TextBox.TextSize = 12; TextBox.TextColor3 = Color3.new(1,1,1); TextBox.Text = tostring(Default)
-    TextBox.FocusLost:Connect(function()
-        local num = tonumber(TextBox.Text)
-        if num then getgenv()[Var] = math.floor(num) else TextBox.Text = tostring(getgenv()[Var]) end
-    end)
+    TextBox.FocusLost:Connect(function() local num = tonumber(TextBox.Text); if num then getgenv()[Var] = math.floor(num) else TextBox.Text = tostring(getgenv()[Var]) end end)
 end
 
 function CreateTileSelectorButton(Parent)
@@ -85,16 +93,13 @@ function CreateTileSelectorButton(Parent)
         local GridContainer = Instance.new("Frame"); GridContainer.Parent = Panel; GridContainer.Size = UDim2.new(0, 220, 0, 220); GridContainer.Position = UDim2.new(0.5, 0, 0, 45); GridContainer.AnchorPoint = Vector2.new(0.5, 0); GridContainer.BackgroundTransparency = 1
         local UIGrid = Instance.new("UIGridLayout"); UIGrid.Parent = GridContainer; UIGrid.CellSize = UDim2.new(0, 40, 0, 40); UIGrid.CellPadding = UDim2.new(0, 5, 0, 5); UIGrid.SortOrder = Enum.SortOrder.LayoutOrder
         
-        local yLevels = {3, 2, 1, 0, -1} 
-        local xLevels = {-2, -1, 0, 1, 2} 
-        
+        local yLevels = {3, 2, 1, 0, -1}; local xLevels = {-2, -1, 0, 1, 2} 
         for _, y in ipairs(yLevels) do
             for _, x in ipairs(xLevels) do
                 local Tile = Instance.new("TextButton"); Tile.Parent = GridContainer; Tile.Text = ""; Tile.Font = Enum.Font.GothamBold; Tile.TextSize = 10; Tile.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Tile).CornerRadius = UDim.new(0, 8)
                 local isSelected = false
                 for _, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then isSelected = true; break end end
-                if x == 0 and y == 0 then
-                    Tile.Text = "I'm here"; Tile.BackgroundColor3 = Theme.TileYou; Tile.AutoButtonColor = false
+                if x == 0 and y == 0 then Tile.Text = "YOU"; Tile.BackgroundColor3 = Theme.TileYou; Tile.AutoButtonColor = false
                 else
                     Tile.BackgroundColor3 = isSelected and Theme.TileOn or Theme.TileOff
                     Tile.MouseButton1Click:Connect(function()
@@ -112,11 +117,12 @@ function CreateTileSelectorButton(Parent)
 end
 
 -- Inject elemen ke UI
-CreateToggle(TargetPage, "Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "Auto Collect", "AutoCollect") 
-CreateToggle(TargetPage, "Only Collect Sapling", "AutoSaplingMode") 
-CreateInput(TargetPage, "Delay Collect(ms)", 350, "WaitDropMs") 
-CreateInput(TargetPage, "Speed Collect(ms)", 100, "WalkSpeedMs") 
+CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
+CreateToggle(TargetPage, "🌱 Only Collect Sapling", "AutoSaplingMode") 
+CreateToggle(TargetPage, "🛡️ Anti-AFK", "AntiAFK")
+CreateInput(TargetPage, "Wait Drop (ms)", 250, "WaitDropMs") 
+CreateInput(TargetPage, "Walk Speed (ms)", 100, "WalkSpeedMs") 
 CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs") 
 CreateInput(TargetPage, "Hit Count", 3, "HitCount") 
 CreateTileSelectorButton(TargetPage) 
@@ -125,17 +131,19 @@ local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
-RunService.Heartbeat:Connect(function()
+getgenv().KzoyzAntiAFK = LP.Idled:Connect(function()
+    if getgenv().AntiAFK then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end
+end)
+
+getgenv().KzoyzHeartbeat = RunService.Heartbeat:Connect(function()
     if getgenv().AutoCollect then
         local highlights = workspace:FindFirstChild("TileHighligts") or workspace:FindFirstChild("TileHighlights")
         if highlights then pcall(function() highlights:ClearAllChildren() end) end
-
         if getgenv().IsGhosting then
             if getgenv().HoldCFrame then
                 local char = LP.Character
                 if char and char:FindFirstChild("HumanoidRootPart") then char.HumanoidRootPart.CFrame = getgenv().HoldCFrame end
             end
-            
             if PlayerMovement then
                 pcall(function()
                     PlayerMovement.VelocityY = 0; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true; PlayerMovement.Jumping = false
@@ -153,12 +161,9 @@ local function GetPlayerGridPosition()
     return nil, nil
 end
 
--- 🌟 SISTEM DEEP ATTRIBUTE SCANNER (Versi Sapling ID) 🌟
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
-    local foundSapling = false
-    local foundAny = false
-
+    local foundSapling = false; local foundAny = false
     for _, folder in ipairs(TargetFolders) do
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
@@ -176,51 +181,31 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                     
                     if dX == TargetGridX and dY == TargetGridY then
                         foundAny = true
-                        
-                        -- Cek apakah objek ini adalah sapling lewat Attributes
                         local isSapling = false
-                        
-                        -- 1. Cek dari Attribute objek utama
                         for _, attrValue in pairs(obj:GetAttributes()) do
-                            if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then
-                                isSapling = true
-                                break
-                            end
+                            if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end
                         end
-                        
-                        -- 2. Cek dari Anak-anaknya kalau belum ketemu
                         if not isSapling then
                             for _, child in ipairs(obj:GetDescendants()) do
-                                -- Cek di StringValue anak
-                                if child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then
-                                    isSapling = true
-                                    break
-                                end
-                                -- Cek di Attribute anak (misal part di dalam model)
+                                if child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then isSapling = true; break end
                                 for _, attrValue in pairs(child:GetAttributes()) do
-                                    if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then
-                                        isSapling = true
-                                        break
-                                    end
+                                    if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end
                                 end
                                 if isSapling then break end
                             end
                         end
-
                         if isSapling then foundSapling = true end
                     end
                 end
             end
         end
     end
-    
     if getgenv().AutoSaplingMode then return foundSapling else return foundAny end
 end
 
 local function WalkGridSync(TargetX, TargetY)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-    
     if MyHitbox then
         local startZ = MyHitbox.Position.Z
         local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
@@ -229,17 +214,16 @@ local function WalkGridSync(TargetX, TargetY)
         while (currentX ~= TargetX or currentY ~= TargetY) and getgenv().MasterAutoFarm do
             if currentX ~= TargetX then currentX = currentX + (TargetX > currentX and 1 or -1) 
             elseif currentY ~= TargetY then currentY = currentY + (TargetY > currentY and 1 or -1) end
-            
             local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
             MyHitbox.CFrame = CFrame.new(newWorldPos)
-            
             if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
             task.wait(getgenv().WalkSpeedMs / 1000) 
         end
     end
 end
 
-task.spawn(function() 
+-- Simpan Main Loop ke global variable
+getgenv().KzoyzFarmLoop = task.spawn(function() 
     while true do 
         if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
             local PosX, PosY = GetPlayerGridPosition()
@@ -255,85 +239,81 @@ task.spawn(function()
                     _, ItemIndex = getgenv().GameInventoryModule.GetSelectedItem() 
                 end 
                 
+                -- [[ FASE 1: PLACE SEMUA TILE ]] --
                 for _, offset in ipairs(getgenv().SelectedTiles) do 
                     if not getgenv().MasterAutoFarm then break end 
-                    
-                    local TargetGridX = BaseX + offset.x
-                    local TargetGridY = BaseY + offset.y
-                    local TGrid = Vector2.new(TargetGridX, TargetGridY) 
-                    
+                    local TGrid = Vector2.new(BaseX + offset.x, BaseY + offset.y) 
                     if ItemIndex then RemotePlace:FireServer(TGrid, ItemIndex); task.wait(getgenv().ActionDelay) end
-                    
+                end
+
+                -- [[ FASE 2: BREAK SEMUA TILE ]] --
+                for _, offset in ipairs(getgenv().SelectedTiles) do 
+                    if not getgenv().MasterAutoFarm then break end 
+                    local TGrid = Vector2.new(BaseX + offset.x, BaseY + offset.y) 
                     for hit = 1, getgenv().HitCount do 
                         if not getgenv().MasterAutoFarm then break end 
                         RemoteBreak:FireServer(TGrid); task.wait(getgenv().BreakDelayMs / 1000) 
                     end
+                end
+                
+                -- [[ FASE 3: COLLECT SEMUA DROP KALAU ADA ]] --
+                if getgenv().AutoCollect then
+                    task.wait(getgenv().WaitDropMs / 1000) 
                     
-                    if getgenv().AutoCollect then
-                        task.wait(getgenv().WaitDropMs / 1000) 
+                    -- Kumpulin dulu daftar tile yang ada sapling/dropnya
+                    local TilesToCollect = {}
+                    for _, offset in ipairs(getgenv().SelectedTiles) do
+                        local tx = BaseX + offset.x
+                        local ty = BaseY + offset.y
+                        if CheckDropsAtGrid(tx, ty) then table.insert(TilesToCollect, {x = tx, y = ty}) end
+                    end
+                    
+                    -- Eksekusi Ghosting hanya jika ada drop
+                    if #TilesToCollect > 0 and getgenv().MasterAutoFarm then
+                        local char = LP.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        local hum = char and char:FindFirstChildOfClass("Humanoid")
+                        local HitboxFolder = workspace:FindFirstChild("Hitbox")
+                        local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                         
-                        -- Pengecekan membaca Attributes Drop
-                        if CheckDropsAtGrid(TargetGridX, TargetGridY) then
-                            
-                            local char = LP.Character
-                            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                            local hum = char and char:FindFirstChildOfClass("Humanoid")
-                            local HitboxFolder = workspace:FindFirstChild("Hitbox")
-                            local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-                            
-                            local ExactHrpCF = hrp and hrp.CFrame
-                            local ExactHitboxCF = MyHitbox and MyHitbox.CFrame
-                            local ExactPMPos = nil
-                            if PlayerMovement then pcall(function() ExactPMPos = PlayerMovement.Position end) end
-                            
-                            if hrp then getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true end
-                            
-                            if hum then
-                                local animator = hum:FindFirstChildOfClass("Animator")
-                                local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
-                                for _, track in ipairs(tracks) do track:Stop(0) end
-                            end
-                            
-                            WalkGridSync(TargetGridX, TargetGridY)
-                            
+                        local ExactHrpCF = hrp and hrp.CFrame
+                        local ExactHitboxCF = MyHitbox and MyHitbox.CFrame
+                        local ExactPMPos = nil
+                        if PlayerMovement then pcall(function() ExactPMPos = PlayerMovement.Position end) end
+                        
+                        if hrp then getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true end
+                        if hum then
+                            local animator = hum:FindFirstChildOfClass("Animator")
+                            local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
+                            for _, track in ipairs(tracks) do track:Stop(0) end
+                        end
+                        
+                        -- Karakter jalan ngambil tiap titik drop secara beruntun
+                        for _, tile in ipairs(TilesToCollect) do
+                            if not getgenv().MasterAutoFarm then break end
+                            WalkGridSync(tile.x, tile.y)
                             local waitTimeout = 0
-                            while CheckDropsAtGrid(TargetGridX, TargetGridY) and waitTimeout < 15 and getgenv().MasterAutoFarm do
+                            while CheckDropsAtGrid(tile.x, tile.y) and waitTimeout < 15 and getgenv().MasterAutoFarm do
                                 task.wait(0.1); waitTimeout = waitTimeout + 1
                             end
-                            
-                            task.wait(0.1)
-                            WalkGridSync(BaseX, BaseY)
-                            
-                            if hrp and ExactHrpCF then 
-                                hrp.AssemblyLinearVelocity = Vector3.zero
-                                hrp.AssemblyAngularVelocity = Vector3.zero
-                                if MyHitbox and ExactHitboxCF then MyHitbox.CFrame = ExactHitboxCF; MyHitbox.AssemblyLinearVelocity = Vector3.zero end
-                                hrp.CFrame = ExactHrpCF
-                                
-                                if PlayerMovement and ExactPMPos then
-                                    pcall(function()
-                                        PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos
-                                        PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true
-                                    end)
-                                end
-                                
-                                RunService.Heartbeat:Wait(); RunService.Heartbeat:Wait()
-                                hrp.Anchored = false 
-                                
-                                for _ = 1, 2 do
-                                    if PlayerMovement and ExactPMPos then
-                                        pcall(function()
-                                            PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos
-                                            PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true
-                                        end)
-                                    end
-                                    RunService.Heartbeat:Wait()
-                                end
-                            end
-                            getgenv().IsGhosting = false 
                         end
+                        
+                        task.wait(0.1)
+                        WalkGridSync(BaseX, BaseY) -- Balik ke posisi awal
+                        
+                        -- Lepaskan Ghosting
+                        if hrp and ExactHrpCF then 
+                            hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
+                            if MyHitbox and ExactHitboxCF then MyHitbox.CFrame = ExactHitboxCF; MyHitbox.AssemblyLinearVelocity = Vector3.zero end
+                            hrp.CFrame = ExactHrpCF
+                            if PlayerMovement and ExactPMPos then pcall(function() PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true end) end
+                            RunService.Heartbeat:Wait(); RunService.Heartbeat:Wait()
+                            hrp.Anchored = false 
+                            for _ = 1, 2 do if PlayerMovement and ExactPMPos then pcall(function() PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos; PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end) end; RunService.Heartbeat:Wait() end
+                        end
+                        getgenv().IsGhosting = false 
                     end
-                end 
+                end
             end 
         else 
             task.wait(0.1) 
