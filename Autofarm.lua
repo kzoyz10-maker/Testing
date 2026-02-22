@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.15) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.16) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.15 (Pixel-Perfect Return)" 
+getgenv().ScriptVersion = "Auto Farm v8.16 (Anti-Bounce State)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -31,7 +31,6 @@ getgenv().BreakDelayMs = 150;
 getgenv().WaitDropMs = 250;  
 getgenv().WalkSpeedMs = 100; 
 
--- Variabel Ghosting
 getgenv().IsGhosting = false
 getgenv().HoldCFrame = nil
 
@@ -68,9 +67,8 @@ function CreateSlider(Parent, Text, Min, Max, Default, Var)
     SliderBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then Dragging = true; Update(i) end end); UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then Dragging = false end end); UIS.InputChanged:Connect(function(i) if Dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then Update(i) end end) 
 end
 
--- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect wooo", "AutoCollect") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect bbbb", "AutoCollect") 
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
 CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
@@ -83,29 +81,18 @@ local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
--- 🌟 LOOP PER FRAME (MANIPULASI PHYSICS & PEMBERSIHAN VISUAL) 🌟
 RunService.Heartbeat:Connect(function()
     if getgenv().AutoCollect then
         local highlights = workspace:FindFirstChild("TileHighligts") or workspace:FindFirstChild("TileHighlights")
         if highlights then pcall(function() highlights:ClearAllChildren() end) end
-
-        if getgenv().IsGhosting then
-            if getgenv().HoldCFrame then
-                local char = LP.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    char.HumanoidRootPart.CFrame = getgenv().HoldCFrame
-                end
-            end
-            
-            if PlayerMovement then
-                pcall(function()
-                    PlayerMovement.VelocityY = 0
-                    PlayerMovement.VelocityX = 0
-                    PlayerMovement.VelocityZ = 0
-                    PlayerMovement.Grounded = true
-                    PlayerMovement.Jumping = false
-                end)
-            end
+        
+        if getgenv().IsGhosting and PlayerMovement then
+            pcall(function()
+                PlayerMovement.VelocityY = 0
+                PlayerMovement.VelocityX = 0
+                PlayerMovement.Grounded = true
+                PlayerMovement.Jumping = false
+            end)
         end
     end
 end)
@@ -130,7 +117,6 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                     local firstPart = obj:FindFirstChildWhichIsA("BasePart")
                     if firstPart then pos = firstPart.Position end
                 end
-                
                 if pos then
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
@@ -145,26 +131,21 @@ end
 local function WalkGridSync(TargetX, TargetY)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-    
     if MyHitbox then
         local startZ = MyHitbox.Position.Z
         local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
         local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
-        
         while (currentX ~= TargetX or currentY ~= TargetY) and getgenv().MasterAutoFarm do
             if currentX ~= TargetX then currentX = currentX + (TargetX > currentX and 1 or -1) 
             elseif currentY ~= TargetY then currentY = currentY + (TargetY > currentY and 1 or -1) end
-            
             local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
             MyHitbox.CFrame = CFrame.new(newWorldPos)
-            
             if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
             task.wait(getgenv().WalkSpeedMs / 1000) 
         end
     end
 end
 
--- 🌟 LOOP SINKRONISASI UTAMA
 task.spawn(function() 
     while true do 
         if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
@@ -206,7 +187,6 @@ task.spawn(function()
                             local HitboxFolder = workspace:FindFirstChild("Hitbox")
                             local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                             
-                            -- 📷 SIMPAN KORDINAT ASLI SECARA PIKSEL-SEMPURNA (TIDAK DIBULATKAN KE GRID)
                             local ExactHrpCF = hrp and hrp.CFrame
                             local ExactHitboxCF = MyHitbox and MyHitbox.CFrame
                             local ExactPMPos = nil
@@ -216,12 +196,13 @@ task.spawn(function()
                                 getgenv().HoldCFrame = ExactHrpCF
                                 hrp.Anchored = true 
                                 getgenv().IsGhosting = true 
-                            end
-                            
-                            if hum then
-                                local animator = hum:FindFirstChildOfClass("Animator")
-                                local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
-                                for _, track in ipairs(tracks) do track:Stop(0) end
+                                
+                                -- 🧠 MATIKAN STATUS JATUH HUMANOID SEBELUM JALAN 🧠
+                                if hum then
+                                    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                                    hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+                                    hum:ChangeState(Enum.HumanoidStateType.Landed)
+                                end
                             end
                             
                             WalkGridSync(TargetGridX, TargetGridY)
@@ -234,27 +215,21 @@ task.spawn(function()
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
                             
-                            -- 🌟 RESTORASI KORDINAT ASLI SECARA ABSOLUT 🌟
                             if hrp and ExactHrpCF then 
+                                -- Matikan Momentum Fisika
                                 hrp.AssemblyLinearVelocity = Vector3.zero
-                                hrp.AssemblyAngularVelocity = Vector3.zero
+                                if MyHitbox then MyHitbox.AssemblyLinearVelocity = Vector3.zero end
                                 
-                                -- Kembalikan Hitbox persis ke titik piksel semula
-                                if MyHitbox and ExactHitboxCF then 
-                                    MyHitbox.CFrame = ExactHitboxCF 
-                                    MyHitbox.AssemblyLinearVelocity = Vector3.zero
-                                end
+                                -- 🌟 GUNAKAN PIVOT TO AGAR SELURUH BADAN & SAMBUNGAN PINDAH SEMPURNA 🌟
+                                if char then char:PivotTo(ExactHrpCF) end
+                                if MyHitbox and ExactHitboxCF then MyHitbox.CFrame = ExactHitboxCF end
                                 
-                                hrp.CFrame = ExactHrpCF
-                                
+                                -- Sinkron Otak Gamenya
                                 if PlayerMovement and ExactPMPos then
                                     pcall(function()
                                         PlayerMovement.Position = ExactPMPos
                                         PlayerMovement.OldPosition = ExactPMPos
-                                        PlayerMovement.VelocityX = 0
                                         PlayerMovement.VelocityY = 0
-                                        PlayerMovement.VelocityZ = 0
-                                        PlayerMovement.Grounded = true
                                     end)
                                 end
                                 
@@ -263,16 +238,11 @@ task.spawn(function()
                                 
                                 hrp.Anchored = false 
                                 
-                                for _ = 1, 2 do
-                                    if PlayerMovement and ExactPMPos then
-                                        pcall(function()
-                                            PlayerMovement.Position = ExactPMPos
-                                            PlayerMovement.OldPosition = ExactPMPos
-                                            PlayerMovement.VelocityY = 0
-                                            PlayerMovement.Grounded = true
-                                        end)
-                                    end
-                                    RunService.Heartbeat:Wait()
+                                -- 🧠 PAKSA HUMANOID MENDARAT DAN NYALAKAN LAGI STATUS JATUH 🧠
+                                if hum then
+                                    hum:ChangeState(Enum.HumanoidStateType.Landed)
+                                    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                                    hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
                                 end
                             end
                             
