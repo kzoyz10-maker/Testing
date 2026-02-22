@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.11) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.12) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.11 (Custom Physics Bypass)" 
+getgenv().ScriptVersion = "Auto Farm v8.12 (Perfect Landing & Clean UI)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -23,6 +23,7 @@ LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickBu
 
 getgenv().MasterAutoFarm = false; 
 getgenv().AutoCollect = false; 
+getgenv().HideHighlights = false; -- Toggle Baru
 getgenv().OffsetX = 0; 
 getgenv().OffsetY = 0; 
 getgenv().FarmAmount = 1; 
@@ -70,7 +71,8 @@ end
 
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect free", "AutoCollect") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
+CreateToggle(TargetPage, "🚫 Hide Tile Highlights", "HideHighlights") -- TOGGLE BARU
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
 CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
@@ -83,8 +85,22 @@ local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
--- 🌟 MANIPULASI CUSTOM PHYSICS (DARI DECOMPILED SCRIPT) 🌟
+-- 🌟 LOOP PER FRAME (MANIPULASI PHYSICS & VISUAL) 🌟
 RunService.Heartbeat:Connect(function()
+    -- Sembunyikan Tile Highlights (karena game mungkin nge-update ini tiap frame)
+    if getgenv().HideHighlights then
+        local highlights = workspace:FindFirstChild("TileHighligts") or workspace:FindFirstChild("TileHighlights")
+        if highlights then
+            for _, v in pairs(highlights:GetDescendants()) do
+                if v:IsA("BasePart") or v:IsA("Texture") or v:IsA("Decal") then
+                    v.Transparency = 1
+                elseif v:IsA("SelectionBox") or v:IsA("Highlight") then
+                    v.Enabled = false
+                end
+            end
+        end
+    end
+
     if getgenv().AutoCollect and getgenv().IsGhosting then
         -- 1. Kunci posisi visual CFrame
         if getgenv().HoldCFrame then
@@ -207,14 +223,12 @@ task.spawn(function()
                                 getgenv().IsGhosting = true 
                             end
                             
-                            -- Hentikan animasi bawaan jika ada sisa
                             if hum then
                                 local animator = hum:FindFirstChildOfClass("Animator")
                                 local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
                                 for _, track in ipairs(tracks) do track:Stop(0) end
                             end
                             
-                            -- JALAN KE BARANG
                             WalkGridSync(TargetGridX, TargetGridY)
                             
                             local waitTimeout = 0
@@ -222,13 +236,29 @@ task.spawn(function()
                                 task.wait(0.1); waitTimeout = waitTimeout + 1
                             end
                             
-                            -- BALIK KE BASE
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
                             task.wait(0.1)
                             
-                            -- LEPASKAN KUNCIAN
-                            if hrp then hrp.Anchored = false end
+                            -- 🌟 ANTI BENTURAN JATUH SAAT UN-ANCHOR 🌟
+                            if hrp and getgenv().HoldCFrame then 
+                                -- 1. Nol-kan sisa gravitasi fisik Roblox
+                                hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                                hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
+                                -- 2. Kunci posisi fisik tepat di CFrame terakhir
+                                hrp.CFrame = getgenv().HoldCFrame
+                                
+                                -- 3. Sinkronisasi Custom Physics game biar nggak kaget
+                                if PlayerMovement then
+                                    pcall(function()
+                                        PlayerMovement.Position = getgenv().HoldCFrame.Position
+                                        PlayerMovement.OldPosition = getgenv().HoldCFrame.Position
+                                    end)
+                                end
+                                
+                                -- Baru lepas jangkarnya
+                                hrp.Anchored = false 
+                            end
                             getgenv().IsGhosting = false 
                         end
                     end
