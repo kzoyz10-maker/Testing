@@ -1,14 +1,14 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & COLLECT (SYNCED LOOP)      ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & WALK COLLECT (v8.0)        ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v7.0 (Master Loop)" 
+getgenv().ScriptVersion = "Auto Farm v8.0 (Walk Collect)" 
 
 -- ========================================== --
-getgenv().ActionDelay = 0.15 -- Cooldown mutlak server game
+getgenv().ActionDelay = 0.15 
 getgenv().GridSize = 4.5 
 -- ========================================== --
 
@@ -20,12 +20,13 @@ local VirtualUser = game:GetService("VirtualUser")
 
 LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
 
-getgenv().MasterAutoFarm = false; -- 🌟 TOGGLE UTAMA DISEKUENS (PLACE + BREAK)
+getgenv().MasterAutoFarm = false; 
 getgenv().AutoCollect = false; 
 getgenv().OffsetX = 0; 
 getgenv().OffsetY = 0; 
 getgenv().FarmAmount = 1; 
-getgenv().HitCount = 3    
+getgenv().HitCount = 3;
+getgenv().BreakDelayMs = 150; -- 🌟 DEFAULT BREAK DELAY (150ms = 0.15s)
 
 local PlayerMovement
 task.spawn(function() pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
@@ -61,8 +62,9 @@ function CreateSlider(Parent, Text, Min, Max, Default, Var)
 end
 
 -- Inject elemen ke UI
-CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") -- Menyatukan Place & Break
-CreateToggle(TargetPage, "Auto Collect", "AutoCollect")
+CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
+CreateToggle(TargetPage, "Auto Collect (Walk)", "AutoCollect")
+CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") -- 🌟 INPUT KECEPATAN BREAK BARU
 CreateSlider(TargetPage, "Farm Offset X", -5, 5, 0, "OffsetX")
 CreateSlider(TargetPage, "Farm Offset Y", -5, 5, 0, "OffsetY")
 CreateSlider(TargetPage, "Farm Amount", 1, 5, 1, "FarmAmount")
@@ -76,7 +78,28 @@ local function GetPlayerGridPosition()
     if PlayerMovement and PlayerMovement.Position then return PlayerMovement.Position.X, PlayerMovement.Position.Y else local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"); if hrp then return hrp.Position.X, hrp.Position.Y end end return nil, nil
 end
 
--- 🌟 1. LOOP MASTER AUTO FARM (SINKRON!)
+-- 🌟 FUNGSI SCAN DROPS DI GRID TERTENTU
+local function CheckDropsAtGrid(TargetGridX, TargetGridY)
+    local dropFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("Items") or workspace:FindFirstChild("DroppedItems")
+    local itemsToScan = dropFolder and dropFolder:GetDescendants() or workspace:GetChildren()
+    
+    for _, obj in pairs(itemsToScan) do
+        -- Jika drop berupa Part biasa
+        if obj:IsA("BasePart") and obj.Name ~= "Baseplate" and not obj.Anchored then
+            local dX = math.floor(obj.Position.X / getgenv().GridSize + 0.5)
+            local dY = math.floor(obj.Position.Y / getgenv().GridSize + 0.5)
+            if dX == TargetGridX and dY == TargetGridY then return true end
+        -- Jika drop berupa Model (misal: Sapling, block, gems)
+        elseif obj:IsA("Model") and obj.PrimaryPart then
+            local pX = math.floor(obj.PrimaryPart.Position.X / getgenv().GridSize + 0.5)
+            local pY = math.floor(obj.PrimaryPart.Position.Y / getgenv().GridSize + 0.5)
+            if pX == TargetGridX and pY == TargetGridY then return true end
+        end
+    end
+    return false
+end
+
+-- 🌟 LOOP MASTER AUTO FARM + AUTO WALK COLLECT TERINTEGRASI
 task.spawn(function() 
     while true do 
         if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
@@ -93,31 +116,48 @@ task.spawn(function()
                     _, ItemIndex = getgenv().GameInventoryModule.GetSelectedItem() 
                 end 
                 
-                if ItemIndex then 
-                    for i = 0, getgenv().FarmAmount - 1 do 
-                        if not getgenv().MasterAutoFarm then break end 
-                        local TGrid = Vector2.new(X + getgenv().OffsetX + i, Y + getgenv().OffsetY) 
-                        
-                        -- LANGKAH A: PLACE ITEM
+                for i = 0, getgenv().FarmAmount - 1 do 
+                    if not getgenv().MasterAutoFarm then break end 
+                    
+                    local TargetGridX = X + getgenv().OffsetX + i
+                    local TargetGridY = Y + getgenv().OffsetY
+                    local TGrid = Vector2.new(TargetGridX, TargetGridY) 
+                    
+                    -- A. PLACE ITEM (Hanya jika ada item)
+                    if ItemIndex then
                         RemotePlace:FireServer(TGrid, ItemIndex) 
-                        task.wait(getgenv().ActionDelay) -- Tunggu server merespons
-                        
-                        -- LANGKAH B: BREAK ITEM (Dipukul HitCount kali)
-                        for hit = 1, getgenv().HitCount do 
-                            if not getgenv().MasterAutoFarm then break end 
-                            RemoteBreak:FireServer(TGrid) 
-                            task.wait(getgenv().ActionDelay) -- Tunggu server merespons
-                        end
-                    end 
-                else
-                    -- Jika item kosong, jalankan Break saja sebagai cadangan
-                    for i = 0, getgenv().FarmAmount - 1 do 
+                        task.wait(getgenv().ActionDelay) 
+                    end
+                    
+                    -- B. BREAK ITEM (Sesuai Break Delay dari Slider)
+                    for hit = 1, getgenv().HitCount do 
                         if not getgenv().MasterAutoFarm then break end 
-                        local TGrid = Vector2.new(X + getgenv().OffsetX + i, Y + getgenv().OffsetY) 
-                        for hit = 1, getgenv().HitCount do 
-                            if not getgenv().MasterAutoFarm then break end 
-                            RemoteBreak:FireServer(TGrid) 
-                            task.wait(getgenv().ActionDelay)
+                        RemoteBreak:FireServer(TGrid) 
+                        -- Konversi MS ke Detik (contoh: 150ms -> 0.15s)
+                        task.wait(getgenv().BreakDelayMs / 1000) 
+                    end
+                    
+                    -- C. AUTO COLLECT REALISTIC (SCAN & WALK)
+                    if getgenv().AutoCollect then
+                        -- Beri sedikit waktu untuk drop muncul di server
+                        task.wait(0.1) 
+                        
+                        -- Scan area offset
+                        if CheckDropsAtGrid(TargetGridX, TargetGridY) then
+                            local char = LP.Character
+                            local hum = char and char:FindFirstChild("Humanoid")
+                            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                            
+                            if hum and hrp then
+                                local originalPos = hrp.Position
+                                -- Jalan ke koordinat item jatuh (Z dipertahankan)
+                                hum:MoveTo(Vector3.new(TargetGridX * getgenv().GridSize, TargetGridY * getgenv().GridSize, originalPos.Z))
+                                task.wait(0.3) -- Tunggu karakter sampai dan pungut barang
+                                
+                                -- Jalan kembali ke posisi farm awal
+                                hum:MoveTo(originalPos)
+                                task.wait(0.3) -- Tunggu kembali ke posisi semula
+                            end
                         end
                     end
                 end 
@@ -126,27 +166,4 @@ task.spawn(function()
             task.wait(0.1) 
         end 
     end 
-end)
-
--- 2. LOOP AUTO COLLECT
-task.spawn(function()
-    while true do
-        if getgenv().AutoCollect then
-            local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local dropFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("Items") or workspace:FindFirstChild("DroppedItems")
-                if dropFolder then
-                    for _, drop in pairs(dropFolder:GetDescendants()) do
-                        if drop:IsA("BasePart") then drop.CFrame = hrp.CFrame end
-                    end
-                else
-                    for _, obj in pairs(workspace:GetChildren()) do
-                        if obj:IsA("BasePart") and not obj.Anchored and obj.Name ~= "Baseplate" then obj.CFrame = hrp.CFrame
-                        elseif obj:IsA("Model") and (obj.Name:match("Drop") or obj.Name:match("Item")) and obj.PrimaryPart then obj:SetPrimaryPartCFrame(hrp.CFrame) end
-                    end
-                end
-            end
-        end
-        task.wait(0.1) 
-    end
 end)
