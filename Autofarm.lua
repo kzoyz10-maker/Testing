@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.60) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.70) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.60 (Mass Phase & Anti-AFK)" 
+getgenv().ScriptVersion = "Auto Farm v8.70 (Mass Phase & Selectable Center)" 
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -97,18 +97,22 @@ function CreateTileSelectorButton(Parent)
         for _, y in ipairs(yLevels) do
             for _, x in ipairs(xLevels) do
                 local Tile = Instance.new("TextButton"); Tile.Parent = GridContainer; Tile.Text = ""; Tile.Font = Enum.Font.GothamBold; Tile.TextSize = 10; Tile.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Tile).CornerRadius = UDim.new(0, 8)
+                
+                -- Tetap berikan teks "YOU" di posisi tengah (0,0) agar user tau posisi karakternya
+                if x == 0 and y == 0 then Tile.Text = "YOU" end 
+
                 local isSelected = false
                 for _, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then isSelected = true; break end end
-                if x == 0 and y == 0 then Tile.Text = "YOU"; Tile.BackgroundColor3 = Theme.TileYou; Tile.AutoButtonColor = false
-                else
-                    Tile.BackgroundColor3 = isSelected and Theme.TileOn or Theme.TileOff
-                    Tile.MouseButton1Click:Connect(function()
-                        local foundIdx = nil
-                        for i, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then foundIdx = i; break end end
-                        if foundIdx then table.remove(getgenv().SelectedTiles, foundIdx); Tile.BackgroundColor3 = Theme.TileOff
-                        else table.insert(getgenv().SelectedTiles, {x=x, y=y}); Tile.BackgroundColor3 = Theme.TileOn end
-                    end)
-                end
+                
+                -- Sekarang posisi YOU juga menggunakan sistem warna yang sama
+                Tile.BackgroundColor3 = isSelected and Theme.TileOn or Theme.TileOff
+                
+                Tile.MouseButton1Click:Connect(function()
+                    local foundIdx = nil
+                    for i, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then foundIdx = i; break end end
+                    if foundIdx then table.remove(getgenv().SelectedTiles, foundIdx); Tile.BackgroundColor3 = Theme.TileOff
+                    else table.insert(getgenv().SelectedTiles, {x=x, y=y}); Tile.BackgroundColor3 = Theme.TileOn end
+                end)
             end
         end
         local DoneBtn = Instance.new("TextButton"); DoneBtn.Parent = Panel; DoneBtn.BackgroundColor3 = Theme.TileYou; DoneBtn.Size = UDim2.new(0, 150, 0, 40); DoneBtn.Position = UDim2.new(0.5, 0, 1, -20); DoneBtn.AnchorPoint = Vector2.new(0.5, 1); DoneBtn.Text = "Done"; DoneBtn.TextColor3 = Color3.new(1,1,1); DoneBtn.Font = Enum.Font.GothamBold; DoneBtn.TextSize = 14; Instance.new("UICorner", DoneBtn).CornerRadius = UDim.new(0, 8)
