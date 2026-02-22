@@ -1,16 +1,15 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & SMART GRID COLLECT (v8.3)  ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & SMART GRID COLLECT (v8.4)  ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.3 (Perfect Vision)" 
+getgenv().ScriptVersion = "Auto Farm v8.4 (Timing Control)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
 getgenv().GridSize = 4.5 
-getgenv().StepDelay = 0.1 -- Kecepatan langkah per grid
 -- ========================================== --
 
 local Players = game:GetService("Players")
@@ -27,7 +26,11 @@ getgenv().OffsetX = 0;
 getgenv().OffsetY = 0; 
 getgenv().FarmAmount = 1; 
 getgenv().HitCount = 3;
+
+-- 🌟 VARIABEL TIMING BARU
 getgenv().BreakDelayMs = 150; 
+getgenv().WaitDropMs = 250;  -- Tunggu drop muncul
+getgenv().WalkSpeedMs = 100; -- Kecepatan jalan per grid
 
 local PlayerMovement
 task.spawn(function() pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
@@ -65,6 +68,8 @@ end
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
 CreateToggle(TargetPage, "Smart Auto Collect", "AutoCollect")
+CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") -- 🌟 Baru: Waktu nunggu drop muncul
+CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") -- 🌟 Baru: Kecepatan jalan per grid
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
 CreateSlider(TargetPage, "Farm Offset X", -5, 5, 0, "OffsetX")
 CreateSlider(TargetPage, "Farm Offset Y", -5, 5, 0, "OffsetY")
@@ -83,7 +88,6 @@ local function GetPlayerGridPosition()
     return nil, nil
 end
 
--- 🌟 FIX: SCANNER DROP SPESIFIK KE FOLDER DROPS & GEMS
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local TargetFolders = {
         workspace:FindFirstChild("Drops"),
@@ -117,7 +121,7 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
--- 🌟 FUNGSI JALAN PER GRID
+-- 🌟 FUNGSI JALAN PER GRID (DIKONTROL SLIDER WALKSPEED)
 local function WalkGridSync(TargetX, TargetY)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
@@ -141,7 +145,8 @@ local function WalkGridSync(TargetX, TargetY)
             MyHitbox.CFrame = CFrame.new(newWorldPos)
             if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
             
-            task.wait(getgenv().StepDelay) 
+            -- Pake slider Walk Speed (dikonversi ke detik)
+            task.wait(getgenv().WalkSpeedMs / 1000) 
         end
     end
 end
@@ -183,27 +188,21 @@ task.spawn(function()
                         task.wait(getgenv().BreakDelayMs / 1000) 
                     end
                     
-                    -- C. SMART AUTO COLLECT (SCAN GEMS & DROPS)
+                    -- C. SMART AUTO COLLECT
                     if getgenv().AutoCollect then
-                        task.wait(0.2) 
+                        -- 🌟 Tunggu server nge-spawn drop sesuai settingan slider
+                        task.wait(getgenv().WaitDropMs / 1000) 
                         
-                        -- Cek ada Gems/Block/Sapling gak di grid yang baru dihancurin?
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
-                            
-                            -- FARM PAUSE: Jalan ke target
                             WalkGridSync(TargetGridX, TargetGridY)
                             
-                            -- Nunggu diambil (timeout 1.5 detik biar aman)
                             local waitTimeout = 0
                             while CheckDropsAtGrid(TargetGridX, TargetGridY) and waitTimeout < 15 and getgenv().MasterAutoFarm do
                                 task.wait(0.1)
                                 waitTimeout = waitTimeout + 1
                             end
                             
-                            -- Jeda bentar habis masuk kantong
                             task.wait(0.1)
-                            
-                            -- FARM RESUME: Pulang ke titik Base awal berdiri
                             WalkGridSync(BaseX, BaseY)
                             task.wait(0.1)
                         end
