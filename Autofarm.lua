@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & SMART GRID COLLECT (v8.4)  ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & GHOST COLLECT (v8.5)       ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.4 (Timing Control)" 
+getgenv().ScriptVersion = "Auto Farm v8.5 (Ghost Collect)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -17,20 +17,24 @@ local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser") 
+local RunService = game:GetService("RunService")
 
 LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
 
 getgenv().MasterAutoFarm = false; 
 getgenv().AutoCollect = false; 
+getgenv().GhostCollect = false; -- 🌟 Toggle Ghost Collect
 getgenv().OffsetX = 0; 
 getgenv().OffsetY = 0; 
 getgenv().FarmAmount = 1; 
 getgenv().HitCount = 3;
-
--- 🌟 VARIABEL TIMING BARU
 getgenv().BreakDelayMs = 150; 
-getgenv().WaitDropMs = 250;  -- Tunggu drop muncul
-getgenv().WalkSpeedMs = 100; -- Kecepatan jalan per grid
+getgenv().WaitDropMs = 250;  
+getgenv().WalkSpeedMs = 100; 
+
+-- Variabel penahan badan
+getgenv().IsGhosting = false
+getgenv().HoldCFrame = nil
 
 local PlayerMovement
 task.spawn(function() pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
@@ -68,8 +72,9 @@ end
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
 CreateToggle(TargetPage, "Smart Auto Collect", "AutoCollect")
-CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") -- 🌟 Baru: Waktu nunggu drop muncul
-CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") -- 🌟 Baru: Kecepatan jalan per grid
+CreateToggle(TargetPage, "👻 Ghost Collect (Badan Diam)", "GhostCollect") -- 🌟 Fitur Baru
+CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
+CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
 CreateSlider(TargetPage, "Farm Offset X", -5, 5, 0, "OffsetX")
 CreateSlider(TargetPage, "Farm Offset Y", -5, 5, 0, "OffsetY")
@@ -80,6 +85,17 @@ local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
+-- 🌟 KUNCI BADAN BIAR DIAM (HEARTBEAT LOOP)
+RunService.Heartbeat:Connect(function()
+    if getgenv().GhostCollect and getgenv().IsGhosting and getgenv().HoldCFrame then
+        local char = LP.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            -- Paksa visual badan tetap di titik farming
+            char.HumanoidRootPart.CFrame = getgenv().HoldCFrame
+        end
+    end
+end)
+
 local function GetPlayerGridPosition()
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
@@ -89,20 +105,13 @@ local function GetPlayerGridPosition()
 end
 
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
-    local TargetFolders = {
-        workspace:FindFirstChild("Drops"),
-        workspace:FindFirstChild("Gems")
-    }
-    
+    local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
     for _, folder in ipairs(TargetFolders) do
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
                 local pos = nil
-                
-                if obj:IsA("BasePart") then
-                    pos = obj.Position
-                elseif obj:IsA("Model") and obj.PrimaryPart then
-                    pos = obj.PrimaryPart.Position
+                if obj:IsA("BasePart") then pos = obj.Position
+                elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
                 elseif obj:IsA("Model") then
                     local firstPart = obj:FindFirstChildWhichIsA("BasePart")
                     if firstPart then pos = firstPart.Position end
@@ -111,9 +120,7 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                 if pos then
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
-                    if dX == TargetGridX and dY == TargetGridY then 
-                        return true 
-                    end
+                    if dX == TargetGridX and dY == TargetGridY then return true end
                 end
             end
         end
@@ -121,13 +128,11 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
--- 🌟 FUNGSI JALAN PER GRID (DIKONTROL SLIDER WALKSPEED)
+-- 🌟 FUNGSI JALAN PER GRID (DENGAN BYPASS GHOSTING)
 local function WalkGridSync(TargetX, TargetY)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-    if not MyHitbox then 
-        MyHitbox = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    end
+    if not MyHitbox then MyHitbox = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") end
     
     if MyHitbox then
         local startZ = MyHitbox.Position.Z
@@ -135,17 +140,19 @@ local function WalkGridSync(TargetX, TargetY)
         local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
         
         while (currentX ~= TargetX or currentY ~= TargetY) and getgenv().MasterAutoFarm do
-            if currentX ~= TargetX then 
-                currentX = currentX + (TargetX > currentX and 1 or -1) 
-            elseif currentY ~= TargetY then 
-                currentY = currentY + (TargetY > currentY and 1 or -1) 
-            end
+            if currentX ~= TargetX then currentX = currentX + (TargetX > currentX and 1 or -1) 
+            elseif currentY ~= TargetY then currentY = currentY + (TargetY > currentY and 1 or -1) end
             
             local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
-            MyHitbox.CFrame = CFrame.new(newWorldPos)
-            if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
             
-            -- Pake slider Walk Speed (dikonversi ke detik)
+            -- Gerakkan fisik aslinya (Hitbox)
+            MyHitbox.CFrame = CFrame.new(newWorldPos)
+            
+            -- JIKA GHOST COLLECT NYALA, JANGAN UPDATE ANIMASI/VISUALNYA!
+            if PlayerMovement and not getgenv().GhostCollect then 
+                pcall(function() PlayerMovement.Position = newWorldPos end) 
+            end
+            
             task.wait(getgenv().WalkSpeedMs / 1000) 
         end
     end
@@ -176,35 +183,43 @@ task.spawn(function()
                     local TGrid = Vector2.new(TargetGridX, TargetGridY) 
                     
                     -- A. PLACE ITEM 
-                    if ItemIndex then
-                        RemotePlace:FireServer(TGrid, ItemIndex) 
-                        task.wait(getgenv().ActionDelay) 
-                    end
+                    if ItemIndex then RemotePlace:FireServer(TGrid, ItemIndex); task.wait(getgenv().ActionDelay) end
                     
                     -- B. BREAK ITEM 
                     for hit = 1, getgenv().HitCount do 
                         if not getgenv().MasterAutoFarm then break end 
-                        RemoteBreak:FireServer(TGrid) 
-                        task.wait(getgenv().BreakDelayMs / 1000) 
+                        RemoteBreak:FireServer(TGrid); task.wait(getgenv().BreakDelayMs / 1000) 
                     end
                     
-                    -- C. SMART AUTO COLLECT
+                    -- C. SMART AUTO COLLECT & GHOSTING
                     if getgenv().AutoCollect then
-                        -- 🌟 Tunggu server nge-spawn drop sesuai settingan slider
                         task.wait(getgenv().WaitDropMs / 1000) 
                         
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
+                            
+                            -- 👻 MULAI GHOSTING SEBELUM JALAN
+                            if getgenv().GhostCollect then
+                                local char = LP.Character
+                                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                                if hrp then
+                                    getgenv().HoldCFrame = hrp.CFrame -- Simpan posisi berdiri sekarang
+                                    getgenv().IsGhosting = true       -- Bekukan badannya!
+                                end
+                            end
+                            
                             WalkGridSync(TargetGridX, TargetGridY)
                             
                             local waitTimeout = 0
                             while CheckDropsAtGrid(TargetGridX, TargetGridY) and waitTimeout < 15 and getgenv().MasterAutoFarm do
-                                task.wait(0.1)
-                                waitTimeout = waitTimeout + 1
+                                task.wait(0.1); waitTimeout = waitTimeout + 1
                             end
                             
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
                             task.wait(0.1)
+                            
+                            -- 👻 SELESAI GHOSTING (Cairkan badan)
+                            getgenv().IsGhosting = false
                         end
                     end
                 end 
