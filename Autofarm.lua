@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & GHOST COLLECT (v8.6)       ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.7)  ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.6 (Ghost Collect Fix)" 
+getgenv().ScriptVersion = "Auto Farm v8.7 (True Visual Ghost)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -68,7 +68,7 @@ function CreateSlider(Parent, Text, Min, Max, Default, Var)
     SliderBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then Dragging = true; Update(i) end end); UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then Dragging = false end end); UIS.InputChanged:Connect(function(i) if Dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then Update(i) end end) 
 end
 
--- Inject elemen ke UI (Ghosting sudah nyatu di Smart Auto Collect)
+-- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
 CreateToggle(TargetPage, "👻 Smart Auto Collect (Ghost)", "AutoCollect") 
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
@@ -83,7 +83,7 @@ local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
--- 🌟 KUNCI BADAN VISUAL (TAPI DATA TETAP JALAN KE SERVER)
+-- 🌟 KUNCI BADAN VISUAL (BACKUP)
 RunService.Heartbeat:Connect(function()
     if getgenv().AutoCollect and getgenv().IsGhosting and getgenv().HoldCFrame then
         local char = LP.Character
@@ -125,7 +125,7 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
--- 🌟 FUNGSI JALAN PER GRID (FIX DATA SINKRONISASI SERVER)
+-- 🌟 FUNGSI JALAN PER GRID (FIX: GAK NGGERAKIN FISIK SAAT GHOSTING)
 local function WalkGridSync(TargetX, TargetY)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
@@ -142,10 +142,13 @@ local function WalkGridSync(TargetX, TargetY)
             
             local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
             
-            -- Gerakkan fisik aslinya (Hitbox)
-            MyHitbox.CFrame = CFrame.new(newWorldPos)
+            -- 🌟 PERBAIKAN UTAMA DI SINI:
+            -- Kalau lagi Ghosting, JANGAN gerakin fisik HRP/Hitbox. Biarin diam.
+            if not getgenv().IsGhosting then
+                 MyHitbox.CFrame = CFrame.new(newWorldPos)
+            end
             
-            -- WAJIB UPDATE PlayerMovement biar server merespon dan collect berhasil!
+            -- TAPI TETAP kirim data posisi baru ke server biar barang keambil
             if PlayerMovement then 
                 pcall(function() PlayerMovement.Position = newWorldPos end) 
             end
@@ -188,21 +191,21 @@ task.spawn(function()
                         RemoteBreak:FireServer(TGrid); task.wait(getgenv().BreakDelayMs / 1000) 
                     end
                     
-                    -- C. SMART AUTO COLLECT (GHOSTING NYATU DI SINI)
+                    -- C. SMART AUTO COLLECT (GHOSTING TERINTEGRASI)
                     if getgenv().AutoCollect then
                         task.wait(getgenv().WaitDropMs / 1000) 
                         
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
                             
-                            -- Kunci Visual Karakter sebelum Hitbox maju
+                            -- Kunci Visual Karakter
                             local char = LP.Character
                             local hrp = char and char:FindFirstChild("HumanoidRootPart")
                             if hrp then
                                 getgenv().HoldCFrame = hrp.CFrame
-                                getgenv().IsGhosting = true
+                                getgenv().IsGhosting = true -- MULAI MODE HANTU
                             end
                             
-                            -- Hitbox Maju Mungut
+                            -- Kirim data jalan ke server (fisik diam)
                             WalkGridSync(TargetGridX, TargetGridY)
                             
                             -- Nungguin barangnya masuk tas
@@ -211,13 +214,13 @@ task.spawn(function()
                                 task.wait(0.1); waitTimeout = waitTimeout + 1
                             end
                             
-                            -- Hitbox Balik ke titik awal
+                            -- Kirim data balik ke base (fisik diam)
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
                             task.wait(0.1)
                             
                             -- Buka kunci visual
-                            getgenv().IsGhosting = false
+                            getgenv().IsGhosting = false -- SELESAI MODE HANTU
                         end
                     end
                 end 
