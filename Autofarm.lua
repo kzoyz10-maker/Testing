@@ -117,7 +117,7 @@ function CreateTileSelectorButton(Parent)
                 end
                 
                 if x == 0 and y == 0 then
-                    Tile.Text = "YOU"
+                    Tile.Text = "I'm Here"
                     Tile.BackgroundColor3 = Theme.TileYou
                     Tile.AutoButtonColor = false
                 else
@@ -147,10 +147,10 @@ function CreateTileSelectorButton(Parent)
 end
 
 -- Inject elemen ke UI
-CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
-CreateInput(TargetPage, "Wait Drop (ms)", 250, "WaitDropMs") 
-CreateInput(TargetPage, "Walk Speed (ms)", 100, "WalkSpeedMs") 
+CreateToggle(TargetPage, "Auto Farm", "MasterAutoFarm") 
+CreateToggle(TargetPage, "Auto Collect", "AutoCollect") 
+CreateInput(TargetPage, "Scan Speed (ms)", 350, "WaitDropMs") 
+CreateInput(TargetPage, "Collect Speed (ms)", 100, "WalkSpeedMs") 
 CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs") 
 CreateInput(TargetPage, "Hit Count", 3, "HitCount") 
 CreateTileSelectorButton(TargetPage) -- Tombol Panggil Modal 5x5
