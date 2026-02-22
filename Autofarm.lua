@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & WALK COLLECT (v8.0)        ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & GRID TP COLLECT (v8.1)     ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.0 (Walk Collect)" 
+getgenv().ScriptVersion = "Auto Farm v8.1 (Grid TP Collect)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -26,7 +26,7 @@ getgenv().OffsetX = 0;
 getgenv().OffsetY = 0; 
 getgenv().FarmAmount = 1; 
 getgenv().HitCount = 3;
-getgenv().BreakDelayMs = 150; -- 🌟 DEFAULT BREAK DELAY (150ms = 0.15s)
+getgenv().BreakDelayMs = 150; 
 
 local PlayerMovement
 task.spawn(function() pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
@@ -63,8 +63,8 @@ end
 
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "Auto Collect (Walk)", "AutoCollect")
-CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") -- 🌟 INPUT KECEPATAN BREAK BARU
+CreateToggle(TargetPage, "Auto Collect (Grid TP)", "AutoCollect")
+CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
 CreateSlider(TargetPage, "Farm Offset X", -5, 5, 0, "OffsetX")
 CreateSlider(TargetPage, "Farm Offset Y", -5, 5, 0, "OffsetY")
 CreateSlider(TargetPage, "Farm Amount", 1, 5, 1, "FarmAmount")
@@ -78,18 +78,15 @@ local function GetPlayerGridPosition()
     if PlayerMovement and PlayerMovement.Position then return PlayerMovement.Position.X, PlayerMovement.Position.Y else local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"); if hrp then return hrp.Position.X, hrp.Position.Y end end return nil, nil
 end
 
--- 🌟 FUNGSI SCAN DROPS DI GRID TERTENTU
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local dropFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("Items") or workspace:FindFirstChild("DroppedItems")
     local itemsToScan = dropFolder and dropFolder:GetDescendants() or workspace:GetChildren()
     
     for _, obj in pairs(itemsToScan) do
-        -- Jika drop berupa Part biasa
         if obj:IsA("BasePart") and obj.Name ~= "Baseplate" and not obj.Anchored then
             local dX = math.floor(obj.Position.X / getgenv().GridSize + 0.5)
             local dY = math.floor(obj.Position.Y / getgenv().GridSize + 0.5)
             if dX == TargetGridX and dY == TargetGridY then return true end
-        -- Jika drop berupa Model (misal: Sapling, block, gems)
         elseif obj:IsA("Model") and obj.PrimaryPart then
             local pX = math.floor(obj.PrimaryPart.Position.X / getgenv().GridSize + 0.5)
             local pY = math.floor(obj.PrimaryPart.Position.Y / getgenv().GridSize + 0.5)
@@ -99,7 +96,7 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
--- 🌟 LOOP MASTER AUTO FARM + AUTO WALK COLLECT TERINTEGRASI
+-- 🌟 LOOP MASTER AUTO FARM + AUTO COLLECT (GRID TP)
 task.spawn(function() 
     while true do 
         if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
@@ -123,40 +120,41 @@ task.spawn(function()
                     local TargetGridY = Y + getgenv().OffsetY
                     local TGrid = Vector2.new(TargetGridX, TargetGridY) 
                     
-                    -- A. PLACE ITEM (Hanya jika ada item)
+                    -- A. PLACE ITEM 
                     if ItemIndex then
                         RemotePlace:FireServer(TGrid, ItemIndex) 
                         task.wait(getgenv().ActionDelay) 
                     end
                     
-                    -- B. BREAK ITEM (Sesuai Break Delay dari Slider)
+                    -- B. BREAK ITEM 
                     for hit = 1, getgenv().HitCount do 
                         if not getgenv().MasterAutoFarm then break end 
                         RemoteBreak:FireServer(TGrid) 
-                        -- Konversi MS ke Detik (contoh: 150ms -> 0.15s)
                         task.wait(getgenv().BreakDelayMs / 1000) 
                     end
                     
-                    -- C. AUTO COLLECT REALISTIC (SCAN & WALK)
+                    -- C. AUTO COLLECT (TELEPORT PER GRID)
                     if getgenv().AutoCollect then
-                        -- Beri sedikit waktu untuk drop muncul di server
-                        task.wait(0.1) 
+                        task.wait(0.1) -- Tunggu drop muncul
                         
-                        -- Scan area offset
+                        -- Cek apakah ada barang jatuh di grid itu
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
                             local char = LP.Character
-                            local hum = char and char:FindFirstChild("Humanoid")
                             local hrp = char and char:FindFirstChild("HumanoidRootPart")
                             
-                            if hum and hrp then
-                                local originalPos = hrp.Position
-                                -- Jalan ke koordinat item jatuh (Z dipertahankan)
-                                hum:MoveTo(Vector3.new(TargetGridX * getgenv().GridSize, TargetGridY * getgenv().GridSize, originalPos.Z))
-                                task.wait(0.3) -- Tunggu karakter sampai dan pungut barang
+                            if hrp then
+                                local originalCFrame = hrp.CFrame
                                 
-                                -- Jalan kembali ke posisi farm awal
-                                hum:MoveTo(originalPos)
-                                task.wait(0.3) -- Tunggu kembali ke posisi semula
+                                -- 1. TP Instan tepat di titik tengah grid target (koordinat dikali ukuran grid)
+                                local targetWorldX = TargetGridX * getgenv().GridSize
+                                local targetWorldY = TargetGridY * getgenv().GridSize
+                                hrp.CFrame = CFrame.new(targetWorldX, targetWorldY, originalCFrame.Position.Z)
+                                
+                                task.wait(0.2) -- Jeda sebentar biar server mencatat bahwa kamu mengambil item
+                                
+                                -- 2. TP balik ke grid awal tempat kamu bertani
+                                hrp.CFrame = originalCFrame
+                                task.wait(0.1)
                             end
                         end
                     end
