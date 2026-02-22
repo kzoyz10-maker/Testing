@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.12) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.13) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.12 (Perfect Landing & Clean UI)" 
+getgenv().ScriptVersion = "Auto Farm v8.13 (Absolute Ghost)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -23,7 +23,6 @@ LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickBu
 
 getgenv().MasterAutoFarm = false; 
 getgenv().AutoCollect = false; 
-getgenv().HideHighlights = false; -- Toggle Baru
 getgenv().OffsetX = 0; 
 getgenv().OffsetY = 0; 
 getgenv().FarmAmount = 1; 
@@ -72,7 +71,6 @@ end
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
 CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
-CreateToggle(TargetPage, "🚫 Hide Tile Highlights", "HideHighlights") -- TOGGLE BARU
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
 CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
@@ -85,40 +83,33 @@ local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
--- 🌟 LOOP PER FRAME (MANIPULASI PHYSICS & VISUAL) 🌟
+-- 🌟 LOOP PER FRAME (MANIPULASI PHYSICS & PEMBERSIHAN VISUAL) 🌟
 RunService.Heartbeat:Connect(function()
-    -- Sembunyikan Tile Highlights (karena game mungkin nge-update ini tiap frame)
-    if getgenv().HideHighlights then
+    if getgenv().AutoCollect then
+        -- 1. Bersihkan Tile Highlights sepenuhnya saat Auto Collect nyala
         local highlights = workspace:FindFirstChild("TileHighligts") or workspace:FindFirstChild("TileHighlights")
         if highlights then
-            for _, v in pairs(highlights:GetDescendants()) do
-                if v:IsA("BasePart") or v:IsA("Texture") or v:IsA("Decal") then
-                    v.Transparency = 1
-                elseif v:IsA("SelectionBox") or v:IsA("Highlight") then
-                    v.Enabled = false
+            pcall(function() highlights:ClearAllChildren() end)
+        end
+
+        -- 2. Manipulasi Physics saat Ghosting
+        if getgenv().IsGhosting then
+            if getgenv().HoldCFrame then
+                local char = LP.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    char.HumanoidRootPart.CFrame = getgenv().HoldCFrame
                 end
             end
-        end
-    end
-
-    if getgenv().AutoCollect and getgenv().IsGhosting then
-        -- 1. Kunci posisi visual CFrame
-        if getgenv().HoldCFrame then
-            local char = LP.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                char.HumanoidRootPart.CFrame = getgenv().HoldCFrame
+            
+            if PlayerMovement then
+                pcall(function()
+                    PlayerMovement.VelocityY = 0
+                    PlayerMovement.VelocityX = 0
+                    PlayerMovement.VelocityZ = 0
+                    PlayerMovement.Grounded = true
+                    PlayerMovement.Jumping = false
+                end)
             end
-        end
-        
-        -- 2. Hack module PlayerMovement game agar tidak ter-trigger animasi jatuh
-        if PlayerMovement then
-            pcall(function()
-                PlayerMovement.VelocityY = 0
-                PlayerMovement.VelocityX = 0
-                PlayerMovement.VelocityZ = 0
-                PlayerMovement.Grounded = true
-                PlayerMovement.Jumping = false
-            end)
         end
     end
 end)
@@ -240,25 +231,42 @@ task.spawn(function()
                             WalkGridSync(BaseX, BaseY)
                             task.wait(0.1)
                             
-                            -- 🌟 ANTI BENTURAN JATUH SAAT UN-ANCHOR 🌟
+                            -- 🌟 PEREDAM BENTURAN JATUH SAAT UN-ANCHOR 🌟
                             if hrp and getgenv().HoldCFrame then 
-                                -- 1. Nol-kan sisa gravitasi fisik Roblox
+                                local returnPos = getgenv().HoldCFrame.Position
+                                
+                                -- Nol-kan sisa gaya tarik gravitasi
                                 hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
                                 hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
-                                -- 2. Kunci posisi fisik tepat di CFrame terakhir
-                                hrp.CFrame = getgenv().HoldCFrame
                                 
-                                -- 3. Sinkronisasi Custom Physics game biar nggak kaget
+                                -- Reset data di otak movement game *sebelum* jangkar dilepas
                                 if PlayerMovement then
                                     pcall(function()
-                                        PlayerMovement.Position = getgenv().HoldCFrame.Position
-                                        PlayerMovement.OldPosition = getgenv().HoldCFrame.Position
+                                        PlayerMovement.Position = returnPos
+                                        PlayerMovement.OldPosition = returnPos
+                                        PlayerMovement.VelocityY = 0
+                                        PlayerMovement.VelocityX = 0
+                                        PlayerMovement.Grounded = true
                                     end)
                                 end
                                 
-                                -- Baru lepas jangkarnya
+                                hrp.CFrame = getgenv().HoldCFrame
                                 hrp.Anchored = false 
+                                
+                                -- PAKSA DIAM SELAMA 5 FRAME SETELAH DILEPAS
+                                task.spawn(function()
+                                    for _ = 1, 5 do
+                                        if PlayerMovement then
+                                            pcall(function()
+                                                PlayerMovement.VelocityY = 0
+                                                PlayerMovement.Grounded = true
+                                            end)
+                                        end
+                                        RunService.Heartbeat:Wait()
+                                    end
+                                end)
                             end
+                            
                             getgenv().IsGhosting = false 
                         end
                     end
