@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.10) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.11) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.10 (Ultimate Anti-Physics)" 
+getgenv().ScriptVersion = "Auto Farm v8.11 (Custom Physics Bypass)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -70,7 +70,7 @@ end
 
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect bisa", "AutoCollect") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect free", "AutoCollect") 
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
 CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
@@ -83,12 +83,26 @@ local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
--- 🌟 KUNCI POSISI CADANGAN
+-- 🌟 MANIPULASI CUSTOM PHYSICS (DARI DECOMPILED SCRIPT) 🌟
 RunService.Heartbeat:Connect(function()
-    if getgenv().AutoCollect and getgenv().IsGhosting and getgenv().HoldCFrame then
-        local char = LP.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = getgenv().HoldCFrame
+    if getgenv().AutoCollect and getgenv().IsGhosting then
+        -- 1. Kunci posisi visual CFrame
+        if getgenv().HoldCFrame then
+            local char = LP.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = getgenv().HoldCFrame
+            end
+        end
+        
+        -- 2. Hack module PlayerMovement game agar tidak ter-trigger animasi jatuh
+        if PlayerMovement then
+            pcall(function()
+                PlayerMovement.VelocityY = 0
+                PlayerMovement.VelocityX = 0
+                PlayerMovement.VelocityZ = 0
+                PlayerMovement.Grounded = true
+                PlayerMovement.Jumping = false
+            end)
         end
     end
 end)
@@ -183,10 +197,8 @@ task.spawn(function()
                         
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
                             
-                            -- 🌟 1. PEMBEKUAN TOTAL ANTI-PHYSICS 🌟
                             local char = LP.Character
                             local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                            local animate = char and char:FindFirstChild("Animate")
                             local hum = char and char:FindFirstChildOfClass("Humanoid")
                             
                             if hrp then
@@ -195,25 +207,14 @@ task.spawn(function()
                                 getgenv().IsGhosting = true 
                             end
                             
-                            if animate then animate.Disabled = true end
-                            
+                            -- Hentikan animasi bawaan jika ada sisa
                             if hum then
-                                -- Mencegah physics ngebug dan mengira kita jatuh
-                                hum.PlatformStand = true 
-                                hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
-                                hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
-                                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-                                hum.Jump = false
-                                
-                                -- Hentikan semua animasi secara INSTAN (angka 0 artinya tanpa delay fade-out)
                                 local animator = hum:FindFirstChildOfClass("Animator")
                                 local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
-                                for _, track in ipairs(tracks) do
-                                    track:Stop(0)
-                                end
+                                for _, track in ipairs(tracks) do track:Stop(0) end
                             end
                             
-                            -- 🌟 2. JALAN KE BARANG 🌟
+                            -- JALAN KE BARANG
                             WalkGridSync(TargetGridX, TargetGridY)
                             
                             local waitTimeout = 0
@@ -221,20 +222,13 @@ task.spawn(function()
                                 task.wait(0.1); waitTimeout = waitTimeout + 1
                             end
                             
-                            -- 🌟 3. BALIK KE BASE 🌟
+                            -- BALIK KE BASE
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
                             task.wait(0.1)
                             
-                            -- 🌟 4. KEMBALIKAN KE NORMAL 🌟
+                            -- LEPASKAN KUNCIAN
                             if hrp then hrp.Anchored = false end
-                            if animate then animate.Disabled = false end
-                            if hum then 
-                                hum.PlatformStand = false
-                                hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-                                hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
-                                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-                            end
                             getgenv().IsGhosting = false 
                         end
                     end
