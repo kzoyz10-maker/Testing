@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.13) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.14) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.13 (Absolute Ghost)" 
+getgenv().ScriptVersion = "Auto Farm v8.14 (Flawless Sync)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -70,7 +70,7 @@ end
 
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect iyaa", "AutoCollect") 
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
 CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
@@ -92,7 +92,7 @@ RunService.Heartbeat:Connect(function()
             pcall(function() highlights:ClearAllChildren() end)
         end
 
-        -- 2. Manipulasi Physics saat Ghosting
+        -- 2. Manipulasi Physics saat awal Ghosting (Diam di Tempat)
         if getgenv().IsGhosting then
             if getgenv().HoldCFrame then
                 local char = LP.Character
@@ -229,42 +229,56 @@ task.spawn(function()
                             
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
-                            task.wait(0.1)
                             
-                            -- 🌟 PEREDAM BENTURAN JATUH SAAT UN-ANCHOR 🌟
+                            -- 🌟 FLAWLESS SYNC: PEREDAM BENTURAN MUTLAK SEBELUM UNANCHOR 🌟
                             if hrp and getgenv().HoldCFrame then 
-                                local returnPos = getgenv().HoldCFrame.Position
+                                local returnCFrame = getgenv().HoldCFrame
+                                local returnPos = returnCFrame.Position
+                                local HitboxFolder = workspace:FindFirstChild("Hitbox")
+                                local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                                 
-                                -- Nol-kan sisa gaya tarik gravitasi
-                                hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
-                                hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
+                                -- 1. Matikan sisa momentum di Roblox Physics
+                                hrp.AssemblyLinearVelocity = Vector3.zero
+                                hrp.AssemblyAngularVelocity = Vector3.zero
                                 
-                                -- Reset data di otak movement game *sebelum* jangkar dilepas
+                                -- 2. Kunci visual dan hitbox ke posisi absolut
+                                hrp.CFrame = returnCFrame
+                                if MyHitbox then 
+                                    MyHitbox.CFrame = returnCFrame 
+                                    MyHitbox.AssemblyLinearVelocity = Vector3.zero
+                                end
+                                
+                                -- 3. Tindih memori interpolasi posisi otak game (Lerp Bypass)
                                 if PlayerMovement then
                                     pcall(function()
                                         PlayerMovement.Position = returnPos
                                         PlayerMovement.OldPosition = returnPos
-                                        PlayerMovement.VelocityY = 0
                                         PlayerMovement.VelocityX = 0
+                                        PlayerMovement.VelocityY = 0
+                                        PlayerMovement.VelocityZ = 0
                                         PlayerMovement.Grounded = true
                                     end)
                                 end
                                 
-                                hrp.CFrame = getgenv().HoldCFrame
+                                -- 4. Sinkronisasi timing dengan tick server/client game
+                                RunService.Heartbeat:Wait()
+                                RunService.Heartbeat:Wait()
+                                
+                                -- 5. Lepas jangkar secara halus
                                 hrp.Anchored = false 
                                 
-                                -- PAKSA DIAM SELAMA 5 FRAME SETELAH DILEPAS
-                                task.spawn(function()
-                                    for _ = 1, 5 do
-                                        if PlayerMovement then
-                                            pcall(function()
-                                                PlayerMovement.VelocityY = 0
-                                                PlayerMovement.Grounded = true
-                                            end)
-                                        end
-                                        RunService.Heartbeat:Wait()
+                                -- 6. Pertahankan perlindungan selama 2 frame ekstra
+                                for _ = 1, 2 do
+                                    if PlayerMovement then
+                                        pcall(function()
+                                            PlayerMovement.Position = returnPos
+                                            PlayerMovement.OldPosition = returnPos
+                                            PlayerMovement.VelocityY = 0
+                                            PlayerMovement.Grounded = true
+                                        end)
                                     end
-                                end)
+                                    RunService.Heartbeat:Wait()
+                                end
                             end
                             
                             getgenv().IsGhosting = false 
