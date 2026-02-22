@@ -13,7 +13,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Pabrik v0.71-SuperBreak" 
+getgenv().ScriptVersion = "Pabrik v0.72-FixBreak" 
 
 -- ========================================== --
 -- [[ SETTING KECEPATAN BASE ]]
@@ -291,7 +291,7 @@ task.spawn(function()
                 for w = 1, getgenv().GrowthTime do if not getgenv().EnablePabrik then break end; task.wait(1) end 
             end
 
-            -- FASE 3: HARVESTING (Tanpa Ghosting/Smart Collect, cuma Sweep alami)
+            -- FASE 3: HARVESTING 
             if getgenv().EnablePabrik then
                 WalkToGrid(getgenv().PabrikStartX, getgenv().PabrikYPos, true); task.wait(0.5)
                 for x = getgenv().PabrikStartX, getgenv().PabrikEndX do
@@ -299,21 +299,29 @@ task.spawn(function()
                     WalkToGrid(x, getgenv().PabrikYPos, true); task.wait(0.1) 
                     local TGrid = Vector2.new(x, getgenv().PabrikYPos)
                     
-                    -- Instant hit pakai os.clock
-                    for hit = 1, getgenv().HitCount do RemoteBreak:FireServer(TGrid) end
+                    -- Pukul pakai jeda 1 frame per hit biar server register!
+                    for hit = 1, getgenv().HitCount do 
+                        RemoteBreak:FireServer(TGrid) 
+                        RunService.Heartbeat:Wait()
+                    end
                     local startT = os.clock()
                     repeat RunService.Heartbeat:Wait() until os.clock() - startT >= 0.15 
                 end
                 
-                -- Sweep ambil barang (jalan mondar mandir ujung ke ujung sekali)
+                -- Sweep pungut manual (Start X ke End X + 1, lalu balik ke Start X - 1)
                 if getgenv().EnablePabrik then
-                    WalkToGrid(getgenv().PabrikEndX, getgenv().PabrikYPos, true)
+                    local moveDir = (getgenv().PabrikEndX >= getgenv().PabrikStartX) and 1 or -1
+                    local sweepTargetX = getgenv().PabrikEndX + moveDir
+                    local sweepReturnX = getgenv().PabrikStartX - moveDir
+
+                    WalkToGrid(sweepTargetX, getgenv().PabrikYPos, true)
                     task.wait(0.3)
-                    WalkToGrid(getgenv().PabrikStartX, getgenv().PabrikYPos, true)
+                    WalkToGrid(sweepReturnX, getgenv().PabrikYPos, true)
+                    task.wait(0.2)
                 end
             end
 
-            -- FASE 4: AUTO FARM BLOCK (Spam Hit pakai os.clock & Smart Collect)
+            -- FASE 4: AUTO FARM BLOCK
             if getgenv().EnablePabrik then
                 WalkToGrid(getgenv().BreakPosX, getgenv().BreakPosY, true); task.wait(0.5)
                 local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
@@ -332,17 +340,18 @@ task.spawn(function()
                     local placeTimer = os.clock()
                     repeat RunService.Heartbeat:Wait() until os.clock() - placeTimer >= 0.05
                     
-                    -- 2. BREAK INSTANT
+                    -- 2. BREAK (Tambahin Heartbeat:Wait() biar server gak anggap spam)
                     for hit = 1, getgenv().HitCount do
                         if not getgenv().EnablePabrik then break end
                         RemoteBreak:FireServer(BreakTarget)
+                        RunService.Heartbeat:Wait()
                     end
                     
                     -- Jeda presisi pakai os.clock buat nunggu hancur dan drop
                     local breakTimer = os.clock()
                     repeat RunService.Heartbeat:Wait() until os.clock() - breakTimer >= 0.15
                     
-                    -- 3. SMART COLLECT (Ghosting Aktif Khusus Fase Ini)
+                    -- 3. SMART COLLECT 
                     if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
                         local char = LP.Character
                         local hrp = char and char:FindFirstChild("HumanoidRootPart")
