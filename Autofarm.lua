@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.9)  ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.10) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.9 (No Jump Ghost)" 
+getgenv().ScriptVersion = "Auto Farm v8.10 (Ultimate Anti-Physics)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -70,7 +70,7 @@ end
 
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect cihuy", "AutoCollect") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect bisa", "AutoCollect") 
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
 CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
@@ -125,7 +125,6 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
--- 🌟 FUNGSI JALAN PER GRID
 local function WalkGridSync(TargetX, TargetY)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
@@ -140,13 +139,9 @@ local function WalkGridSync(TargetX, TargetY)
             elseif currentY ~= TargetY then currentY = currentY + (TargetY > currentY and 1 or -1) end
             
             local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
-            
             MyHitbox.CFrame = CFrame.new(newWorldPos)
             
-            if PlayerMovement then 
-                pcall(function() PlayerMovement.Position = newWorldPos end) 
-            end
-            
+            if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
             task.wait(getgenv().WalkSpeedMs / 1000) 
         end
     end
@@ -183,13 +178,12 @@ task.spawn(function()
                         RemoteBreak:FireServer(TGrid); task.wait(getgenv().BreakDelayMs / 1000) 
                     end
                     
-                    -- C. SMART AUTO COLLECT (GHOSTING + NO JUMP FIX)
                     if getgenv().AutoCollect then
                         task.wait(getgenv().WaitDropMs / 1000) 
                         
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
                             
-                            -- 🌟 1. BEKUKAN KARAKTER VISUAL SECARA TOTAL 🌟
+                            -- 🌟 1. PEMBEKUAN TOTAL ANTI-PHYSICS 🌟
                             local char = LP.Character
                             local hrp = char and char:FindFirstChild("HumanoidRootPart")
                             local animate = char and char:FindFirstChild("Animate")
@@ -201,22 +195,25 @@ task.spawn(function()
                                 getgenv().IsGhosting = true 
                             end
                             
-                            if animate then 
-                                animate.Disabled = true 
-                            end
+                            if animate then animate.Disabled = true end
                             
                             if hum then
-                                -- Mencegah engine Roblox memicu animasi lompat/jatuh
+                                -- Mencegah physics ngebug dan mengira kita jatuh
+                                hum.PlatformStand = true 
                                 hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
                                 hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+                                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
                                 hum.Jump = false
                                 
-                                for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
-                                    track:Stop()
+                                -- Hentikan semua animasi secara INSTAN (angka 0 artinya tanpa delay fade-out)
+                                local animator = hum:FindFirstChildOfClass("Animator")
+                                local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
+                                for _, track in ipairs(tracks) do
+                                    track:Stop(0)
                                 end
                             end
                             
-                            -- 🌟 2. BERANGKATKAN HITBOX KE BARANG 🌟
+                            -- 🌟 2. JALAN KE BARANG 🌟
                             WalkGridSync(TargetGridX, TargetGridY)
                             
                             local waitTimeout = 0
@@ -224,18 +221,19 @@ task.spawn(function()
                                 task.wait(0.1); waitTimeout = waitTimeout + 1
                             end
                             
-                            -- 🌟 3. BALIKKAN HITBOX KE BASE 🌟
+                            -- 🌟 3. BALIK KE BASE 🌟
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
                             task.wait(0.1)
                             
-                            -- 🌟 4. LEPASKAN KUNCIAN VISUAL 🌟
+                            -- 🌟 4. KEMBALIKAN KE NORMAL 🌟
                             if hrp then hrp.Anchored = false end
                             if animate then animate.Disabled = false end
                             if hum then 
-                                -- Kembalikan state lompat/jatuh biar normal lagi
+                                hum.PlatformStand = false
                                 hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
                                 hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+                                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
                             end
                             getgenv().IsGhosting = false 
                         end
