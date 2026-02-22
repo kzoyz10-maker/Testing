@@ -13,13 +13,14 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Pabrik v0.72-FixBreak" 
+getgenv().ScriptVersion = "Pabrik v0.73-MasterBreak" 
 
 -- ========================================== --
 -- [[ SETTING KECEPATAN BASE ]]
 getgenv().PlaceDelay = 0.05  
 getgenv().DropDelay = 0.5      
 getgenv().StepDelay = 0.1   
+getgenv().BreakDelay = 0.15 -- Samain dengan Master (150ms)
 -- ========================================== --
 
 local Players = game:GetService("Players")
@@ -39,7 +40,7 @@ if getgenv().KzoyzHeartbeatPabrik then getgenv().KzoyzHeartbeatPabrik:Disconnect
 
 -- [[ VARIABEL GLOBAL ]] --
 getgenv().GridSize = 4.5; 
-getgenv().HitCount = 4    
+getgenv().HitCount = 3    -- Default 3 sesuai Master
 getgenv().EnablePabrik = false
 getgenv().PabrikStartX = 0; getgenv().PabrikEndX = 10; getgenv().PabrikYPos = 37
 getgenv().GrowthTime = 30 
@@ -71,7 +72,6 @@ end)
 -- Modul Game Internal --
 local InventoryMod
 pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
-
 local UIManager
 pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
@@ -233,6 +233,7 @@ CreateButton(TargetPage, "🔄 Refresh Tas", function() local newItems = ScanAva
 CreateToggle(TargetPage, "START BALANCED PABRIK", "EnablePabrik")
 
 CreateTextBox(TargetPage, "Hit Count", getgenv().HitCount, "HitCount")
+CreateTextBox(TargetPage, "Break Delay (Detik)", getgenv().BreakDelay, "BreakDelay") -- Input Delay Baru
 CreateTextBox(TargetPage, "Start X", getgenv().PabrikStartX, "PabrikStartX")
 CreateTextBox(TargetPage, "End X", getgenv().PabrikEndX, "PabrikEndX")
 CreateTextBox(TargetPage, "Y Pos", getgenv().PabrikYPos, "PabrikYPos")
@@ -299,13 +300,12 @@ task.spawn(function()
                     WalkToGrid(x, getgenv().PabrikYPos, true); task.wait(0.1) 
                     local TGrid = Vector2.new(x, getgenv().PabrikYPos)
                     
-                    -- Pukul pakai jeda 1 frame per hit biar server register!
+                    -- Pukul pakai jeda yang fix per hit (Sama kyk Master Auto Farm)
                     for hit = 1, getgenv().HitCount do 
+                        if not getgenv().EnablePabrik then break end
                         RemoteBreak:FireServer(TGrid) 
-                        RunService.Heartbeat:Wait()
+                        task.wait(getgenv().BreakDelay)
                     end
-                    local startT = os.clock()
-                    repeat RunService.Heartbeat:Wait() until os.clock() - startT >= 0.15 
                 end
                 
                 -- Sweep pungut manual (Start X ke End X + 1, lalu balik ke Start X - 1)
@@ -335,21 +335,14 @@ task.spawn(function()
                     
                     -- 1. PLACE
                     RemotePlace:FireServer(BreakTarget, blockSlot)
+                    task.wait(0.15) -- Action Delay untuk kasih nafas ke server
                     
-                    -- Jeda tipis sebelum break supaya block ke-register di server
-                    local placeTimer = os.clock()
-                    repeat RunService.Heartbeat:Wait() until os.clock() - placeTimer >= 0.05
-                    
-                    -- 2. BREAK (Tambahin Heartbeat:Wait() biar server gak anggap spam)
+                    -- 2. BREAK (Pakai BreakDelay Master)
                     for hit = 1, getgenv().HitCount do
                         if not getgenv().EnablePabrik then break end
                         RemoteBreak:FireServer(BreakTarget)
-                        RunService.Heartbeat:Wait()
+                        task.wait(getgenv().BreakDelay)
                     end
-                    
-                    -- Jeda presisi pakai os.clock buat nunggu hancur dan drop
-                    local breakTimer = os.clock()
-                    repeat RunService.Heartbeat:Wait() until os.clock() - breakTimer >= 0.15
                     
                     -- 3. SMART COLLECT 
                     if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
