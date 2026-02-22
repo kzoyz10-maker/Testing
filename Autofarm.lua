@@ -1,15 +1,16 @@
--- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & GRID TP COLLECT (v8.1)     ]] --
+l-- [[ ========================================================= ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & SMART GRID COLLECT (v8.2)  ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.1 (Grid TP Collect)" 
+getgenv().ScriptVersion = "Auto Farm v8.2 (Smart Grid Collect)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
 getgenv().GridSize = 4.5 
+getgenv().StepDelay = 0.1 -- Kecepatan jalan per grid
 -- ========================================== --
 
 local Players = game:GetService("Players")
@@ -63,7 +64,7 @@ end
 
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "Auto Collect (Grid TP)", "AutoCollect")
+CreateToggle(TargetPage, "Smart Auto Collect", "AutoCollect")
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
 CreateSlider(TargetPage, "Farm Offset X", -5, 5, 0, "OffsetX")
 CreateSlider(TargetPage, "Farm Offset Y", -5, 5, 0, "OffsetY")
@@ -96,15 +97,41 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
--- 🌟 LOOP MASTER AUTO FARM + AUTO COLLECT (GRID TP)
+-- 🌟 FUNGSI JALAN PER GRID (Diadaptasi dari Kodemu)
+local function WalkGridSync(TargetX, TargetY)
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    
+    if MyHitbox then
+        local startZ = MyHitbox.Position.Z
+        local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+        local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+        
+        while (currentX ~= TargetX or currentY ~= TargetY) and getgenv().MasterAutoFarm do
+            if currentX ~= TargetX then 
+                currentX = currentX + (TargetX > currentX and 1 or -1) 
+            elseif currentY ~= TargetY then 
+                currentY = currentY + (TargetY > currentY and 1 or -1) 
+            end
+            
+            local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
+            MyHitbox.CFrame = CFrame.new(newWorldPos)
+            if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
+            
+            task.wait(getgenv().StepDelay) -- Jalan pelan-pelan per grid
+        end
+    end
+end
+
+-- 🌟 LOOP SINKRONISASI UTAMA (Farm -> Pause -> Collect -> Resume)
 task.spawn(function() 
     while true do 
         if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
             local PosX, PosY = GetPlayerGridPosition()
             
             if PosX and PosY then 
-                local X = math.floor(PosX / getgenv().GridSize + 0.5)
-                local Y = math.floor(PosY / getgenv().GridSize + 0.5)
+                local BaseX = math.floor(PosX / getgenv().GridSize + 0.5)
+                local BaseY = math.floor(PosY / getgenv().GridSize + 0.5)
                 local _, ItemIndex 
                 
                 if getgenv().GameInventoryModule.GetSelectedHotbarItem then 
@@ -116,8 +143,8 @@ task.spawn(function()
                 for i = 0, getgenv().FarmAmount - 1 do 
                     if not getgenv().MasterAutoFarm then break end 
                     
-                    local TargetGridX = X + getgenv().OffsetX + i
-                    local TargetGridY = Y + getgenv().OffsetY
+                    local TargetGridX = BaseX + getgenv().OffsetX + i
+                    local TargetGridY = BaseY + getgenv().OffsetY
                     local TGrid = Vector2.new(TargetGridX, TargetGridY) 
                     
                     -- A. PLACE ITEM 
@@ -133,29 +160,26 @@ task.spawn(function()
                         task.wait(getgenv().BreakDelayMs / 1000) 
                     end
                     
-                    -- C. AUTO COLLECT (TELEPORT PER GRID)
+                    -- C. SMART AUTO COLLECT LOH!
                     if getgenv().AutoCollect then
-                        task.wait(0.1) -- Tunggu drop muncul
+                        task.wait(0.2) -- Jeda sebentar biar drop muncul di map
                         
-                        -- Cek apakah ada barang jatuh di grid itu
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
-                            local char = LP.Character
-                            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                            -- FARM PAUSE: Jalan ke arah drop
+                            WalkGridSync(TargetGridX, TargetGridY)
                             
-                            if hrp then
-                                local originalCFrame = hrp.CFrame
-                                
-                                -- 1. TP Instan tepat di titik tengah grid target (koordinat dikali ukuran grid)
-                                local targetWorldX = TargetGridX * getgenv().GridSize
-                                local targetWorldY = TargetGridY * getgenv().GridSize
-                                hrp.CFrame = CFrame.new(targetWorldX, targetWorldY, originalCFrame.Position.Z)
-                                
-                                task.wait(0.2) -- Jeda sebentar biar server mencatat bahwa kamu mengambil item
-                                
-                                -- 2. TP balik ke grid awal tempat kamu bertani
-                                hrp.CFrame = originalCFrame
+                            -- Tunggu sampai drop di grid itu benar-benar keambil/hilang (Max nunggu 1.5 detik biar ga nyangkut)
+                            local waitTimeout = 0
+                            while CheckDropsAtGrid(TargetGridX, TargetGridY) and waitTimeout < 15 and getgenv().MasterAutoFarm do
                                 task.wait(0.1)
+                                waitTimeout = waitTimeout + 1
                             end
+                            
+                            -- Jeda bentar habis masuk inventory, terus pulang ke posisi Base awal
+                            task.wait(0.1)
+                            WalkGridSync(BaseX, BaseY)
+                            
+                            -- FARM RESUME: Lanjut ke block selanjutnya (FarmAmount)
                         end
                     end
                 end 
