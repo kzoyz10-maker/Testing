@@ -1,16 +1,16 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & SMART GRID COLLECT (v8.2)  ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & SMART GRID COLLECT (v8.3)  ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.2 (Smart Grid Collect)" 
+getgenv().ScriptVersion = "Auto Farm v8.3 (Perfect Vision)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
 getgenv().GridSize = 4.5 
-getgenv().StepDelay = 0.1 -- Kecepatan jalan per grid
+getgenv().StepDelay = 0.1 -- Kecepatan langkah per grid
 -- ========================================== --
 
 local Players = game:GetService("Players")
@@ -76,31 +76,54 @@ local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 
 local function GetPlayerGridPosition()
-    if PlayerMovement and PlayerMovement.Position then return PlayerMovement.Position.X, PlayerMovement.Position.Y else local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"); if hrp then return hrp.Position.X, hrp.Position.Y end end return nil, nil
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+    local ref = MyHitbox or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if ref then return ref.Position.X, ref.Position.Y end
+    return nil, nil
 end
 
+-- 🌟 FIX: SCANNER DROP SPESIFIK KE FOLDER DROPS & GEMS
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
-    local dropFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("Items") or workspace:FindFirstChild("DroppedItems")
-    local itemsToScan = dropFolder and dropFolder:GetDescendants() or workspace:GetChildren()
+    local TargetFolders = {
+        workspace:FindFirstChild("Drops"),
+        workspace:FindFirstChild("Gems")
+    }
     
-    for _, obj in pairs(itemsToScan) do
-        if obj:IsA("BasePart") and obj.Name ~= "Baseplate" and not obj.Anchored then
-            local dX = math.floor(obj.Position.X / getgenv().GridSize + 0.5)
-            local dY = math.floor(obj.Position.Y / getgenv().GridSize + 0.5)
-            if dX == TargetGridX and dY == TargetGridY then return true end
-        elseif obj:IsA("Model") and obj.PrimaryPart then
-            local pX = math.floor(obj.PrimaryPart.Position.X / getgenv().GridSize + 0.5)
-            local pY = math.floor(obj.PrimaryPart.Position.Y / getgenv().GridSize + 0.5)
-            if pX == TargetGridX and pY == TargetGridY then return true end
+    for _, folder in ipairs(TargetFolders) do
+        if folder then
+            for _, obj in pairs(folder:GetChildren()) do
+                local pos = nil
+                
+                if obj:IsA("BasePart") then
+                    pos = obj.Position
+                elseif obj:IsA("Model") and obj.PrimaryPart then
+                    pos = obj.PrimaryPart.Position
+                elseif obj:IsA("Model") then
+                    local firstPart = obj:FindFirstChildWhichIsA("BasePart")
+                    if firstPart then pos = firstPart.Position end
+                end
+                
+                if pos then
+                    local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
+                    local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
+                    if dX == TargetGridX and dY == TargetGridY then 
+                        return true 
+                    end
+                end
+            end
         end
     end
     return false
 end
 
--- 🌟 FUNGSI JALAN PER GRID (Diadaptasi dari Kodemu)
+-- 🌟 FUNGSI JALAN PER GRID
 local function WalkGridSync(TargetX, TargetY)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
-    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+    if not MyHitbox then 
+        MyHitbox = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    end
     
     if MyHitbox then
         local startZ = MyHitbox.Position.Z
@@ -118,12 +141,12 @@ local function WalkGridSync(TargetX, TargetY)
             MyHitbox.CFrame = CFrame.new(newWorldPos)
             if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
             
-            task.wait(getgenv().StepDelay) -- Jalan pelan-pelan per grid
+            task.wait(getgenv().StepDelay) 
         end
     end
 end
 
--- 🌟 LOOP SINKRONISASI UTAMA (Farm -> Pause -> Collect -> Resume)
+-- 🌟 LOOP SINKRONISASI UTAMA
 task.spawn(function() 
     while true do 
         if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
@@ -160,26 +183,29 @@ task.spawn(function()
                         task.wait(getgenv().BreakDelayMs / 1000) 
                     end
                     
-                    -- C. SMART AUTO COLLECT LOH!
+                    -- C. SMART AUTO COLLECT (SCAN GEMS & DROPS)
                     if getgenv().AutoCollect then
-                        task.wait(0.2) -- Jeda sebentar biar drop muncul di map
+                        task.wait(0.2) 
                         
+                        -- Cek ada Gems/Block/Sapling gak di grid yang baru dihancurin?
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
-                            -- FARM PAUSE: Jalan ke arah drop
+                            
+                            -- FARM PAUSE: Jalan ke target
                             WalkGridSync(TargetGridX, TargetGridY)
                             
-                            -- Tunggu sampai drop di grid itu benar-benar keambil/hilang (Max nunggu 1.5 detik biar ga nyangkut)
+                            -- Nunggu diambil (timeout 1.5 detik biar aman)
                             local waitTimeout = 0
                             while CheckDropsAtGrid(TargetGridX, TargetGridY) and waitTimeout < 15 and getgenv().MasterAutoFarm do
                                 task.wait(0.1)
                                 waitTimeout = waitTimeout + 1
                             end
                             
-                            -- Jeda bentar habis masuk inventory, terus pulang ke posisi Base awal
+                            -- Jeda bentar habis masuk kantong
                             task.wait(0.1)
-                            WalkGridSync(BaseX, BaseY)
                             
-                            -- FARM RESUME: Lanjut ke block selanjutnya (FarmAmount)
+                            -- FARM RESUME: Pulang ke titik Base awal berdiri
+                            WalkGridSync(BaseX, BaseY)
+                            task.wait(0.1)
                         end
                     end
                 end 
