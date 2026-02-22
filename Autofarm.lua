@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.14) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.15) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.14 (Flawless Sync)" 
+getgenv().ScriptVersion = "Auto Farm v8.15 (Pixel-Perfect Return)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -70,7 +70,7 @@ end
 
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
-CreateToggle(TargetPage, "👻 Smart Auto Collect iyaa", "AutoCollect") 
+CreateToggle(TargetPage, "👻 Smart Auto Collect wooo", "AutoCollect") 
 CreateSlider(TargetPage, "Wait Drop (ms)", 50, 1000, 250, "WaitDropMs") 
 CreateSlider(TargetPage, "Walk Speed (ms)", 10, 500, 100, "WalkSpeedMs") 
 CreateSlider(TargetPage, "Break Delay (ms)", 10, 500, 150, "BreakDelayMs") 
@@ -86,13 +86,9 @@ local RemoteBreak = Remotes:WaitForChild("PlayerFist")
 -- 🌟 LOOP PER FRAME (MANIPULASI PHYSICS & PEMBERSIHAN VISUAL) 🌟
 RunService.Heartbeat:Connect(function()
     if getgenv().AutoCollect then
-        -- 1. Bersihkan Tile Highlights sepenuhnya saat Auto Collect nyala
         local highlights = workspace:FindFirstChild("TileHighligts") or workspace:FindFirstChild("TileHighlights")
-        if highlights then
-            pcall(function() highlights:ClearAllChildren() end)
-        end
+        if highlights then pcall(function() highlights:ClearAllChildren() end) end
 
-        -- 2. Manipulasi Physics saat awal Ghosting (Diam di Tempat)
         if getgenv().IsGhosting then
             if getgenv().HoldCFrame then
                 local char = LP.Character
@@ -207,9 +203,17 @@ task.spawn(function()
                             local char = LP.Character
                             local hrp = char and char:FindFirstChild("HumanoidRootPart")
                             local hum = char and char:FindFirstChildOfClass("Humanoid")
+                            local HitboxFolder = workspace:FindFirstChild("Hitbox")
+                            local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+                            
+                            -- 📷 SIMPAN KORDINAT ASLI SECARA PIKSEL-SEMPURNA (TIDAK DIBULATKAN KE GRID)
+                            local ExactHrpCF = hrp and hrp.CFrame
+                            local ExactHitboxCF = MyHitbox and MyHitbox.CFrame
+                            local ExactPMPos = nil
+                            if PlayerMovement then pcall(function() ExactPMPos = PlayerMovement.Position end) end
                             
                             if hrp then
-                                getgenv().HoldCFrame = hrp.CFrame
+                                getgenv().HoldCFrame = ExactHrpCF
                                 hrp.Anchored = true 
                                 getgenv().IsGhosting = true 
                             end
@@ -230,29 +234,23 @@ task.spawn(function()
                             task.wait(0.1)
                             WalkGridSync(BaseX, BaseY)
                             
-                            -- 🌟 FLAWLESS SYNC: PEREDAM BENTURAN MUTLAK SEBELUM UNANCHOR 🌟
-                            if hrp and getgenv().HoldCFrame then 
-                                local returnCFrame = getgenv().HoldCFrame
-                                local returnPos = returnCFrame.Position
-                                local HitboxFolder = workspace:FindFirstChild("Hitbox")
-                                local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-                                
-                                -- 1. Matikan sisa momentum di Roblox Physics
+                            -- 🌟 RESTORASI KORDINAT ASLI SECARA ABSOLUT 🌟
+                            if hrp and ExactHrpCF then 
                                 hrp.AssemblyLinearVelocity = Vector3.zero
                                 hrp.AssemblyAngularVelocity = Vector3.zero
                                 
-                                -- 2. Kunci visual dan hitbox ke posisi absolut
-                                hrp.CFrame = returnCFrame
-                                if MyHitbox then 
-                                    MyHitbox.CFrame = returnCFrame 
+                                -- Kembalikan Hitbox persis ke titik piksel semula
+                                if MyHitbox and ExactHitboxCF then 
+                                    MyHitbox.CFrame = ExactHitboxCF 
                                     MyHitbox.AssemblyLinearVelocity = Vector3.zero
                                 end
                                 
-                                -- 3. Tindih memori interpolasi posisi otak game (Lerp Bypass)
-                                if PlayerMovement then
+                                hrp.CFrame = ExactHrpCF
+                                
+                                if PlayerMovement and ExactPMPos then
                                     pcall(function()
-                                        PlayerMovement.Position = returnPos
-                                        PlayerMovement.OldPosition = returnPos
+                                        PlayerMovement.Position = ExactPMPos
+                                        PlayerMovement.OldPosition = ExactPMPos
                                         PlayerMovement.VelocityX = 0
                                         PlayerMovement.VelocityY = 0
                                         PlayerMovement.VelocityZ = 0
@@ -260,19 +258,16 @@ task.spawn(function()
                                     end)
                                 end
                                 
-                                -- 4. Sinkronisasi timing dengan tick server/client game
                                 RunService.Heartbeat:Wait()
                                 RunService.Heartbeat:Wait()
                                 
-                                -- 5. Lepas jangkar secara halus
                                 hrp.Anchored = false 
                                 
-                                -- 6. Pertahankan perlindungan selama 2 frame ekstra
                                 for _ = 1, 2 do
-                                    if PlayerMovement then
+                                    if PlayerMovement and ExactPMPos then
                                         pcall(function()
-                                            PlayerMovement.Position = returnPos
-                                            PlayerMovement.OldPosition = returnPos
+                                            PlayerMovement.Position = ExactPMPos
+                                            PlayerMovement.OldPosition = ExactPMPos
                                             PlayerMovement.VelocityY = 0
                                             PlayerMovement.Grounded = true
                                         end)
