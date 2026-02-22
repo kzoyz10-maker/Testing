@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.30) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.35) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.30 (Deep Sapling Scanner)" 
+getgenv().ScriptVersion = "Auto Farm v8.35 (Attribute Sapling Scanner)" 
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -114,7 +114,7 @@ end
 -- Inject elemen ke UI
 CreateToggle(TargetPage, "Master Auto Farm", "MasterAutoFarm") 
 CreateToggle(TargetPage, "👻 Smart Auto Collect", "AutoCollect") 
-CreateToggle(TargetPage, "🌱 Only Collect Sapling", "AutoSaplingMode") -- Toggle Prioritas
+CreateToggle(TargetPage, "🌱 Only Collect Sapling", "AutoSaplingMode") 
 CreateInput(TargetPage, "Wait Drop (ms)", 250, "WaitDropMs") 
 CreateInput(TargetPage, "Walk Speed (ms)", 100, "WalkSpeedMs") 
 CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs") 
@@ -153,7 +153,7 @@ local function GetPlayerGridPosition()
     return nil, nil
 end
 
--- 🌟 SISTEM DEEP SCAN: Cek sampai ke akar untuk mencari kata "Sapling"
+-- 🌟 SISTEM DEEP ATTRIBUTE SCANNER (Versi Sapling ID) 🌟
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
     local foundSapling = false
@@ -177,37 +177,44 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                     if dX == TargetGridX and dY == TargetGridY then
                         foundAny = true
                         
-                        -- Cek apakah objek ini adalah sapling (Cek nama dan isinya)
+                        -- Cek apakah objek ini adalah sapling lewat Attributes
                         local isSapling = false
-                        if string.find(string.lower(obj.Name), "sapling") then
-                            isSapling = true
-                        else
+                        
+                        -- 1. Cek dari Attribute objek utama
+                        for _, attrValue in pairs(obj:GetAttributes()) do
+                            if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then
+                                isSapling = true
+                                break
+                            end
+                        end
+                        
+                        -- 2. Cek dari Anak-anaknya kalau belum ketemu
+                        if not isSapling then
                             for _, child in ipairs(obj:GetDescendants()) do
-                                if string.find(string.lower(child.Name), "sapling") then
-                                    isSapling = true
-                                    break
-                                elseif child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then
+                                -- Cek di StringValue anak
+                                if child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then
                                     isSapling = true
                                     break
                                 end
+                                -- Cek di Attribute anak (misal part di dalam model)
+                                for _, attrValue in pairs(child:GetAttributes()) do
+                                    if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then
+                                        isSapling = true
+                                        break
+                                    end
+                                end
+                                if isSapling then break end
                             end
                         end
 
-                        if isSapling then
-                            foundSapling = true
-                        end
+                        if isSapling then foundSapling = true end
                     end
                 end
             end
         end
     end
     
-    -- Kalau mode Only Sapling nyala, kembalikan TRUE hanya jika ada sapling
-    if getgenv().AutoSaplingMode then
-        return foundSapling
-    else
-        return foundAny
-    end
+    if getgenv().AutoSaplingMode then return foundSapling else return foundAny end
 end
 
 local function WalkGridSync(TargetX, TargetY)
@@ -265,7 +272,7 @@ task.spawn(function()
                     if getgenv().AutoCollect then
                         task.wait(getgenv().WaitDropMs / 1000) 
                         
-                        -- Pengecekan krusial: Jika Only Sapling aktif, fungsi ini hanya True saat ada Sapling
+                        -- Pengecekan membaca Attributes Drop
                         if CheckDropsAtGrid(TargetGridX, TargetGridY) then
                             
                             local char = LP.Character
