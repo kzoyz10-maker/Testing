@@ -13,14 +13,14 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Pabrik v0.73-MasterBreak" 
+getgenv().ScriptVersion = "Pabrik v0.74-SaplingOnly" 
 
 -- ========================================== --
 -- [[ SETTING KECEPATAN BASE ]]
 getgenv().PlaceDelay = 0.05  
 getgenv().DropDelay = 0.5      
 getgenv().StepDelay = 0.1   
-getgenv().BreakDelay = 0.15 -- Samain dengan Master (150ms)
+getgenv().BreakDelay = 0.15 
 -- ========================================== --
 
 local Players = game:GetService("Players")
@@ -40,7 +40,7 @@ if getgenv().KzoyzHeartbeatPabrik then getgenv().KzoyzHeartbeatPabrik:Disconnect
 
 -- [[ VARIABEL GLOBAL ]] --
 getgenv().GridSize = 4.5; 
-getgenv().HitCount = 3    -- Default 3 sesuai Master
+getgenv().HitCount = 3    
 getgenv().EnablePabrik = false
 getgenv().PabrikStartX = 0; getgenv().PabrikEndX = 10; getgenv().PabrikYPos = 37
 getgenv().GrowthTime = 30 
@@ -112,7 +112,7 @@ local function ScanAvailableItems()
     return items
 end
 
--- SISTEM DETEKSI DROP --
+-- SISTEM DETEKSI DROP (ONLY SAPLING HARDCODED NYALA) --
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
     for _, folder in ipairs(TargetFolders) do
@@ -125,10 +125,30 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                     local firstPart = obj:FindFirstChildWhichIsA("BasePart")
                     if firstPart then pos = firstPart.Position end
                 end
+                
                 if pos then
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
-                    if dX == TargetGridX and dY == TargetGridY then return true end
+                    
+                    if dX == TargetGridX and dY == TargetGridY then
+                        -- Cek apakah drop ini adalah Sapling
+                        local isSapling = false
+                        for _, attrValue in pairs(obj:GetAttributes()) do
+                            if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end
+                        end
+                        if not isSapling then
+                            for _, child in ipairs(obj:GetDescendants()) do
+                                if child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then isSapling = true; break end
+                                for _, attrValue in pairs(child:GetAttributes()) do
+                                    if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end
+                                end
+                                if isSapling then break end
+                            end
+                        end
+                        
+                        -- Cuma me-return True kalau dia beneran Sapling
+                        if isSapling then return true end
+                    end
                 end
             end
         end
@@ -233,7 +253,7 @@ CreateButton(TargetPage, "🔄 Refresh Tas", function() local newItems = ScanAva
 CreateToggle(TargetPage, "START BALANCED PABRIK", "EnablePabrik")
 
 CreateTextBox(TargetPage, "Hit Count", getgenv().HitCount, "HitCount")
-CreateTextBox(TargetPage, "Break Delay (Detik)", getgenv().BreakDelay, "BreakDelay") -- Input Delay Baru
+CreateTextBox(TargetPage, "Break Delay (Detik)", getgenv().BreakDelay, "BreakDelay") 
 CreateTextBox(TargetPage, "Start X", getgenv().PabrikStartX, "PabrikStartX")
 CreateTextBox(TargetPage, "End X", getgenv().PabrikEndX, "PabrikEndX")
 CreateTextBox(TargetPage, "Y Pos", getgenv().PabrikYPos, "PabrikYPos")
@@ -300,7 +320,6 @@ task.spawn(function()
                     WalkToGrid(x, getgenv().PabrikYPos, true); task.wait(0.1) 
                     local TGrid = Vector2.new(x, getgenv().PabrikYPos)
                     
-                    -- Pukul pakai jeda yang fix per hit (Sama kyk Master Auto Farm)
                     for hit = 1, getgenv().HitCount do 
                         if not getgenv().EnablePabrik then break end
                         RemoteBreak:FireServer(TGrid) 
@@ -308,7 +327,7 @@ task.spawn(function()
                     end
                 end
                 
-                -- Sweep pungut manual (Start X ke End X + 1, lalu balik ke Start X - 1)
+                -- Sweep pungut manual 
                 if getgenv().EnablePabrik then
                     local moveDir = (getgenv().PabrikEndX >= getgenv().PabrikStartX) and 1 or -1
                     local sweepTargetX = getgenv().PabrikEndX + moveDir
@@ -335,16 +354,16 @@ task.spawn(function()
                     
                     -- 1. PLACE
                     RemotePlace:FireServer(BreakTarget, blockSlot)
-                    task.wait(0.15) -- Action Delay untuk kasih nafas ke server
+                    task.wait(0.15) 
                     
-                    -- 2. BREAK (Pakai BreakDelay Master)
+                    -- 2. BREAK 
                     for hit = 1, getgenv().HitCount do
                         if not getgenv().EnablePabrik then break end
                         RemoteBreak:FireServer(BreakTarget)
                         task.wait(getgenv().BreakDelay)
                     end
                     
-                    -- 3. SMART COLLECT 
+                    -- 3. SMART COLLECT (UDAH PERMANEN ONLY SAPLING!)
                     if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
                         local char = LP.Character
                         local hrp = char and char:FindFirstChild("HumanoidRootPart")
