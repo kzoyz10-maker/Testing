@@ -13,7 +13,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Auto Plant Full World v1.2 - Smart ZigZag" 
+getgenv().ScriptVersion = "Auto Plant Full World v1.3 - Auto Fly Dynamic" 
 
 -- ========================================== --
 -- [[ SETTING KECEPATAN BASE ]]
@@ -43,12 +43,12 @@ getgenv().ModFly = false
 getgenv().EnableFullPlant = false
 getgenv().PlantSeedID = ""
 
--- Sistem Kordinat ZigZag Baru
+-- Sistem Kordinat ZigZag
 getgenv().PlantStartX = 99
 getgenv().PlantEndX = 0
 getgenv().PlantStartY = 41
 getgenv().PlantEndY = 39
-getgenv().PlantStepY = 2 -- Jarak lompat baris (default 2)
+getgenv().PlantStepY = 2
 
 -- [[ SISTEM MOD FLY (INVISIBLE PLATFORM) ]] --
 local AirPlat = Instance.new("Part")
@@ -60,8 +60,9 @@ AirPlat.Transparency = 1
 AirPlat.Parent = workspace
 getgenv().AirPlatform = AirPlat
 
+-- Loop Mod Fly sekarang HANYA baca getgenv().ModFly (dikontrol dinamis oleh AutoPlant)
 getgenv().KzoyzModFlyLoop = RunService.Stepped:Connect(function()
-    if getgenv().ModFly or getgenv().EnableFullPlant then
+    if getgenv().ModFly then
         local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
         if H then getgenv().AirPlatform.CFrame = CFrame.new(H.Position.X, H.Position.Y - (getgenv().GridSize / 2), H.Position.Z) end
         if PlayerMovement then pcall(function() PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end) end
@@ -129,7 +130,7 @@ function CreateButton(Parent, Text, Callback) local Btn = Instance.new("TextButt
 function CreateDropdown(Parent, Text, DefaultOptions, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6); local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""; local Label = Instance.new("TextLabel", TopBtn); Label.Text = Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left; local Icon = Instance.new("TextLabel", TopBtn); Icon.Text = "v"; Icon.TextColor3 = Theme.Purple; Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 12; Icon.Size = UDim2.new(0, 20, 1, 0); Icon.Position = UDim2.new(1, -25, 0, 0); Icon.BackgroundTransparency = 1; local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; Scroll.ScrollBarImageColor3 = Theme.Purple; local List = Instance.new("UIListLayout", Scroll); local isOpen = false; TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true); Icon.Text = "^" else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end end); local function RefreshOptions(Options) for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end; for _, opt in ipairs(Options) do local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11; OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end) end; Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) end; RefreshOptions(DefaultOptions); return RefreshOptions end
 
 -- [[ INJECT MENU ]] --
-CreateToggle(TargetPage, "🕊️ Mod Fly (Air Walk)", "ModFly")
+CreateToggle(TargetPage, "🕊️ Mod Fly (Bisa Manual)", "ModFly")
 
 local RefreshSeedDropdown = CreateDropdown(TargetPage, "Pilih Seed", ScanAvailableItems(), "PlantSeedID")
 CreateButton(TargetPage, "🔄 Refresh Tas", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems) end)
@@ -139,7 +140,7 @@ CreateToggle(TargetPage, "🚀 START AUTO PLANT", "EnableFullPlant")
 -- INPUT POSISI ZIG-ZAG DINAMIS
 local StartXBox = CreateTextBox(TargetPage, "Start X", getgenv().PlantStartX, "PlantStartX")
 local StartYBox = CreateTextBox(TargetPage, "Start Y", getgenv().PlantStartY, "PlantStartY")
-CreateButton(TargetPage, "📍 Set Kordinat Awal (99,41)", function() 
+CreateButton(TargetPage, "📍 Set Kordinat Awal", function() 
     local H = workspace.Hitbox:FindFirstChild(LP.Name) 
     if H then 
         local bx = math.floor(H.Position.X/4.5+0.5)
@@ -151,7 +152,7 @@ end)
 
 local EndXBox = CreateTextBox(TargetPage, "Batas ZigZag X", getgenv().PlantEndX, "PlantEndX")
 local EndYBox = CreateTextBox(TargetPage, "End Y", getgenv().PlantEndY, "PlantEndY")
-CreateButton(TargetPage, "📍 Set Kordinat Akhir (0,39)", function() 
+CreateButton(TargetPage, "📍 Set Kordinat Akhir", function() 
     local H = workspace.Hitbox:FindFirstChild(LP.Name) 
     if H then 
         local bx = math.floor(H.Position.X/4.5+0.5)
@@ -174,33 +175,40 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
                 continue
             end
             
-            -- Hitung arah step Y (naik atau turun)
+            -- Tentukan pergerakan Y naik atau turun
             local absStepY = math.max(1, math.abs(getgenv().PlantStepY))
             local yStep = (getgenv().PlantStartY <= getgenv().PlantEndY) and absStepY or -absStepY
             
-            local moveForward = true -- Flag penentu arah Zig-Zag
+            -- Flag ini menentukan apakah kita butuh Mod Fly atau tidak
+            local isGoingUp = (yStep > 0)
+            local moveForward = true
             
-            -- Looping per baris sesuai step yang diinput (Naik / Turun otomatis)
             for y = getgenv().PlantStartY, getgenv().PlantEndY, yStep do
                 if not getgenv().EnableFullPlant then break end
                 
-                -- [[ LOGIKA ZIG-ZAG ]]
-                -- Kalau true: Kiri ke Kanan. Kalau false: Kanan ke Kiri.
+                -- [[ KONTROL FLY DINAMIS ]]
+                -- Nyalain otomatis JIKA naik. Matiin JIKA turun.
+                if isGoingUp then
+                    getgenv().ModFly = true
+                else
+                    getgenv().ModFly = false
+                end
+                
                 local currentStartX = moveForward and getgenv().PlantStartX or getgenv().PlantEndX
                 local currentEndX = moveForward and getgenv().PlantEndX or getgenv().PlantStartX
                 local xStep = (currentStartX <= currentEndX) and 1 or -1
                 
-                -- Karakter jalan dulu ke ujung mulai baris
+                -- Jalan ke ujung dulu sebelum mulai tanam
                 WalkToGrid(currentStartX, y)
                 task.wait(0.2)
                 
-                -- Mulai tanam di baris tersebut
                 for x = currentStartX, currentEndX, xStep do
                     if not getgenv().EnableFullPlant then break end
                     
                     local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
                     if not seedSlot then 
                         getgenv().EnableFullPlant = false
+                        getgenv().ModFly = false -- Matiin fly pas seed habis
                         break 
                     end
                     
@@ -211,12 +219,12 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
                     task.wait(getgenv().PlaceDelay)
                 end
                 
-                -- Balik arah untuk baris selanjutnya
                 moveForward = not moveForward
             end
             
             if getgenv().EnableFullPlant then
-                getgenv().EnableFullPlant = false -- Otomatis stop setelah beres 1 world
+                getgenv().EnableFullPlant = false 
+                getgenv().ModFly = false -- Otomatis matiin fly kalau kelar
             end
         end
         task.wait(1)
