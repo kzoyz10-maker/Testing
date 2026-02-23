@@ -1,7 +1,6 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
--- [[ FIX SCROLL MENTOK ]] --
 TargetPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
 TargetPage.CanvasSize = UDim2.new(0, 0, 0, 0)
 local listLayout = TargetPage:FindFirstChildWhichIsA("UIListLayout")
@@ -11,56 +10,41 @@ if listLayout then
         TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
     end)
 end
-------------------------------
 
-getgenv().ScriptVersion = "Auto Plant Full World v1.3 - Auto Fly Dynamic" 
+getgenv().ScriptVersion = "Auto Plant v2.0 - Auto Detect & Smart Path" 
 
 -- ========================================== --
--- [[ SETTING KECEPATAN BASE ]]
 getgenv().PlaceDelay = 0.05  
 getgenv().StepDelay = 0.1   
+getgenv().GridSize = 4.5
 -- ========================================== --
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
-local UIS = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser") 
 local RunService = game:GetService("RunService")
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
-LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
-
 if getgenv().KzoyzPlantLoop then task.cancel(getgenv().KzoyzPlantLoop); getgenv().KzoyzPlantLoop = nil end
 if getgenv().KzoyzModFlyLoop then getgenv().KzoyzModFlyLoop:Disconnect(); getgenv().KzoyzModFlyLoop = nil end
 if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
 
--- [[ VARIABEL GLOBAL ]] --
-getgenv().GridSize = 4.5
 getgenv().ModFly = false
-getgenv().EnableFullPlant = false
+getgenv().EnableSmartPlant = false
 getgenv().PlantSeedID = ""
+getgenv().ScanRadiusX = 50 -- Jarak bot nyari ladang ke kiri-kanan
+getgenv().ScanRadiusY = 10 -- Jarak bot nyari ladang ke atas-bawah
 
--- Sistem Kordinat ZigZag
-getgenv().PlantStartX = 99
-getgenv().PlantEndX = 0
-getgenv().PlantStartY = 41
-getgenv().PlantEndY = 39
-getgenv().PlantStepY = 2
-
--- [[ SISTEM MOD FLY (INVISIBLE PLATFORM) ]] --
+-- [[ SISTEM MOD FLY (DINAMIS) ]] --
 local AirPlat = Instance.new("Part")
 AirPlat.Name = "KzoyzAirWalk"
 AirPlat.Size = Vector3.new(getgenv().GridSize + 1, 1, getgenv().GridSize + 1)
-AirPlat.Anchored = true
-AirPlat.CanCollide = true
-AirPlat.Transparency = 1 
+AirPlat.Anchored = true; AirPlat.CanCollide = true; AirPlat.Transparency = 1 
 AirPlat.Parent = workspace
 getgenv().AirPlatform = AirPlat
 
--- Loop Mod Fly sekarang HANYA baca getgenv().ModFly (dikontrol dinamis oleh AutoPlant)
 getgenv().KzoyzModFlyLoop = RunService.Stepped:Connect(function()
     if getgenv().ModFly then
         local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
@@ -71,16 +55,13 @@ getgenv().KzoyzModFlyLoop = RunService.Stepped:Connect(function()
     end
 end)
 
--- Modul Game Internal --
+-- Modul Tas
 local InventoryMod
 pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
-
 local function GetSlotByItemID(targetID)
     if not InventoryMod or not InventoryMod.Stacks then return nil end
     for slotIndex, data in pairs(InventoryMod.Stacks) do
-        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
-            if not data.Amount or data.Amount > 0 then return slotIndex end
-        end
+        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) and data.Amount > 0 then return slotIndex end
     end return nil
 end
 
@@ -100,133 +81,154 @@ local function ScanAvailableItems()
     return items
 end
 
-local function WalkToGrid(tX, tY)
-    local HitboxFolder = workspace:FindFirstChild("Hitbox")
-    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-    if not MyHitbox then return end
+-- [[ SISTEM SENSOR RAYCAST ]] --
+-- Mengecek apakah ada benda padat di arah tertentu
+local function CheckSolidBlock(startX, startY, dirX, dirY)
+    local H = workspace.Hitbox:FindFirstChild(LP.Name)
+    if not H then return false end
+    
+    local origin = Vector3.new(startX * getgenv().GridSize, startY * getgenv().GridSize, H.Position.Z)
+    local direction = Vector3.new(dirX * getgenv().GridSize, dirY * getgenv().GridSize, 0)
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {workspace:FindFirstChild("Hitbox"), getgenv().AirPlatform}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
-    local startZ = MyHitbox.Position.Z
-    local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
-    local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    return result ~= nil -- Return True kalau nabrak block
+end
 
-    while (currentX ~= tX or currentY ~= tY) do
-        if not getgenv().EnableFullPlant then break end
-        if currentX ~= tX then currentX = currentX + (tX > currentX and 1 or -1)
-        elseif currentY ~= tY then currentY = currentY + (tY > currentY and 1 or -1) end
+-- [[ SMART MOVEMENT ]] --
+local function MoveToWithEdgeDetection(tX, tY)
+    local H = workspace.Hitbox:FindFirstChild(LP.Name)
+    if not H then return end
+    local startZ = H.Position.Z
+
+    while true do
+        if not getgenv().EnableSmartPlant then break end
         
-        local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
-        MyHitbox.CFrame = CFrame.new(newWorldPos)
-        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
+        local cX = math.floor(H.Position.X / getgenv().GridSize + 0.5)
+        local cY = math.floor(H.Position.Y / getgenv().GridSize + 0.5)
+        
+        if cX == tX and cY == tY then break end -- Udah sampai
+
+        -- JIKA HARUS NAIK KE ATAS (Mod Fly)
+        if tY > cY then
+            -- Cek Atap, mentok gak?
+            local isCeilingBlocked = CheckSolidBlock(cX, cY, 0, 1)
+            
+            if isCeilingBlocked then
+                -- Atap mentok! Jalan ke ujung platform dulu.
+                getgenv().ModFly = false -- Jalan di tanah biasa
+                local testX = cX
+                local foundGap = false
+                
+                -- Cari celah ke arah tujuan X
+                local searchDir = (tX > cX) and 1 or -1
+                for i = 1, 30 do -- Coba scan sampai 30 blok ke depan
+                    testX = testX + searchDir
+                    if not CheckSolidBlock(testX, cY, 0, 1) then -- Atapnya bolong!
+                        foundGap = true
+                        break
+                    end
+                end
+                
+                -- Kalau ketemu celahnya, jalan ke situ
+                if foundGap then
+                    cX = cX + (testX > cX and 1 or -1)
+                else
+                    -- Mentok semua? Coba jalan paksa aja
+                    cX = cX + searchDir
+                end
+            else
+                -- Atap bolong, aman buat terbang naik!
+                getgenv().ModFly = true
+                cY = cY + 1
+            end
+            
+        -- JIKA HARUS TURUN KE BAWAH
+        elseif tY < cY then
+            getgenv().ModFly = false -- Matiin Fly biar jatuh
+            cY = cY - 1
+            
+        -- JIKA CUMA JALAN LURUS KIRI/KANAN
+        else
+            getgenv().ModFly = false 
+            cX = cX + (tX > cX and 1 or -1)
+        end
+
+        local newPos = Vector3.new(cX * getgenv().GridSize, cY * getgenv().GridSize, startZ)
+        H.CFrame = CFrame.new(newPos)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = newPos end) end
         task.wait(getgenv().StepDelay)
     end
 end
 
 -- [[ UI SETUP ]] --
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
-
 function CreateToggle(Parent, Text, Var) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6); local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left; local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); local IC = Instance.new("UICorner", IndBg); IC.CornerRadius = UDim.new(1,0); local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); local DC = Instance.new("UICorner", Dot); DC.CornerRadius = UDim.new(1,0); IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30); Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end end) end
-function CreateTextBox(Parent, Text, Default, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6); local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); local IC = Instance.new("UICorner", InputBox); IC.CornerRadius = UDim.new(0, 4); InputBox.FocusLost:Connect(function() local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end end); return InputBox end
 function CreateButton(Parent, Text, Callback) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) end
 function CreateDropdown(Parent, Text, DefaultOptions, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6); local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""; local Label = Instance.new("TextLabel", TopBtn); Label.Text = Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left; local Icon = Instance.new("TextLabel", TopBtn); Icon.Text = "v"; Icon.TextColor3 = Theme.Purple; Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 12; Icon.Size = UDim2.new(0, 20, 1, 0); Icon.Position = UDim2.new(1, -25, 0, 0); Icon.BackgroundTransparency = 1; local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; Scroll.ScrollBarImageColor3 = Theme.Purple; local List = Instance.new("UIListLayout", Scroll); local isOpen = false; TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true); Icon.Text = "^" else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end end); local function RefreshOptions(Options) for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end; for _, opt in ipairs(Options) do local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11; OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end) end; Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) end; RefreshOptions(DefaultOptions); return RefreshOptions end
 
 -- [[ INJECT MENU ]] --
-CreateToggle(TargetPage, "🕊️ Mod Fly (Bisa Manual)", "ModFly")
-
 local RefreshSeedDropdown = CreateDropdown(TargetPage, "Pilih Seed", ScanAvailableItems(), "PlantSeedID")
-CreateButton(TargetPage, "🔄 Refresh Tas", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems) end)
+CreateButton(TargetPage, "🔄 Refresh Tas", function() RefreshSeedDropdown(ScanAvailableItems()) end)
 
-CreateToggle(TargetPage, "🚀 START AUTO PLANT", "EnableFullPlant")
+CreateToggle(TargetPage, "🤖 START SMART AUTO PLANT", "EnableSmartPlant")
 
--- INPUT POSISI ZIG-ZAG DINAMIS
-local StartXBox = CreateTextBox(TargetPage, "Start X", getgenv().PlantStartX, "PlantStartX")
-local StartYBox = CreateTextBox(TargetPage, "Start Y", getgenv().PlantStartY, "PlantStartY")
-CreateButton(TargetPage, "📍 Set Kordinat Awal", function() 
-    local H = workspace.Hitbox:FindFirstChild(LP.Name) 
-    if H then 
-        local bx = math.floor(H.Position.X/4.5+0.5)
-        local by = math.floor(H.Position.Y/4.5+0.5)
-        getgenv().PlantStartX = bx; getgenv().PlantStartY = by
-        StartXBox.Text = tostring(bx); StartYBox.Text = tostring(by)
-    end 
-end)
-
-local EndXBox = CreateTextBox(TargetPage, "Batas ZigZag X", getgenv().PlantEndX, "PlantEndX")
-local EndYBox = CreateTextBox(TargetPage, "End Y", getgenv().PlantEndY, "PlantEndY")
-CreateButton(TargetPage, "📍 Set Kordinat Akhir", function() 
-    local H = workspace.Hitbox:FindFirstChild(LP.Name) 
-    if H then 
-        local bx = math.floor(H.Position.X/4.5+0.5)
-        local by = math.floor(H.Position.Y/4.5+0.5)
-        getgenv().PlantEndX = bx; getgenv().PlantEndY = by
-        EndXBox.Text = tostring(bx); EndYBox.Text = tostring(by)
-    end 
-end)
-
-CreateTextBox(TargetPage, "Jarak Baris (Y Step)", getgenv().PlantStepY, "PlantStepY")
-
--- [[ LOGIC AUTO PLANT (SMART ZIG-ZAG) ]] --
+-- [[ LOGIC AUTO PLANT SMART SENSOR ]] --
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
 
 getgenv().KzoyzPlantLoop = task.spawn(function()
     while true do
-        if getgenv().EnableFullPlant then
-            if getgenv().PlantSeedID == "" then
-                task.wait(2)
+        if getgenv().EnableSmartPlant then
+            local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
+            if not seedSlot then 
+                getgenv().EnableSmartPlant = false
+                getgenv().ModFly = false
+                task.wait(1)
                 continue
             end
             
-            -- Tentukan pergerakan Y naik atau turun
-            local absStepY = math.max(1, math.abs(getgenv().PlantStepY))
-            local yStep = (getgenv().PlantStartY <= getgenv().PlantEndY) and absStepY or -absStepY
-            
-            -- Flag ini menentukan apakah kita butuh Mod Fly atau tidak
-            local isGoingUp = (yStep > 0)
-            local moveForward = true
-            
-            for y = getgenv().PlantStartY, getgenv().PlantEndY, yStep do
-                if not getgenv().EnableFullPlant then break end
+            local H = workspace.Hitbox:FindFirstChild(LP.Name)
+            if H then
+                local myX = math.floor(H.Position.X / getgenv().GridSize + 0.5)
+                local myY = math.floor(H.Position.Y / getgenv().GridSize + 0.5)
                 
-                -- [[ KONTROL FLY DINAMIS ]]
-                -- Nyalain otomatis JIKA naik. Matiin JIKA turun.
-                if isGoingUp then
-                    getgenv().ModFly = true
-                else
+                local foundTarget = false
+                
+                -- SENSOR SCAN: Nyari area kosong di sekitar player
+                -- Dia bakal scan dari bawah ke atas, kiri ke kanan
+                for scanY = myY - getgenv().ScanRadiusY, myY + getgenv().ScanRadiusY do
+                    if not getgenv().EnableSmartPlant then break end
+                    
+                    for scanX = myX - getgenv().ScanRadiusX, myX + getgenv().ScanRadiusX do
+                        -- Cek 1: Apakah di grid Bawah (Y-1) ada tanah?
+                        local hasDirtBelow = CheckSolidBlock(scanX, scanY, 0, -1)
+                        -- Cek 2: Apakah grid ini (Y) KOSONG (gak ada tanaman)?
+                        local isGridEmpty = not CheckSolidBlock(scanX, scanY, 0, 0)
+                        
+                        if hasDirtBelow and isGridEmpty then
+                            -- Wah ada ladang kosong nih! Samperin!
+                            MoveToWithEdgeDetection(scanX, scanY)
+                            task.wait(0.05)
+                            RemotePlace:FireServer(Vector2.new(scanX, scanY), seedSlot)
+                            task.wait(getgenv().PlaceDelay)
+                            
+                            foundTarget = true
+                            break -- Balik scan dari awal biar gerakannya teratur
+                        end
+                    end
+                    if foundTarget then break end
+                end
+                
+                if not foundTarget then
+                    -- Kalau muter-muter 100 block gak nemu tanah kosong, matiin diri.
+                    getgenv().EnableSmartPlant = false
                     getgenv().ModFly = false
                 end
-                
-                local currentStartX = moveForward and getgenv().PlantStartX or getgenv().PlantEndX
-                local currentEndX = moveForward and getgenv().PlantEndX or getgenv().PlantStartX
-                local xStep = (currentStartX <= currentEndX) and 1 or -1
-                
-                -- Jalan ke ujung dulu sebelum mulai tanam
-                WalkToGrid(currentStartX, y)
-                task.wait(0.2)
-                
-                for x = currentStartX, currentEndX, xStep do
-                    if not getgenv().EnableFullPlant then break end
-                    
-                    local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
-                    if not seedSlot then 
-                        getgenv().EnableFullPlant = false
-                        getgenv().ModFly = false -- Matiin fly pas seed habis
-                        break 
-                    end
-                    
-                    WalkToGrid(x, y)
-                    task.wait(0.05) 
-                    
-                    RemotePlace:FireServer(Vector2.new(x, y), seedSlot)
-                    task.wait(getgenv().PlaceDelay)
-                end
-                
-                moveForward = not moveForward
-            end
-            
-            if getgenv().EnableFullPlant then
-                getgenv().EnableFullPlant = false 
-                getgenv().ModFly = false -- Otomatis matiin fly kalau kelar
             end
         end
-        task.wait(1)
+        task.wait(0.5)
     end
 end)
