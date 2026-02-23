@@ -180,6 +180,76 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
         end
         task.wait(1)
     end
+end)    while true do
+        if getgenv().EnableGTPlant then
+            local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
+            if not seedSlot then 
+                warn("Seed habis atau belum dipilih!")
+                getgenv().EnableGTPlant = false
+                task.wait(2); continue 
+            end
+
+            -- Siapkan variabel looping
+            local currentY = getgenv().FarmTopY
+            local isLeftToRight = true -- Mulai Baris 1: Kiri ke Kanan
+
+            -- Jalan ke Titik Start Paling Atas Kiri (0, 60) sebelum mulai
+            if getgenv().EnableGTPlant then
+                StepTo(getgenv().FarmStartX, currentY)
+                task.wait(0.5)
+            end
+
+            -- LOOPING BESAR: Dari Atas ke Bawah
+            while currentY >= getgenv().FarmBottomY and getgenv().EnableGTPlant do
+                
+                -- Tentukan arah jalan baris ini
+                local startX = isLeftToRight and getgenv().FarmStartX or getgenv().FarmEndX
+                local endX = isLeftToRight and getgenv().FarmEndX or getgenv().FarmStartX
+                local stepX = isLeftToRight and 1 or -1
+
+                -- JALAN & TANAM SEPANJANG BARIS
+                for x = startX, endX, stepX do
+                    if not getgenv().EnableGTPlant then break end
+                    
+                    seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
+                    if not seedSlot then getgenv().EnableGTPlant = false; break end
+
+                    -- 1. Pindah ke koordinat
+                    StepTo(x, currentY)
+
+                    -- 2. Tanam (Tabrak aja, kalau ada block server bakal nolak sendiri)
+                    RemotePlace:FireServer(Vector2.new(x, currentY), seedSlot)
+                    task.wait(getgenv().PlaceDelay)
+                end
+
+                if not getgenv().EnableGTPlant then break end
+
+                -- BARIS SELESAI, SAATNYA TURUN KE BAWAH!
+                local nextY = currentY - getgenv().FarmStepY
+                
+                -- Pastikan belum ngelewatin batas bawah (Bedrock)
+                if nextY >= getgenv().FarmBottomY then
+                    local edgeX = endX -- Posisi X kita sekarang (di ujung jurang)
+                    
+                    -- Turunin karakter grid per grid biar mulus gak ngeglitch
+                    for dropY = currentY - 1, nextY, -1 do
+                        StepTo(edgeX, dropY)
+                    end
+                end
+
+                -- Persiapan untuk baris selanjutnya
+                currentY = nextY
+                isLeftToRight = not isLeftToRight -- Putar balik arahnya
+            end
+
+            -- Kalau udah sampai dasar (Y=6), matikan toggle
+            if getgenv().EnableGTPlant then
+                print("Farming selesai sampai dasar!")
+                getgenv().EnableGTPlant = false
+            end
+        end
+        task.wait(1)
+    end
 end)    
     while getgenv().EnableGTPlant do
         local cX = math.floor(H.Position.X / getgenv().GridSize + 0.5)
