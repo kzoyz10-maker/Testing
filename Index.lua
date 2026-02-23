@@ -85,8 +85,8 @@ local function CreateAutoLoadTab(TabName, DescText, LoadLink)
     table.insert(Tabs, TBtn); table.insert(Pages, Page); return Page, TBtn
 end
 
-CreateAutoLoadTab("Pabrik", "Pabrik (Factory)", "https://raw.githubusercontent.com/Koziz/kzoyz10-maker/refs/heads/main/Pabrik.lua")
-CreateAutoLoadTab("Auto Farm", "Semi Auto Farm", "https://raw.githubusercontent.com/Koziz/kzoyz10-maker/refs/heads/main/Autofarm.lua")
-CreateAutoLoadTab("Manager", "Farming Manager", "https://raw.githubusercontent.com/Koziz/kzoyz10-maker/refs/heads/main/Manager.lua")
-CreateAutoLoadTab("plant", "plant Manager", "https://raw.githubusercontent.com/Koziz/kzoyz10-maker/refs/heads/main/Autoplant.lua")
+CreateAutoLoadTab("Pabrik", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Pabrik.lua")
+CreateAutoLoadTab("Auto Farm", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autofarm.lua")
+CreateAutoLoadTab("Manager", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Manager.lua")
+CreateAutoLoadTab("plant", "plant Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoplant.lua")
 CreateAutoLoadTab("Information", "How to use? ", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Hrs.lua")
