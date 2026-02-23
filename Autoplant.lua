@@ -17,7 +17,7 @@ getgenv().ScriptVersion = "Auto Plant v4.0 - GT Style (Anti Glitch)"
 getgenv().GridSize = 4.5
 -- BISA DIATUR DARI MENU SEKARANG:
 getgenv().WalkDelay = 0.25 -- Jeda saat pindah 1 block (Makin gede makin pelan/aman)
-getgenv().PlaceDelay = 0.1 -- Jeda setelah naruh seed
+getgenv().PlaceDelay = 0.15 -- Jeda setelah naruh seed
 -- ========================================== --
 
 local Players = game:GetService("Players")
