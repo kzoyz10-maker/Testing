@@ -13,7 +13,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Auto Plant Full World v1.0" 
+getgenv().ScriptVersion = "Auto Plant Full World v1.1 - Fly Support" 
 
 -- ========================================== --
 -- [[ SETTING KECEPATAN BASE ]]
@@ -33,16 +33,50 @@ pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerM
 
 LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
 
+-- CLEANUP LOOP LAMA BIAR GAK NUMPUK
 if getgenv().KzoyzPlantLoop then task.cancel(getgenv().KzoyzPlantLoop); getgenv().KzoyzPlantLoop = nil end
+if getgenv().KzoyzModFlyLoop then getgenv().KzoyzModFlyLoop:Disconnect(); getgenv().KzoyzModFlyLoop = nil end
+if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
 
 -- [[ VARIABEL GLOBAL ]] --
 getgenv().GridSize = 4.5
+getgenv().ModFly = false
 getgenv().EnableFullPlant = false
 getgenv().PlantSeedID = ""
 getgenv().WorldMinX = 0
 getgenv().WorldMaxX = 50
 getgenv().WorldMinY = 0
 getgenv().WorldMaxY = 10
+
+-- [[ SISTEM MOD FLY (INVISIBLE PLATFORM) ]] --
+local AirPlat = Instance.new("Part")
+AirPlat.Name = "KzoyzAirWalk"
+AirPlat.Size = Vector3.new(getgenv().GridSize + 1, 1, getgenv().GridSize + 1)
+AirPlat.Anchored = true
+AirPlat.CanCollide = true
+AirPlat.Transparency = 1 -- Kasat mata
+AirPlat.Parent = workspace
+getgenv().AirPlatform = AirPlat
+
+getgenv().KzoyzModFlyLoop = RunService.Stepped:Connect(function()
+    -- ModFly nyala otomatis kalau lagi Auto Plant biar gak jatuh
+    if getgenv().ModFly or getgenv().EnableFullPlant then
+        local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+        if H then
+            -- Taruh platform tepat di bawah grid (kaki)
+            getgenv().AirPlatform.CFrame = CFrame.new(H.Position.X, H.Position.Y - (getgenv().GridSize / 2), H.Position.Z)
+        end
+        if PlayerMovement then
+            pcall(function() 
+                PlayerMovement.VelocityY = 0
+                PlayerMovement.Grounded = true
+            end)
+        end
+    else
+        -- Sembunyiin platform jauh di bawah tanah kalau lagi mati
+        getgenv().AirPlatform.CFrame = CFrame.new(0, -9999, 0)
+    end
+end)
 
 -- Modul Game Internal --
 local InventoryMod
@@ -85,6 +119,8 @@ local function WalkToGrid(tX, tY)
 
     while (currentX ~= tX or currentY ~= tY) do
         if not getgenv().EnableFullPlant then break end
+        
+        -- Gerak sumbu X dulu, kalau udah sejajar baru sumbu Y
         if currentX ~= tX then currentX = currentX + (tX > currentX and 1 or -1)
         elseif currentY ~= tY then currentY = currentY + (tY > currentY and 1 or -1) end
         
@@ -104,6 +140,8 @@ function CreateButton(Parent, Text, Callback) local Btn = Instance.new("TextButt
 function CreateDropdown(Parent, Text, DefaultOptions, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6); local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""; local Label = Instance.new("TextLabel", TopBtn); Label.Text = Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left; local Icon = Instance.new("TextLabel", TopBtn); Icon.Text = "v"; Icon.TextColor3 = Theme.Purple; Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 12; Icon.Size = UDim2.new(0, 20, 1, 0); Icon.Position = UDim2.new(1, -25, 0, 0); Icon.BackgroundTransparency = 1; local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; Scroll.ScrollBarImageColor3 = Theme.Purple; local List = Instance.new("UIListLayout", Scroll); local isOpen = false; TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true); Icon.Text = "^" else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end end); local function RefreshOptions(Options) for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end; for _, opt in ipairs(Options) do local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11; OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end) end; Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) end; RefreshOptions(DefaultOptions); return RefreshOptions end
 
 -- [[ INJECT MENU ]] --
+CreateToggle(TargetPage, "🕊️ Mod Fly (Air Walk)", "ModFly")
+
 local RefreshSeedDropdown = CreateDropdown(TargetPage, "Pilih Seed", ScanAvailableItems(), "PlantSeedID")
 CreateButton(TargetPage, "🔄 Refresh Tas", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems) end)
 
@@ -141,29 +179,23 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
     while true do
         if getgenv().EnableFullPlant then
             if getgenv().PlantSeedID == "" then
-                -- Tunggu sebentar kalau Seed belum dipilih
                 task.wait(2)
                 continue
             end
             
-            -- Normalisasi titik X dan Y (biar ga pusing kebolak-balik)
             local minX = math.min(getgenv().WorldMinX, getgenv().WorldMaxX)
             local maxX = math.max(getgenv().WorldMinX, getgenv().WorldMaxX)
             local minY = math.min(getgenv().WorldMinY, getgenv().WorldMaxY)
             local maxY = math.max(getgenv().WorldMinY, getgenv().WorldMaxY)
 
-            -- Looping per baris (dari bawah ke atas)
             for y = minY, maxY do
                 if not getgenv().EnableFullPlant then break end
                 
-                -- [[ LOGIKA ZIG-ZAG ]]
-                -- Baris genap dari Kiri -> Kanan, Ganjil dari Kanan -> Kiri
                 local isEvenRow = (y % 2 == 0)
                 local startX = isEvenRow and minX or maxX
                 local endX = isEvenRow and maxX or minX
                 local step = isEvenRow and 1 or -1
                 
-                -- Karakter jalan dulu ke ujung baris biar ga miring
                 WalkToGrid(startX, y)
                 task.wait(0.2)
                 
@@ -172,13 +204,12 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
                     
                     local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
                     if not seedSlot then 
-                        -- Toggle langsung mati kalau seed habis di tas
                         getgenv().EnableFullPlant = false
                         break 
                     end
                     
                     WalkToGrid(x, y)
-                    task.wait(0.05) -- Jeda kecil biar hitbox lurus
+                    task.wait(0.05) 
                     
                     RemotePlace:FireServer(Vector2.new(x, y), seedSlot)
                     task.wait(getgenv().PlaceDelay)
@@ -186,7 +217,6 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
             end
             
             if getgenv().EnableFullPlant then
-                -- Kalau udah berhasil tembus sampai atas, otomatis mati
                 getgenv().EnableFullPlant = false
             end
         end
