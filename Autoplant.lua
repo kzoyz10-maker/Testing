@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V3 (SMART 100% DETECTOR)"
+getgenv().ScriptVersion = "Auto Farm V4 (MEMORY SCANNER ALA ROCKHUB)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
@@ -52,8 +52,7 @@ function CreateToggle(Parent, Text, Var)
     end) 
 end
 
--- Bikin Menu Lebih Simpel, Nggak Usah Input X Y Lagi!
-CreateToggle(TargetPage, "🚀 START SMART AUTO HARVEST (100%)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START AUTO HARVEST (iyadeeh)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY ]]
@@ -106,18 +105,58 @@ local function WalkToGrid(tX, tY, startZ)
 end
 
 -- ========================================== --
--- [[ 📡 RADAR PENCARI TANAMAN 100% ]]
+-- [[ 🧠 PENCARI TANAMAN 100% VIA MEMORI CLIENT ]]
 -- ========================================== --
-local function GetRipePlants()
+local MapTableCache = nil
+
+-- Fungsi nyari otak game (cuma butuh 1 kali)
+local function GetMapTable(cx, cy)
+    if MapTableCache and rawget(MapTableCache, cx) then return MapTableCache end
+    for _, obj in pairs(getgc(true)) do
+        if type(obj) == "table" then
+            local success, dataX = pcall(function() return rawget(obj, cx) end)
+            if success and type(dataX) == "table" then
+                local success2, dataY = pcall(function() return rawget(dataX, cy) end)
+                if success2 and type(dataY) == "table" then
+                    MapTableCache = obj -- Simpan biar gak lag
+                    return obj
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function GetAllRipePlants()
     local ripePlants = {}
-    -- Cek semua benda di map
-    for _, obj in pairs(workspace:GetDescendants()) do
-        -- Cari UI Text yang mengandung kata "100%"
-        if obj:IsA("TextLabel") and string.find(obj.Text, "100%%") then
-            -- Ambil Part/Blok fisik tempat UI itu nempel
-            local plantPart = obj:FindFirstAncestorWhichIsA("BasePart")
-            if plantPart then
-                table.insert(ripePlants, plantPart)
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+    if not MyHitbox then return ripePlants end
+
+    local cx = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+    local cy = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+    
+    local mapTable = GetMapTable(cx, cy)
+    if not mapTable then return ripePlants end
+
+    -- BACA SELURUH MAP INSTAN 0 DETIK!
+    for gridX, col in pairs(mapTable) do
+        if type(gridX) == "number" and type(col) == "table" then
+            for gridY, blockData in pairs(col) do
+                if type(gridY) == "number" and type(blockData) == "table" then
+                    local data = rawget(blockData, 1) -- Ambil Layer [1]
+                    if type(data) == "table" then
+                        local name = rawget(data, 1) -- Ambil Nama (ex: dirt_sapling)
+                        local details = rawget(data, 2) -- Ambil Tabel Detail
+                        
+                        if type(name) == "string" and string.find(name, "sapling") then
+                            -- CEK JIKA N == 3 (100% GROWN)
+                            if type(details) == "table" and rawget(details, "n") == 3 then
+                                table.insert(ripePlants, {x = gridX, y = gridY})
+                            end
+                        end
+                    end
+                end
             end
         end
     end
@@ -125,7 +164,7 @@ local function GetRipePlants()
 end
 
 -- ========================================== --
--- [[ LOGIKA UTAMA: SMART HARVEST ]]
+-- [[ LOGIKA UTAMA: SMART HARVEST MEMORY ]]
 -- ========================================== --
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist") 
 
@@ -134,7 +173,8 @@ if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     while true do
         if getgenv().EnableSmartHarvest then
-            local targetPlants = GetRipePlants()
+            -- Cari tanaman matang langsung dari otak game!
+            local targetPlants = GetAllRipePlants()
             
             if #targetPlants > 0 then
                 local HitboxFolder = workspace:FindFirstChild("Hitbox")
@@ -143,20 +183,15 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 if MyHitbox then
                     local startZ = MyHitbox.Position.Z
                     
-                    -- Eksekusi semua tanaman yang udah 100%
                     for _, plant in ipairs(targetPlants) do
                         if not getgenv().EnableSmartHarvest then break end
                         
-                        -- Terjemahkan posisi 3D tanaman ke kordinat Grid 2D (X, Y)
-                        local gridX = math.floor(plant.Position.X / getgenv().GridSize + 0.5)
-                        local gridY = math.floor(plant.Position.Y / getgenv().GridSize + 0.5)
-                        
-                        -- Jalan ke sana
-                        WalkToGrid(gridX, gridY, startZ)
+                        -- Jalan ke kordinat grid dari memori
+                        WalkToGrid(plant.x, plant.y, startZ)
                         task.wait(0.1) 
                         
-                        -- Kirim pukulan mematikan
-                        local targetVec = Vector2.new(gridX, gridY)
+                        -- Pukul
+                        local targetVec = Vector2.new(plant.x, plant.y)
                         for i = 1, getgenv().HitsPerBlock do
                             if not getgenv().EnableSmartHarvest then break end
                             pcall(function() 
@@ -172,7 +207,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 end
             end
         end
-        -- Kalau map lagi kosong, dia istirahat 1 detik sebelum nge-scan lagi biar gak ngelag
+        -- Cek memori tiap 1 detik
         task.wait(1)
     end
 end)
