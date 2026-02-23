@@ -13,7 +13,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Auto Plant Full World v1.1 - Fly Support" 
+getgenv().ScriptVersion = "Auto Plant Full World v1.2 - Smart ZigZag" 
 
 -- ========================================== --
 -- [[ SETTING KECEPATAN BASE ]]
@@ -33,7 +33,6 @@ pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerM
 
 LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
 
--- CLEANUP LOOP LAMA BIAR GAK NUMPUK
 if getgenv().KzoyzPlantLoop then task.cancel(getgenv().KzoyzPlantLoop); getgenv().KzoyzPlantLoop = nil end
 if getgenv().KzoyzModFlyLoop then getgenv().KzoyzModFlyLoop:Disconnect(); getgenv().KzoyzModFlyLoop = nil end
 if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
@@ -43,10 +42,13 @@ getgenv().GridSize = 4.5
 getgenv().ModFly = false
 getgenv().EnableFullPlant = false
 getgenv().PlantSeedID = ""
-getgenv().WorldMinX = 0
-getgenv().WorldMaxX = 50
-getgenv().WorldMinY = 0
-getgenv().WorldMaxY = 10
+
+-- Sistem Kordinat ZigZag Baru
+getgenv().PlantStartX = 99
+getgenv().PlantEndX = 0
+getgenv().PlantStartY = 41
+getgenv().PlantEndY = 39
+getgenv().PlantStepY = 2 -- Jarak lompat baris (default 2)
 
 -- [[ SISTEM MOD FLY (INVISIBLE PLATFORM) ]] --
 local AirPlat = Instance.new("Part")
@@ -54,26 +56,16 @@ AirPlat.Name = "KzoyzAirWalk"
 AirPlat.Size = Vector3.new(getgenv().GridSize + 1, 1, getgenv().GridSize + 1)
 AirPlat.Anchored = true
 AirPlat.CanCollide = true
-AirPlat.Transparency = 1 -- Kasat mata
+AirPlat.Transparency = 1 
 AirPlat.Parent = workspace
 getgenv().AirPlatform = AirPlat
 
 getgenv().KzoyzModFlyLoop = RunService.Stepped:Connect(function()
-    -- ModFly nyala otomatis kalau lagi Auto Plant biar gak jatuh
     if getgenv().ModFly or getgenv().EnableFullPlant then
         local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
-        if H then
-            -- Taruh platform tepat di bawah grid (kaki)
-            getgenv().AirPlatform.CFrame = CFrame.new(H.Position.X, H.Position.Y - (getgenv().GridSize / 2), H.Position.Z)
-        end
-        if PlayerMovement then
-            pcall(function() 
-                PlayerMovement.VelocityY = 0
-                PlayerMovement.Grounded = true
-            end)
-        end
+        if H then getgenv().AirPlatform.CFrame = CFrame.new(H.Position.X, H.Position.Y - (getgenv().GridSize / 2), H.Position.Z) end
+        if PlayerMovement then pcall(function() PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end) end
     else
-        -- Sembunyiin platform jauh di bawah tanah kalau lagi mati
         getgenv().AirPlatform.CFrame = CFrame.new(0, -9999, 0)
     end
 end)
@@ -88,8 +80,7 @@ local function GetSlotByItemID(targetID)
         if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
             if not data.Amount or data.Amount > 0 then return slotIndex end
         end
-    end
-    return nil
+    end return nil
 end
 
 local function ScanAvailableItems()
@@ -119,8 +110,6 @@ local function WalkToGrid(tX, tY)
 
     while (currentX ~= tX or currentY ~= tY) do
         if not getgenv().EnableFullPlant then break end
-        
-        -- Gerak sumbu X dulu, kalau udah sejajar baru sumbu Y
         if currentX ~= tX then currentX = currentX + (tX > currentX and 1 or -1)
         elseif currentY ~= tY then currentY = currentY + (tY > currentY and 1 or -1) end
         
@@ -147,32 +136,34 @@ CreateButton(TargetPage, "🔄 Refresh Tas", function() local newItems = ScanAva
 
 CreateToggle(TargetPage, "🚀 START AUTO PLANT", "EnableFullPlant")
 
--- AUTO-UPDATE POSISI DI UI
-local MinXBox = CreateTextBox(TargetPage, "Start X (Kiri)", getgenv().WorldMinX, "WorldMinX")
-local MinYBox = CreateTextBox(TargetPage, "Start Y (Bawah)", getgenv().WorldMinY, "WorldMinY")
-CreateButton(TargetPage, "📍 Set Titik Awal (Di Sini)", function() 
+-- INPUT POSISI ZIG-ZAG DINAMIS
+local StartXBox = CreateTextBox(TargetPage, "Start X", getgenv().PlantStartX, "PlantStartX")
+local StartYBox = CreateTextBox(TargetPage, "Start Y", getgenv().PlantStartY, "PlantStartY")
+CreateButton(TargetPage, "📍 Set Kordinat Awal (99,41)", function() 
     local H = workspace.Hitbox:FindFirstChild(LP.Name) 
     if H then 
         local bx = math.floor(H.Position.X/4.5+0.5)
         local by = math.floor(H.Position.Y/4.5+0.5)
-        getgenv().WorldMinX = bx; getgenv().WorldMinY = by
-        MinXBox.Text = tostring(bx); MinYBox.Text = tostring(by)
+        getgenv().PlantStartX = bx; getgenv().PlantStartY = by
+        StartXBox.Text = tostring(bx); StartYBox.Text = tostring(by)
     end 
 end)
 
-local MaxXBox = CreateTextBox(TargetPage, "End X (Kanan)", getgenv().WorldMaxX, "WorldMaxX")
-local MaxYBox = CreateTextBox(TargetPage, "End Y (Atas)", getgenv().WorldMaxY, "WorldMaxY")
-CreateButton(TargetPage, "📍 Set Titik Akhir (Di Sini)", function() 
+local EndXBox = CreateTextBox(TargetPage, "Batas ZigZag X", getgenv().PlantEndX, "PlantEndX")
+local EndYBox = CreateTextBox(TargetPage, "End Y", getgenv().PlantEndY, "PlantEndY")
+CreateButton(TargetPage, "📍 Set Kordinat Akhir (0,39)", function() 
     local H = workspace.Hitbox:FindFirstChild(LP.Name) 
     if H then 
         local bx = math.floor(H.Position.X/4.5+0.5)
         local by = math.floor(H.Position.Y/4.5+0.5)
-        getgenv().WorldMaxX = bx; getgenv().WorldMaxY = by
-        MaxXBox.Text = tostring(bx); MaxYBox.Text = tostring(by)
+        getgenv().PlantEndX = bx; getgenv().PlantEndY = by
+        EndXBox.Text = tostring(bx); EndYBox.Text = tostring(by)
     end 
 end)
 
--- [[ LOGIC AUTO PLANT (ZIG-ZAG) ]] --
+CreateTextBox(TargetPage, "Jarak Baris (Y Step)", getgenv().PlantStepY, "PlantStepY")
+
+-- [[ LOGIC AUTO PLANT (SMART ZIG-ZAG) ]] --
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
 
 getgenv().KzoyzPlantLoop = task.spawn(function()
@@ -183,23 +174,28 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
                 continue
             end
             
-            local minX = math.min(getgenv().WorldMinX, getgenv().WorldMaxX)
-            local maxX = math.max(getgenv().WorldMinX, getgenv().WorldMaxX)
-            local minY = math.min(getgenv().WorldMinY, getgenv().WorldMaxY)
-            local maxY = math.max(getgenv().WorldMinY, getgenv().WorldMaxY)
-
-            for y = minY, maxY do
+            -- Hitung arah step Y (naik atau turun)
+            local absStepY = math.max(1, math.abs(getgenv().PlantStepY))
+            local yStep = (getgenv().PlantStartY <= getgenv().PlantEndY) and absStepY or -absStepY
+            
+            local moveForward = true -- Flag penentu arah Zig-Zag
+            
+            -- Looping per baris sesuai step yang diinput (Naik / Turun otomatis)
+            for y = getgenv().PlantStartY, getgenv().PlantEndY, yStep do
                 if not getgenv().EnableFullPlant then break end
                 
-                local isEvenRow = (y % 2 == 0)
-                local startX = isEvenRow and minX or maxX
-                local endX = isEvenRow and maxX or minX
-                local step = isEvenRow and 1 or -1
+                -- [[ LOGIKA ZIG-ZAG ]]
+                -- Kalau true: Kiri ke Kanan. Kalau false: Kanan ke Kiri.
+                local currentStartX = moveForward and getgenv().PlantStartX or getgenv().PlantEndX
+                local currentEndX = moveForward and getgenv().PlantEndX or getgenv().PlantStartX
+                local xStep = (currentStartX <= currentEndX) and 1 or -1
                 
-                WalkToGrid(startX, y)
+                -- Karakter jalan dulu ke ujung mulai baris
+                WalkToGrid(currentStartX, y)
                 task.wait(0.2)
                 
-                for x = startX, endX, step do
+                -- Mulai tanam di baris tersebut
+                for x = currentStartX, currentEndX, xStep do
                     if not getgenv().EnableFullPlant then break end
                     
                     local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
@@ -214,10 +210,13 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
                     RemotePlace:FireServer(Vector2.new(x, y), seedSlot)
                     task.wait(getgenv().PlaceDelay)
                 end
+                
+                -- Balik arah untuk baris selanjutnya
+                moveForward = not moveForward
             end
             
             if getgenv().EnableFullPlant then
-                getgenv().EnableFullPlant = false
+                getgenv().EnableFullPlant = false -- Otomatis stop setelah beres 1 world
             end
         end
         task.wait(1)
