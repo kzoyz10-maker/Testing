@@ -11,17 +11,19 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Plant v6.0 - Hardcode Farm" 
+getgenv().ScriptVersion = "Auto Plant v7.0 - Smooth Walk GT" 
 
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().WalkDelay = 0.15 -- Jeda gerak per kotak (Pas buat server)
-getgenv().PlaceDelay = 0.05 -- Jeda setelah naruh seed
+getgenv().PlayerYOffset = 0 -- GANTI INI kalau karakter kelihatan mendem di tanah (misal jadi 1 atau 2)
+getgenv().WalkDelay = 0.15 
+getgenv().PlaceDelay = 0.1
 -- ========================================== --
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
@@ -30,7 +32,6 @@ LP.Idled:Connect(function() game:GetService("VirtualUser"):CaptureController(); 
 
 if getgenv().KzoyzPlantLoop then task.cancel(getgenv().KzoyzPlantLoop); getgenv().KzoyzPlantLoop = nil end
 
--- [[ VARIABEL FARMING HARDCODE ]] --
 getgenv().EnableGTPlant = false
 getgenv().PlantSeedID = ""
 
@@ -66,24 +67,36 @@ local function ScanAvailableItems()
     if #items == 0 then items = {"Kosong"} end return items
 end
 
--- [[ FUNGSI GERAK GRID MURNI (ANTI GLITCH) ]] --
-local function StepTo(tX, tY)
+-- [[ SISTEM JALAN MULUS (ANTI-GLITCH SERVER) ]] --
+local function SmoothWalkTo(tX, tY)
     if not getgenv().EnableGTPlant then return end
-    local H = workspace.Hitbox:FindFirstChild(LP.Name)
-    if H then
-        local newPos = Vector3.new(tX * getgenv().GridSize, tY * getgenv().GridSize, H.Position.Z)
-        H.CFrame = CFrame.new(newPos)
+    local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+    if not H then return end
+    
+    local startPos = H.Position
+    -- Hitung posisi asli di World
+    local targetPos = Vector3.new(tX * getgenv().GridSize, (tY * getgenv().GridSize) + getgenv().PlayerYOffset, startPos.Z)
+    
+    -- Pecah jarak 1 block jadi 5 langkah kecil biar dikira jalan natural
+    local steps = 5
+    local waitTime = getgenv().WalkDelay / steps
+    
+    for i = 1, steps do
+        if not getgenv().EnableGTPlant then break end
+        local lerpedPos = startPos:Lerp(targetPos, i / steps)
+        
+        H.CFrame = CFrame.new(lerpedPos)
         if PlayerMovement then 
             pcall(function() 
-                PlayerMovement.Position = newPos 
+                PlayerMovement.Position = lerpedPos 
                 PlayerMovement.VelocityY = 0
                 PlayerMovement.VelocityX = 0
                 PlayerMovement.VelocityZ = 0
                 PlayerMovement.Grounded = true
             end) 
         end
+        task.wait(waitTime)
     end
-    task.wait(getgenv().WalkDelay)
 end
 
 -- [[ UI SETUP ]] --
@@ -99,12 +112,12 @@ CreateButton(TargetPage, "🔄 Refresh Tas", function() RefreshSeedDropdown(Scan
 
 CreateToggle(TargetPage, "🚜 START GT AUTO PLANT", "EnableGTPlant")
 
+CreateTextBox(TargetPage, "Tinggi Karakter (Y-Offset)", getgenv().PlayerYOffset, "PlayerYOffset")
 CreateTextBox(TargetPage, "Speed Jalan (Delay)", getgenv().WalkDelay, "WalkDelay")
 CreateTextBox(TargetPage, "Kordinat X Kiri (Start)", getgenv().FarmStartX, "FarmStartX")
 CreateTextBox(TargetPage, "Kordinat X Kanan (End)", getgenv().FarmEndX, "FarmEndX")
 CreateTextBox(TargetPage, "Kordinat Y Atas (Mulai)", getgenv().FarmTopY, "FarmTopY")
 CreateTextBox(TargetPage, "Kordinat Y Bawah (Stop)", getgenv().FarmBottomY, "FarmBottomY")
-CreateTextBox(TargetPage, "Turun Tiap (Y Step)", getgenv().FarmStepY, "FarmStepY")
 
 -- [[ LOGIC UTAMA: HARDCODE ZIG-ZAG TOP-TO-BOTTOM ]] --
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
@@ -119,62 +132,52 @@ getgenv().KzoyzPlantLoop = task.spawn(function()
                 task.wait(2); continue 
             end
 
-            -- Siapkan variabel looping
-            local currentY = getgenv().FarmTopY
-            local isLeftToRight = true -- Mulai Baris 1: Kiri ke Kanan
+            -- Mulai dari posisi Atas (60) dan jalan dari Kiri ke Kanan
+            local isLeftToRight = true 
 
-            -- Jalan ke Titik Start Paling Atas Kiri (0, 60) sebelum mulai
-            if getgenv().EnableGTPlant then
-                StepTo(getgenv().FarmStartX, currentY)
-                task.wait(0.5)
-            end
+            for y = getgenv().FarmTopY, getgenv().FarmBottomY, -getgenv().FarmStepY do
+                if not getgenv().EnableGTPlant then break end
 
-            -- LOOPING BESAR: Dari Atas ke Bawah
-            while currentY >= getgenv().FarmBottomY and getgenv().EnableGTPlant do
-                
-                -- Tentukan arah jalan baris ini
+                -- Tentukan Arah Baris Ini
                 local startX = isLeftToRight and getgenv().FarmStartX or getgenv().FarmEndX
                 local endX = isLeftToRight and getgenv().FarmEndX or getgenv().FarmStartX
                 local stepX = isLeftToRight and 1 or -1
 
-                -- JALAN & TANAM SEPANJANG BARIS
+                -- Eksekusi Jalan & Tanam di baris yang sama
                 for x = startX, endX, stepX do
                     if not getgenv().EnableGTPlant then break end
                     
                     seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
                     if not seedSlot then getgenv().EnableGTPlant = false; break end
 
-                    -- 1. Pindah ke koordinat
-                    StepTo(x, currentY)
+                    -- Meluncur pelan ke kordinat selanjutnya
+                    SmoothWalkTo(x, y)
 
-                    -- 2. Tanam (Tabrak aja, kalau ada block server bakal nolak sendiri)
-                    RemotePlace:FireServer(Vector2.new(x, currentY), seedSlot)
+                    -- Tanam ke arah grid (bodo amat ada blok atau nggak, hantam!)
+                    RemotePlace:FireServer(Vector2.new(x, y), seedSlot)
                     task.wait(getgenv().PlaceDelay)
                 end
 
                 if not getgenv().EnableGTPlant then break end
 
-                -- BARIS SELESAI, SAATNYA TURUN KE BAWAH!
-                local nextY = currentY - getgenv().FarmStepY
-                
-                -- Pastikan belum ngelewatin batas bawah (Bedrock)
+                -- Baris beres, ganti arah buat baris selanjutnya
+                isLeftToRight = not isLeftToRight
+
+                -- Proses Turun ke Lantai Bawah lewat celah ujung
+                local nextY = y - getgenv().FarmStepY
                 if nextY >= getgenv().FarmBottomY then
-                    local edgeX = endX -- Posisi X kita sekarang (di ujung jurang)
+                    local edgeX = endX -- Posisi ujung saat ini (0 atau 100)
                     
-                    -- Turunin karakter grid per grid biar mulus gak ngeglitch
-                    for dropY = currentY - 1, nextY, -1 do
-                        StepTo(edgeX, dropY)
+                    -- Turun meluncur grid-per-grid biar rapi
+                    for dropY = y - 1, nextY, -1 do
+                        if not getgenv().EnableGTPlant then break end
+                        SmoothWalkTo(edgeX, dropY)
                     end
                 end
-
-                -- Persiapan untuk baris selanjutnya
-                currentY = nextY
-                isLeftToRight = not isLeftToRight -- Putar balik arahnya
             end
 
-            -- Kalau udah sampai dasar (Y=6), matikan toggle
             if getgenv().EnableGTPlant then
-                print("Farming selesai sampai dasar!")
+                print("Farming selesai sampai Bedrock!")
                 getgenv().EnableGTPlant = false
             end
         end
