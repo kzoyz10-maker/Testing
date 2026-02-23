@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Plant Full World v4 (ZigZag + Nonstop ModFly)"
+getgenv().ScriptVersion = "Auto Plant Full World v5 (Custom Y Step)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
@@ -25,6 +25,7 @@ getgenv().FarmStartX = 0
 getgenv().FarmEndX = 50
 getgenv().FarmStartY = 37    -- Y awal (Mulai)
 getgenv().FarmEndY = 10      -- Y akhir (Mentok)
+getgenv().FarmStepY = 2      -- Default turun 2 blok
 getgenv().SelectedSeed = ""
 
 -- ========================================== --
@@ -94,6 +95,7 @@ CreateTextBox(TargetPage, "X Kiri (Start)", getgenv().FarmStartX, "FarmStartX")
 CreateTextBox(TargetPage, "X Kanan (End)", getgenv().FarmEndX, "FarmEndX")
 CreateTextBox(TargetPage, "Y Atas (Mulai)", getgenv().FarmStartY, "FarmStartY")
 CreateTextBox(TargetPage, "Y Bawah (Berhenti)", getgenv().FarmEndY, "FarmEndY")
+CreateTextBox(TargetPage, "Turun Tiap (Y Step)", getgenv().FarmStepY, "FarmStepY")
 
 CreateToggle(TargetPage, "🚜 START AUTO PLANT FULL FLY", "EnableAutoPlant")
 
@@ -181,13 +183,15 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 continue 
             end
 
-            local stepY = (getgenv().FarmStartY > getgenv().FarmEndY) and -1 or 1
+            -- Hitung step Y (naik atau turun) dengan aman
+            local absStepY = math.max(1, math.abs(getgenv().FarmStepY))
+            local stepY = (getgenv().FarmStartY > getgenv().FarmEndY) and -absStepY or absStepY
+            
+            -- Mulai jalan selalu ke arah Kanan untuk baris pertama
+            local isMovingRight = true
 
             for y = getgenv().FarmStartY, getgenv().FarmEndY, stepY do
                 if not getgenv().EnableAutoPlant then break end
-
-                local mathHelper = math.abs(getgenv().FarmStartY - y)
-                local isMovingRight = (mathHelper % 2 == 0)
 
                 local startX = isMovingRight and getgenv().FarmStartX or getgenv().FarmEndX
                 local endX = isMovingRight and getgenv().FarmEndX or getgenv().FarmStartX
@@ -220,6 +224,9 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                     
                     task.wait(getgenv().PlaceDelay)
                 end
+                
+                -- Setelah 1 baris selesai, putar balik arah jalan untuk baris bawahnya
+                isMovingRight = not isMovingRight
             end
             
             -- Matikan kalau udah selesai loop
