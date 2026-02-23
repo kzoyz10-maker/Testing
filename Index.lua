@@ -159,7 +159,7 @@ local RefreshSeedDropdown = CreateDropdown(TargetPage, "Pilih Seed", ScanAvailab
 CreateButton(TargetPage, "🔄 Refresh Tas", function() RefreshSeedDropdown(ScanAvailableItems()) end)
 
 CreateTextBox(TargetPage, "Speed Jalan (Delay)", getgenv().WalkDelay, "WalkDelay")
-CreateTextBox(TargetPage, "Speed Nanam (Delay)", getgenv().PlaceDelay, "PlaceDelay")
+CreateTextBox(TargetPage, "SuuuNanam (Delay)", getgenv().PlaceDelay, "PlaceDelay")
 
 CreateToggle(TargetPage, "🚜 START GT AUTO PLANT", "EnableGTPlant")
 
