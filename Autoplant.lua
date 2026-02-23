@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm v9 (String Format Fix)"
+getgenv().ScriptVersion = "Auto Farm (Mode Klasik / Buldoser)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
@@ -111,6 +111,130 @@ CreateToggle(TargetPage, "🔨 START AUTO HARVEST", "EnableAutoBreak", true)
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY ]]
+-- ========================================== --
+if getgenv().KzoyzModFlyHeartbeat then getgenv().KzoyzModFlyHeartbeat:Disconnect(); getgenv().KzoyzModFlyHeartbeat = nil end
+if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
+
+local AirPlat = Instance.new("Part")
+AirPlat.Name = "KzoyzAirWalk"
+AirPlat.Size = Vector3.new(getgenv().GridSize + 1, 1, getgenv().GridSize + 1)
+AirPlat.Anchored = true; AirPlat.CanCollide = true; AirPlat.Transparency = 1 
+AirPlat.Parent = workspace
+getgenv().AirPlatform = AirPlat
+
+getgenv().KzoyzModFlyHeartbeat = RunService.Heartbeat:Connect(function()
+    if getgenv().EnableAutoPlant or getgenv().EnableAutoBreak then
+        local HitboxFolder = workspace:FindFirstChild("Hitbox")
+        local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+        if MyHitbox then getgenv().AirPlatform.CFrame = CFrame.new(MyHitbox.Position.X, MyHitbox.Position.Y - (getgenv().GridSize / 2), MyHitbox.Position.Z) end
+        if PlayerMovement then pcall(function() PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end) end
+    else
+        getgenv().AirPlatform.CFrame = CFrame.new(0, -9999, 0)
+    end
+end)
+
+-- ========================================== --
+-- [[ FUNGSI JALAN PER GRID ]]
+-- ========================================== --
+local function WalkToGrid(tX, tY)
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+    if not MyHitbox then return end
+
+    local startZ = MyHitbox.Position.Z
+    local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+    local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+
+    while (currentX ~= tX or currentY ~= tY) do
+        if not (getgenv().EnableAutoPlant or getgenv().EnableAutoBreak) then break end
+        if currentX ~= tX then currentX = currentX + (tX > currentX and 1 or -1)
+        elseif currentY ~= tY then currentY = currentY + (tY > currentY and 1 or -1) end
+        
+        local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
+        MyHitbox.CFrame = CFrame.new(newWorldPos)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
+        task.wait(getgenv().StepDelay)
+    end
+end
+
+-- ========================================== --
+-- [[ LOGIKA UTAMA: AUTO PLANT & BREAK KLASIK ]]
+-- ========================================== --
+local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
+local RemoteBreak = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist") 
+
+if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
+
+getgenv().KzoyzAutoFarmLoop = task.spawn(function()
+    while true do
+        local isPlanting = getgenv().EnableAutoPlant
+        local isBreaking = getgenv().EnableAutoBreak
+
+        if isPlanting or isBreaking then
+            if isPlanting and getgenv().SelectedSeed == "" then 
+                warn("Pilih Seed dulu di Dropdown sebelum mulai Plant!")
+                getgenv().EnableAutoPlant = false
+                task.wait(1); continue 
+            end
+
+            local absStepY = math.max(1, math.abs(getgenv().FarmStepY))
+            local stepY = (getgenv().FarmStartY > getgenv().FarmEndY) and -absStepY or absStepY
+            local isMovingRight = true
+
+            for y = getgenv().FarmStartY, getgenv().FarmEndY, stepY do
+                if not (getgenv().EnableAutoPlant or getgenv().EnableAutoBreak) then break end
+
+                local startX = isMovingRight and getgenv().FarmStartX or getgenv().FarmEndX
+                local endX = isMovingRight and getgenv().FarmEndX or getgenv().FarmStartX
+                local stepX = isMovingRight and 1 or -1
+
+                WalkToGrid(startX, y)
+                task.wait(0.2) 
+
+                for x = startX, endX, stepX do
+                    if not (getgenv().EnableAutoPlant or getgenv().EnableAutoBreak) then break end
+
+                    WalkToGrid(x, y)
+                    task.wait(0.1) 
+
+                    -- Tembak peluru ganda biar pasti nyangkut ke sistem gamenya
+                    local targetVec = Vector2.new(x, y)
+                    local targetStr = tostring(x) .. ", " .. tostring(y)
+
+                    if getgenv().EnableAutoPlant then
+                        local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
+                        if not seedSlot then
+                            warn("Seed habis bos!")
+                            getgenv().EnableAutoPlant = false
+                            break
+                        end
+                        -- Tembak Format Vector & String
+                        pcall(function() RemotePlace:FireServer(targetVec, seedSlot) end)
+                        pcall(function() RemotePlace:FireServer(targetStr, seedSlot) end)
+                        task.wait(getgenv().PlaceDelay)
+
+                    elseif getgenv().EnableAutoBreak then
+                        for i = 1, getgenv().HitsPerBlock do
+                            if not getgenv().EnableAutoBreak then break end
+                            -- Tembak Format Vector & String
+                            pcall(function() RemoteBreak:FireServer(targetVec) end)
+                            pcall(function() RemoteBreak:FireServer(targetStr) end)
+                            task.wait(getgenv().BreakDelay)
+                        end
+                    end
+                end
+                isMovingRight = not isMovingRight
+            end
+            
+            if getgenv().EnableAutoPlant or getgenv().EnableAutoBreak then
+                print("Selesai mengeksekusi seluruh area!")
+                getgenv().EnableAutoPlant = false
+                getgenv().EnableAutoBreak = false
+            end
+        end
+        task.wait(1)
+    end
+end)-- [[ SISTEM FULL MODFLY ]]
 -- ========================================== --
 if getgenv().KzoyzModFlyHeartbeat then getgenv().KzoyzModFlyHeartbeat:Disconnect(); getgenv().KzoyzModFlyHeartbeat = nil end
 if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
