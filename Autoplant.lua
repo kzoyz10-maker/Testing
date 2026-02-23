@@ -112,7 +112,7 @@ CreateTextBox(TargetPage, "Turun Tiap (Y Step)", getgenv().FarmStepY, "FarmStepY
 CreateTextBox(TargetPage, "Hit Per Blok (Buat Break)", getgenv().HitsPerBlock, "HitsPerBlock")
 
 CreateToggle(TargetPage, "🚜 START AUTO PLANT", "EnableAutoPlant", false)
-CreateToggle(TargetPage, "🔨 START AUTO BREAK/HARVEST", "EnableAutoBreak", true)
+CreateToggle(TargetPage, "🔨 START AUTO BREAK/IZIN", "EnableAutoBreak", true)
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY (INVISIBLE PLATFORM) ]]
