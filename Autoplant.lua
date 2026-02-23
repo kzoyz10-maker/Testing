@@ -11,14 +11,18 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Plant Full World - Scan & Plant"
+getgenv().ScriptVersion = "Auto Plant Full World v2 (Zig-Zag)"
 
 -- ========================================== --
 getgenv().GridSize = 4.5
+getgenv().StepDelay = 0.1   -- Kecepatan jalan per grid
+getgenv().PlaceDelay = 0.15 -- Kecepatan nanam (Jangan terlalu cepat biar gak desync)
+
 getgenv().EnableAutoPlant = false
 getgenv().FarmStartX = 0
 getgenv().FarmEndX = 50
-getgenv().FarmBottomY = 10 -- Batas bawah mentok farming
+getgenv().FarmStartY = 37   -- Y posisi paling atas
+getgenv().FarmEndY = 10     -- Y posisi paling bawah (mentok)
 getgenv().SelectedSeed = ""
 -- ========================================== --
 
@@ -27,7 +31,10 @@ local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
--- Fungsi tas (Bawaanmu)
+local PlayerMovement
+pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
+
+-- Fungsi Tas & Scan
 local InventoryMod
 pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
 
@@ -53,99 +60,119 @@ local function ScanAvailableItems()
     if #items == 0 then items = {"Kosong"} end return items
 end
 
--- UI Setup (Bawaanmu - Disingkat biar rapi)
+-- ========================================== --
+-- [[ UI SETUP KEMBALI SEPERTI SEMULA ]]
+-- ========================================== --
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
+
 function CreateToggle(Parent, Text, Var) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = "  " .. Text; Btn.TextColor3 = Theme.Text; Btn.Font = Enum.Font.GothamSemibold; Btn.TextSize = 12; Btn.TextXAlignment = Enum.TextXAlignment.Left; local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end end) end
 function CreateButton(Parent, Text, Callback) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Btn.MouseButton1Click:Connect(Callback) end
 function CreateTextBox(Parent, Text, Default, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); local Label = Instance.new("TextLabel", Frame); Label.Text = "  "..Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); InputBox.FocusLost:Connect(function() local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end end); return InputBox end
+function CreateDropdown(Parent, Text, DefaultOptions, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""; local Label = Instance.new("TextLabel", TopBtn); Label.Text = "  " .. Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left; local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; local List = Instance.new("UIListLayout", Scroll); local isOpen = false; TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true) else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true) end end); local function RefreshOptions(Options) for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end; for _, opt in ipairs(Options) do local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11; OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = "  " .. Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true) end) end; Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) end; RefreshOptions(DefaultOptions); return RefreshOptions end
 
--- Inject UI
-local SeedBox = CreateTextBox(TargetPage, "Seed ID (Manual kalau Dropdown error)", getgenv().SelectedSeed, "SelectedSeed")
-CreateTextBox(TargetPage, "Kiri X (Start)", getgenv().FarmStartX, "FarmStartX")
-CreateTextBox(TargetPage, "Kanan X (End)", getgenv().FarmEndX, "FarmEndX")
-CreateTextBox(TargetPage, "Bawah Y (Stop Farm)", getgenv().FarmBottomY, "FarmBottomY")
-CreateToggle(TargetPage, "🚜 START AUTO PLANT FULL", "EnableAutoPlant")
+-- [[ INJECT MENU ]]
+local RefreshSeedDropdown = CreateDropdown(TargetPage, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
+CreateButton(TargetPage, "🔄 Refresh Tas", function() RefreshSeedDropdown(ScanAvailableItems()) end)
 
--- ================================================= --
--- [[ LOGIC INTI: JALAN NATURAL + SCAN & PLANT ]]    --
--- ================================================= --
+CreateTextBox(TargetPage, "X Kiri (Start)", getgenv().FarmStartX, "FarmStartX")
+CreateTextBox(TargetPage, "X Kanan (End)", getgenv().FarmEndX, "FarmEndX")
+CreateTextBox(TargetPage, "Y Atas (Mulai)", getgenv().FarmStartY, "FarmStartY")
+CreateTextBox(TargetPage, "Y Bawah (Berhenti)", getgenv().FarmEndY, "FarmEndY")
 
+CreateToggle(TargetPage, "🚜 START AUTO PLANT ZIG-ZAG", "EnableAutoPlant")
+
+-- ========================================== --
+-- [[ FUNGSI JALAN PER GRID YG AMAN ]]
+-- ========================================== --
+local function WalkToGrid(tX, tY)
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+    if not MyHitbox then return end
+
+    local startZ = MyHitbox.Position.Z
+    local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+    local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+
+    -- Looping langkah demi langkah biar server gak kaget (anti desync)
+    while (currentX ~= tX or currentY ~= tY) do
+        if not getgenv().EnableAutoPlant then break end
+        if currentX ~= tX then currentX = currentX + (tX > currentX and 1 or -1)
+        elseif currentY ~= tY then currentY = currentY + (tY > currentY and 1 or -1) end
+        
+        local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
+        MyHitbox.CFrame = CFrame.new(newWorldPos)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
+        
+        task.wait(getgenv().StepDelay)
+    end
+end
+
+-- ========================================== --
+-- [[ LOGIKA ZIG-ZAG AUTO PLANT ]]
+-- ========================================== --
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
 
-if getgenv().KzoyzAutoPlantLoop then task.cancel(getgenv().KzoyzAutoPlantLoop) end
+task.spawn(function()
+    while true do
+        if getgenv().EnableAutoPlant then
+            if getgenv().SelectedSeed == "" then 
+                warn("Pilih Seed dulu di Dropdown!")
+                task.wait(2)
+                continue 
+            end
 
-getgenv().KzoyzAutoPlantLoop = task.spawn(function()
-    local walkDir = "Right" 
-    local lastPlantedX = nil
+            -- Loop dari Y atas turun ke Y bawah
+            -- Asumsi Y makin turun = makin ke dalam tanah (atau balik kalau minus)
+            local stepY = (getgenv().FarmStartY > getgenv().FarmEndY) and -1 or 1
 
-    while task.wait(0.05) do
-        if not getgenv().EnableAutoPlant then 
-            lastPlantedX = nil -- Reset kalau dimatiin
-            continue 
-        end
+            for y = getgenv().FarmStartY, getgenv().FarmEndY, stepY do
+                if not getgenv().EnableAutoPlant then break end
 
-        local char = LP.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChild("Humanoid")
-        
-        if not hrp or not hum then continue end
+                -- Tentukan arah: baris genap ke kanan, baris ganjil ke kiri (Zig-Zag)
+                local mathHelper = math.abs(getgenv().FarmStartY - y)
+                local isMovingRight = (mathHelper % 2 == 0)
 
-        -- Cek Slot Seed
-        local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
-        if not seedSlot then
-            warn("Bibit Habis! Auto Plant Berhenti.")
-            getgenv().EnableAutoPlant = false
-            hum:MoveTo(hrp.Position) -- Ngerem / Berhenti jalan
-            continue
-        end
+                local startX = isMovingRight and getgenv().FarmStartX or getgenv().FarmEndX
+                local endX = isMovingRight and getgenv().FarmEndX or getgenv().FarmStartX
+                local stepX = isMovingRight and 1 or -1
 
-        -- 1. Deteksi Grid Secara Real-Time (Tanpa Teleport)
-        local currentGridX = math.floor(hrp.Position.X / getgenv().GridSize + 0.5)
-        local currentGridY = math.floor(hrp.Position.Y / getgenv().GridSize + 0.5)
+                -- Jalan ke titik awal baris ini (sebelum mulai nanam)
+                WalkToGrid(startX, y)
+                task.wait(0.2) -- Jeda biar server sinkron posisinya
 
-        -- Stop farming kalau udah nyentuh batas bawah tanah
-        if currentGridY <= getgenv().FarmBottomY then
-            print("Farming selesai sampai batas Y: " .. getgenv().FarmBottomY)
-            getgenv().EnableAutoPlant = false
-            hum:MoveTo(hrp.Position)
-            continue
-        end
+                for x = startX, endX, stepX do
+                    if not getgenv().EnableAutoPlant then break end
 
-        -- 2. TUKANG TANAM (Nembak remote otomatis pas nginjek grid baru)
-        if currentGridX ~= lastPlantedX then
-            local targetGrid = Vector2.new(currentGridX, currentGridY)
-            pcall(function()
-                RemotePlace:FireServer(targetGrid, seedSlot)
-            end)
-            lastPlantedX = currentGridX
-        end
+                    -- 1. Jalan per kotak
+                    WalkToGrid(x, y)
+                    
+                    -- Jeda sedikiiit sebelum nembak remote, wajib buat hindarin desync (Nanam jauh dari player)
+                    task.wait(0.1) 
 
-        -- 3. TUKANG JALAN (Ngeluarin perintah lari tanpa nge-Desync server)
-        local targetGridX = (walkDir == "Right") and getgenv().FarmEndX or getgenv().FarmStartX
-        
-        -- Jalan natural pakai Humanoid:MoveTo ke ujung baris
-        local targetWorldPos = Vector3.new(targetGridX * getgenv().GridSize, hrp.Position.Y, hrp.Position.Z)
-        hum:MoveTo(targetWorldPos)
+                    -- 2. Cek Tas
+                    local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
+                    if not seedSlot then
+                        warn("Seed habis bos!")
+                        getgenv().EnableAutoPlant = false
+                        break
+                    end
 
-        -- 4. LOGIKA PUTAR BALIK & TURUN
-        -- Kalau posisi aslinya udah nyampe / mentok di target (toleransi 0.5 biar gak bug)
-        if math.abs(hrp.Position.X - targetWorldPos.X) <= 1 then
-            hum:MoveTo(hrp.Position) -- Ngerem dulu sebentar
-            task.wait(0.3)
-            
-            -- Balik arah
-            if walkDir == "Right" then
-                walkDir = "Left"
-            else
-                walkDir = "Right"
+                    -- 3. Tanam!
+                    local targetGrid = Vector2.new(x, y)
+                    pcall(function()
+                        RemotePlace:FireServer(targetGrid, seedSlot)
+                    end)
+                    
+                    task.wait(getgenv().PlaceDelay)
+                end
             end
             
-            -- RESET lastPlantedX biar pas turun ke baris baru, dia langsung nanam lagi
-            lastPlantedX = nil
-            
-            -- Biarkan game secara natural menjatuhkan karaktermu ke bawah (kalau blok di bawahnya kosong)
-            -- Kita kasih delay dikit nunggu karakter jatuh ke Y berikutnya
-            task.wait(0.5) 
+            -- Kalau udah selesai loop sampai ujung bawah, matikan otomatis
+            if getgenv().EnableAutoPlant then
+                print("Selesai menanam seluruh area!")
+                getgenv().EnableAutoPlant = false
+            end
         end
+        task.wait(1)
     end
 end)
