@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Plant Full World v5 (Custom Y Step)"
+getgenv().ScriptVersion = "Auto Plant & Break v6 (Full ModFly)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
@@ -19,14 +19,19 @@ getgenv().ScriptVersion = "Auto Plant Full World v5 (Custom Y Step)"
 getgenv().GridSize = 4.5
 getgenv().StepDelay = 0.08   -- Kecepatan jalan per grid
 getgenv().PlaceDelay = 0.15  -- Jeda nanam anti desync
+getgenv().BreakDelay = 0.15  -- Jeda ngehancurin blok
 
 getgenv().EnableAutoPlant = false
+getgenv().EnableAutoBreak = false
+
 getgenv().FarmStartX = 0
 getgenv().FarmEndX = 50
 getgenv().FarmStartY = 37    -- Y awal (Mulai)
 getgenv().FarmEndY = 10      -- Y akhir (Mentok)
 getgenv().FarmStepY = 2      -- Default turun 2 blok
+
 getgenv().SelectedSeed = ""
+getgenv().HitsPerBlock = 1   -- Berapa kali pukul per blok (1 = Harvest)
 
 -- ========================================== --
 local Players = game:GetService("Players")
@@ -66,17 +71,25 @@ end
 -- ========================================== --
 -- [[ UI SETUP ]]
 -- ========================================== --
-local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
+local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255), Red = Color3.fromRGB(255, 80, 80) }
 
-function CreateToggle(Parent, Text, Var) 
+function CreateToggle(Parent, Text, Var, IsBreak) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = "  " .. Text; Btn.TextColor3 = Theme.Text; Btn.Font = Enum.Font.GothamSemibold; Btn.TextSize = 12; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
     local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
     local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); 
     
+    local activeColor = IsBreak and Theme.Red or Theme.Purple
+
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
+        
+        -- Keamanan: Biar gak nyala dua-duanya bersamaan
+        if getgenv()[Var] then
+            if IsBreak then getgenv().EnableAutoPlant = false else getgenv().EnableAutoBreak = false end
+        end
+
         if getgenv()[Var] then 
-            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
+            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = activeColor 
         else 
             Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
         end 
@@ -88,7 +101,7 @@ function CreateTextBox(Parent, Text, Default, Var) local Frame = Instance.new("F
 function CreateDropdown(Parent, Text, DefaultOptions, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""; local Label = Instance.new("TextLabel", TopBtn); Label.Text = "  " .. Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left; local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; local List = Instance.new("UIListLayout", Scroll); local isOpen = false; TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true) else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true) end end); local function RefreshOptions(Options) for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end; for _, opt in ipairs(Options) do local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11; OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = "  " .. Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true) end) end; Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) end; RefreshOptions(DefaultOptions); return RefreshOptions end
 
 -- [[ INJECT MENU ]]
-local RefreshSeedDropdown = CreateDropdown(TargetPage, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
+local RefreshSeedDropdown = CreateDropdown(TargetPage, "Pilih Seed (Buat Plant)", ScanAvailableItems(), "SelectedSeed")
 CreateButton(TargetPage, "🔄 Refresh Tas", function() RefreshSeedDropdown(ScanAvailableItems()) end)
 
 CreateTextBox(TargetPage, "X Kiri (Start)", getgenv().FarmStartX, "FarmStartX")
@@ -96,8 +109,10 @@ CreateTextBox(TargetPage, "X Kanan (End)", getgenv().FarmEndX, "FarmEndX")
 CreateTextBox(TargetPage, "Y Atas (Mulai)", getgenv().FarmStartY, "FarmStartY")
 CreateTextBox(TargetPage, "Y Bawah (Berhenti)", getgenv().FarmEndY, "FarmEndY")
 CreateTextBox(TargetPage, "Turun Tiap (Y Step)", getgenv().FarmStepY, "FarmStepY")
+CreateTextBox(TargetPage, "Hit Per Blok (Buat Break)", getgenv().HitsPerBlock, "HitsPerBlock")
 
-CreateToggle(TargetPage, "🚜 START AUTO PLANT FULL FLY", "EnableAutoPlant")
+CreateToggle(TargetPage, "🚜 START AUTO PLANT", "EnableAutoPlant", false)
+CreateToggle(TargetPage, "🔨 START AUTO BREAK/HARVEST", "EnableAutoBreak", true)
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY (INVISIBLE PLATFORM) ]]
@@ -111,6 +126,142 @@ AirPlat.Size = Vector3.new(getgenv().GridSize + 1, 1, getgenv().GridSize + 1)
 AirPlat.Anchored = true
 AirPlat.CanCollide = true
 AirPlat.Transparency = 1 
+AirPlat.Parent = workspace
+getgenv().AirPlatform = AirPlat
+
+getgenv().KzoyzModFlyHeartbeat = RunService.Heartbeat:Connect(function()
+    if getgenv().EnableAutoPlant or getgenv().EnableAutoBreak then
+        local HitboxFolder = workspace:FindFirstChild("Hitbox")
+        local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+        
+        if MyHitbox then 
+            getgenv().AirPlatform.CFrame = CFrame.new(MyHitbox.Position.X, MyHitbox.Position.Y - (getgenv().GridSize / 2), MyHitbox.Position.Z)
+        end
+        
+        if PlayerMovement then
+            pcall(function()
+                PlayerMovement.VelocityY = 0
+                PlayerMovement.Grounded = true
+            end)
+        end
+    else
+        getgenv().AirPlatform.CFrame = CFrame.new(0, -9999, 0)
+    end
+end)
+
+-- ========================================== --
+-- [[ FUNGSI JALAN PER GRID ]]
+-- ========================================== --
+local function WalkToGrid(tX, tY)
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+    if not MyHitbox then return end
+
+    local startZ = MyHitbox.Position.Z
+    local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+    local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+
+    while (currentX ~= tX or currentY ~= tY) do
+        if not (getgenv().EnableAutoPlant or getgenv().EnableAutoBreak) then break end
+        
+        if currentX ~= tX then 
+            currentX = currentX + (tX > currentX and 1 or -1)
+        elseif currentY ~= tY then 
+            currentY = currentY + (tY > currentY and 1 or -1) 
+        end
+        
+        local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
+        MyHitbox.CFrame = CFrame.new(newWorldPos)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
+        
+        task.wait(getgenv().StepDelay)
+    end
+end
+
+-- ========================================== --
+-- [[ LOGIKA UTAMA: AUTO PLANT & BREAK ]]
+-- ========================================== --
+local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
+-- Asumsi remote untuk hancurin blok/harvest. Akan menyesuaikan nama umum di game.
+local RemotesFolder = RS:WaitForChild("Remotes")
+local RemoteHit = RemotesFolder:FindFirstChild("PlayerHitBlock") or RemotesFolder:FindFirstChild("PlayerMineBlock") or RemotesFolder:FindFirstChild("PlayerHit")
+
+if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
+
+getgenv().KzoyzAutoFarmLoop = task.spawn(function()
+    while true do
+        local isPlanting = getgenv().EnableAutoPlant
+        local isBreaking = getgenv().EnableAutoBreak
+
+        if isPlanting or isBreaking then
+            -- Cek seed cuma waktu lagi mode nanam
+            if isPlanting and getgenv().SelectedSeed == "" then 
+                warn("Pilih Seed dulu di Dropdown sebelum mulai Plant!")
+                getgenv().EnableAutoPlant = false
+                task.wait(1)
+                continue 
+            end
+
+            local absStepY = math.max(1, math.abs(getgenv().FarmStepY))
+            local stepY = (getgenv().FarmStartY > getgenv().FarmEndY) and -absStepY or absStepY
+            local isMovingRight = true
+
+            for y = getgenv().FarmStartY, getgenv().FarmEndY, stepY do
+                if not (getgenv().EnableAutoPlant or getgenv().EnableAutoBreak) then break end
+
+                local startX = isMovingRight and getgenv().FarmStartX or getgenv().FarmEndX
+                local endX = isMovingRight and getgenv().FarmEndX or getgenv().FarmStartX
+                local stepX = isMovingRight and 1 or -1
+
+                WalkToGrid(startX, y)
+                task.wait(0.2) 
+
+                for x = startX, endX, stepX do
+                    if not (getgenv().EnableAutoPlant or getgenv().EnableAutoBreak) then break end
+
+                    WalkToGrid(x, y)
+                    task.wait(0.1) 
+
+                    local targetGrid = Vector2.new(x, y)
+
+                    if getgenv().EnableAutoPlant then
+                        -- [[ MODE: AUTO PLANT ]]
+                        local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
+                        if not seedSlot then
+                            warn("Seed habis bos!")
+                            getgenv().EnableAutoPlant = false
+                            break
+                        end
+                        pcall(function() RemotePlace:FireServer(targetGrid, seedSlot) end)
+                        task.wait(getgenv().PlaceDelay)
+
+                    elseif getgenv().EnableAutoBreak then
+                        -- [[ MODE: AUTO BREAK / HARVEST ]]
+                        if RemoteHit then
+                            for i = 1, getgenv().HitsPerBlock do
+                                pcall(function() RemoteHit:FireServer(targetGrid) end)
+                                task.wait(getgenv().BreakDelay)
+                            end
+                        else
+                            warn("Remote Hit Block tidak ditemukan di game ini!")
+                            getgenv().EnableAutoBreak = false
+                            break
+                        end
+                    end
+                end
+                
+                isMovingRight = not isMovingRight
+            end
+            
+            if getgenv().EnableAutoPlant or getgenv().EnableAutoBreak then
+                print("Selesai mengeksekusi seluruh area!")
+                getgenv().EnableAutoPlant = false
+                getgenv().EnableAutoBreak = false
+            end
+        end
+        task.wait(1)
+    end
+end)AirPlat.Transparency = 1 
 AirPlat.Parent = workspace
 getgenv().AirPlatform = AirPlat
 
