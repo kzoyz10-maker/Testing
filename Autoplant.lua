@@ -11,27 +11,28 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm v7 (Plant & Break ModFly)"
+getgenv().ScriptVersion = "Auto Farm v8 (Smart Scanner)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().StepDelay = 0.08   -- Kecepatan jalan per grid
-getgenv().PlaceDelay = 0.15  -- Jeda nanam anti desync
-getgenv().BreakDelay = 0.15  -- Jeda ngehancurin blok
+getgenv().StepDelay = 0.08   
+getgenv().PlaceDelay = 0.15  
+getgenv().BreakDelay = 0.15  
 
 getgenv().EnableAutoPlant = false
 getgenv().EnableAutoBreak = false
 
 getgenv().FarmStartX = 0
 getgenv().FarmEndX = 50
-getgenv().FarmStartY = 37    -- Y awal (Mulai)
-getgenv().FarmEndY = 10      -- Y akhir (Mentok)
-getgenv().FarmStepY = 2      -- Default turun 2 blok
+getgenv().FarmStartY = 37    
+getgenv().FarmEndY = 10      
+getgenv().FarmStepY = 2      
 
 getgenv().SelectedSeed = ""
-getgenv().HitsPerBlock = 1   -- Berapa kali pukul per blok (1 = Harvest)
+getgenv().HitsPerBlock = 1   
+getgenv().ReadyKeyword = "tree" -- Default deteksi nama "Tree" untuk panen
 
 -- ========================================== --
 local Players = game:GetService("Players")
@@ -83,7 +84,6 @@ function CreateToggle(Parent, Text, Var, IsBreak)
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
         
-        -- Kalau satu nyala, matiin yang lain biar gak tabrakan
         if getgenv()[Var] then
             if IsBreak then getgenv().EnableAutoPlant = false else getgenv().EnableAutoBreak = false end
         end
@@ -97,7 +97,7 @@ function CreateToggle(Parent, Text, Var, IsBreak)
 end
 
 function CreateButton(Parent, Text, Callback) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Btn.MouseButton1Click:Connect(Callback) end
-function CreateTextBox(Parent, Text, Default, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); local Label = Instance.new("TextLabel", Frame); Label.Text = "  "..Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); InputBox.FocusLost:Connect(function() local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end end); return InputBox end
+function CreateTextBox(Parent, Text, Default, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); local Label = Instance.new("TextLabel", Frame); Label.Text = "  "..Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); InputBox.FocusLost:Connect(function() local val = tonumber(InputBox.Text) or InputBox.Text; getgenv()[Var] = val; InputBox.Text = tostring(getgenv()[Var]) end); return InputBox end
 function CreateDropdown(Parent, Text, DefaultOptions, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""; local Label = Instance.new("TextLabel", TopBtn); Label.Text = "  " .. Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left; local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; local List = Instance.new("UIListLayout", Scroll); local isOpen = false; TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true) else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true) end end); local function RefreshOptions(Options) for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end; for _, opt in ipairs(Options) do local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11; OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = "  " .. Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true) end) end; Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) end; RefreshOptions(DefaultOptions); return RefreshOptions end
 
 -- [[ INJECT MENU ]]
@@ -109,10 +109,11 @@ CreateTextBox(TargetPage, "X Kanan (End)", getgenv().FarmEndX, "FarmEndX")
 CreateTextBox(TargetPage, "Y Atas (Mulai)", getgenv().FarmStartY, "FarmStartY")
 CreateTextBox(TargetPage, "Y Bawah (Berhenti)", getgenv().FarmEndY, "FarmEndY")
 CreateTextBox(TargetPage, "Turun Tiap (Y Step)", getgenv().FarmStepY, "FarmStepY")
-CreateTextBox(TargetPage, "Hit Per Blok (Buat Break)", getgenv().HitsPerBlock, "HitsPerBlock")
+CreateTextBox(TargetPage, "Hit Per Blok (Break)", getgenv().HitsPerBlock, "HitsPerBlock")
+CreateTextBox(TargetPage, "Keyword Panen (opsional)", getgenv().ReadyKeyword, "ReadyKeyword")
 
 CreateToggle(TargetPage, "🚜 START AUTO PLANT", "EnableAutoPlant", false)
-CreateToggle(TargetPage, "🔨 START AUTO BREAK/IZIN", "EnableAutoBreak", true)
+CreateToggle(TargetPage, "🔨 START AUTO HARVEST", "EnableAutoBreak", true)
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY (INVISIBLE PLATFORM) ]]
@@ -123,9 +124,7 @@ if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy(
 local AirPlat = Instance.new("Part")
 AirPlat.Name = "KzoyzAirWalk"
 AirPlat.Size = Vector3.new(getgenv().GridSize + 1, 1, getgenv().GridSize + 1)
-AirPlat.Anchored = true
-AirPlat.CanCollide = true
-AirPlat.Transparency = 1 
+AirPlat.Anchored = true; AirPlat.CanCollide = true; AirPlat.Transparency = 1 
 AirPlat.Parent = workspace
 getgenv().AirPlatform = AirPlat
 
@@ -137,17 +136,75 @@ getgenv().KzoyzModFlyHeartbeat = RunService.Heartbeat:Connect(function()
         if MyHitbox then 
             getgenv().AirPlatform.CFrame = CFrame.new(MyHitbox.Position.X, MyHitbox.Position.Y - (getgenv().GridSize / 2), MyHitbox.Position.Z)
         end
-        
         if PlayerMovement then
-            pcall(function()
-                PlayerMovement.VelocityY = 0
-                PlayerMovement.Grounded = true
-            end)
+            pcall(function() PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end)
         end
     else
         getgenv().AirPlatform.CFrame = CFrame.new(0, -9999, 0)
     end
 end)
+
+-- ========================================== --
+-- [[ SISTEM SCANNER (MATA VIRTUAL) ]]
+-- ========================================== --
+local function IsReadyToHarvest(obj)
+    local name = string.lower(obj.Name)
+    local keyword = string.lower(tostring(getgenv().ReadyKeyword))
+    
+    -- Cek via Keyword Name
+    if keyword ~= "" and string.find(name, keyword) then return true end
+    if string.find(name, "ready") then return true end
+    
+    -- Cek via Attributes (Bawaan Game)
+    for attr, val in pairs(obj:GetAttributes()) do
+        local lowerAttr = string.lower(attr)
+        if (lowerAttr == "ready" and val == true) or (lowerAttr == "growth" and (val == 100 or val == 1)) then 
+            return true 
+        end
+    end
+    return false
+end
+
+local function ScanGrid(X, Y)
+    local zPos = 0
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+    if MyHitbox then zPos = MyHitbox.Position.Z end
+    
+    local pos = Vector3.new(X * getgenv().GridSize, Y * getgenv().GridSize, zPos)
+    local hitBoxSize = Vector3.new(1.5, 1.5, 1.5) -- Scan kotak kecil di tengah grid aja biar ga salah baca tetangga
+    
+    local params = OverlapParams.new()
+    local targetFolders = {}
+    if workspace:FindFirstChild("Tiles") then table.insert(targetFolders, workspace.Tiles) end
+    if workspace:FindFirstChild("Backgrounds") then table.insert(targetFolders, workspace.Backgrounds) end
+    
+    if #targetFolders > 0 then
+        params.FilterDescendantsInstances = targetFolders
+        params.FilterType = Enum.RaycastFilterType.Include
+    else
+        -- Kalo folder gak standard, filter karakter doang
+        params.FilterDescendantsInstances = {LP.Character, workspace:FindFirstChild("Hitbox")}
+        params.FilterType = Enum.RaycastFilterType.Exclude
+    end
+    
+    local partsInGrid = workspace:GetPartBoundsInBox(CFrame.new(pos), hitBoxSize, params)
+    
+    local isOccupied = false
+    local isReady = false
+    
+    if #partsInGrid > 0 then
+        isOccupied = true
+        for _, p in ipairs(partsInGrid) do
+            local obj = p:FindFirstAncestorWhichIsA("Model") or p
+            if IsReadyToHarvest(obj) then
+                isReady = true
+                break
+            end
+        end
+    end
+    
+    return isOccupied, isReady
+end
 
 -- ========================================== --
 -- [[ FUNGSI JALAN PER GRID ]]
@@ -182,7 +239,7 @@ end
 -- [[ LOGIKA UTAMA: AUTO PLANT & BREAK ]]
 -- ========================================== --
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
-local RemoteBreak = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist") -- Remote udah diganti jadi PlayerFist
+local RemoteBreak = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist") 
 
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 
@@ -192,12 +249,10 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
         local isBreaking = getgenv().EnableAutoBreak
 
         if isPlanting or isBreaking then
-            -- Peringatan kalau lupa pilih seed (khusus Plant)
             if isPlanting and getgenv().SelectedSeed == "" then 
                 warn("Pilih Seed dulu di Dropdown sebelum mulai Plant!")
                 getgenv().EnableAutoPlant = false
-                task.wait(1)
-                continue 
+                task.wait(1); continue 
             end
 
             local absStepY = math.max(1, math.abs(getgenv().FarmStepY))
@@ -211,7 +266,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 local endX = isMovingRight and getgenv().FarmEndX or getgenv().FarmStartX
                 local stepX = isMovingRight and 1 or -1
 
-                -- Terbang ke ujung barisan sebelum mulai
                 WalkToGrid(startX, y)
                 task.wait(0.2) 
 
@@ -222,29 +276,35 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     task.wait(0.1) 
 
                     local targetGrid = Vector2.new(x, y)
+                    
+                    -- SCANNER VIRTUAL DI KOORDINAT SAAT INI
+                    local isOccupied, isReady = ScanGrid(x, y)
 
                     if getgenv().EnableAutoPlant then
-                        -- [[ MODE: AUTO PLANT ]]
-                        local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
-                        if not seedSlot then
-                            warn("Seed habis bos!")
-                            getgenv().EnableAutoPlant = false
-                            break
+                        -- Cuma tanam kalo kotak bener-bener KOSONG
+                        if not isOccupied then
+                            local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
+                            if not seedSlot then
+                                warn("Seed habis bos!")
+                                getgenv().EnableAutoPlant = false
+                                break
+                            end
+                            pcall(function() RemotePlace:FireServer(targetGrid, seedSlot) end)
+                            task.wait(getgenv().PlaceDelay)
                         end
-                        pcall(function() RemotePlace:FireServer(targetGrid, seedSlot) end)
-                        task.wait(getgenv().PlaceDelay)
 
                     elseif getgenv().EnableAutoBreak then
-                        -- [[ MODE: AUTO BREAK / HARVEST ]]
-                        for i = 1, getgenv().HitsPerBlock do
-                            if not getgenv().EnableAutoBreak then break end
-                            pcall(function() RemoteBreak:FireServer(targetGrid) end)
-                            task.wait(getgenv().BreakDelay)
+                        -- Cuma pukul kalo ada benda DAN berstatus READY (Pohon mateng)
+                        if isOccupied and isReady then
+                            for i = 1, getgenv().HitsPerBlock do
+                                if not getgenv().EnableAutoBreak then break end
+                                pcall(function() RemoteBreak:FireServer(targetGrid) end)
+                                task.wait(getgenv().BreakDelay)
+                            end
                         end
                     end
                 end
                 
-                -- Selesai 1 baris, putar balik
                 isMovingRight = not isMovingRight
             end
             
