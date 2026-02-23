@@ -11,13 +11,12 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Plant v4.0 - GT Style (Anti Glitch)" 
+getgenv().ScriptVersion = "Auto Plant v5.0 - True GT Style" 
 
 -- ========================================== --
 getgenv().GridSize = 4.5
--- BISA DIATUR DARI MENU SEKARANG:
-getgenv().WalkDelay = 0.25 -- Jeda saat pindah 1 block (Makin gede makin pelan/aman)
-getgenv().PlaceDelay = 0.1 -- Jeda setelah naruh seed
+getgenv().WalkDelay = 0.25 -- Jeda gerak per-kotak (Anti-Glitch Server)
+getgenv().PlaceDelay = 0.1  -- Jeda setelah nanam
 -- ========================================== --
 
 local Players = game:GetService("Players")
@@ -80,19 +79,72 @@ local function ScanAvailableItems()
     if #items == 0 then items = {"Kosong"} end return items
 end
 
+-- MEMBACA SELURUH MAP (Support BasePart & Model)
 local function GetWorldMap()
     local map = {}
-    for x = 0, 99 do map[x] = {} end 
+    for x = -10, 110 do map[x] = {} end -- Beri buffer ukuran map
+    
     local tilesFolder = workspace:FindFirstChild("Tiles")
     if tilesFolder then
         for _, block in ipairs(tilesFolder:GetChildren()) do
-            if block:IsA("BasePart") then
-                local gX = math.floor(block.Position.X / getgenv().GridSize + 0.5)
-                local gY = math.floor(block.Position.Y / getgenv().GridSize + 0.5)
-                if gX >= 0 and gX <= 99 and gY >= 0 and gY <= 59 then map[gX][gY] = true end
+            local pos = nil
+            if block:IsA("BasePart") then pos = block.Position
+            elseif block:IsA("Model") and block.PrimaryPart then pos = block.PrimaryPart.Position
+            elseif block:IsA("Model") then
+                local firstPart = block:FindFirstChildWhichIsA("BasePart")
+                if firstPart then pos = firstPart.Position end
+            end
+            
+            if pos then
+                local gX = math.floor(pos.X / getgenv().GridSize + 0.5)
+                local gY = math.floor(pos.Y / getgenv().GridSize + 0.5)
+                if map[gX] then map[gX][gY] = true end
             end
         end
-    end return map
+    end 
+    return map
+end
+
+-- PENCARI JALAN PINTAR (Step-by-step Anti Glitch)
+local function SmartWalkTo(tX, tY, map)
+    local H = workspace.Hitbox:FindFirstChild(LP.Name)
+    if not H then return end
+    local startZ = H.Position.Z
+    
+    while getgenv().EnableGTPlant do
+        local cX = math.floor(H.Position.X / getgenv().GridSize + 0.5)
+        local cY = math.floor(H.Position.Y / getgenv().GridSize + 0.5)
+        
+        if cX == tX and cY == tY then break end -- Sampai Tujuan
+        
+        local nextX = cX
+        local nextY = cY
+        
+        if cY < tY then -- Butuh Naik
+            if map[cX] and map[cX][cY+1] then
+                -- Atap ketutup! Geser cari celah.
+                local dir = (tX > cX) and 1 or -1
+                if cX == tX then dir = 1 end
+                nextX = cX + dir
+                getgenv().ModFly = false
+            else
+                -- Atap kebuka, terbang naik
+                nextY = cY + 1
+                getgenv().ModFly = true
+            end
+        elseif cY > tY then -- Butuh Turun
+            nextY = cY - 1
+            getgenv().ModFly = false
+        else -- Sejajar, jalan horizontal
+            nextX = cX + ((tX > cX) and 1 or -1)
+            getgenv().ModFly = false
+        end
+        
+        local newPos = Vector3.new(nextX * getgenv().GridSize, nextY * getgenv().GridSize, startZ)
+        H.CFrame = CFrame.new(newPos)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = newPos end) end
+        task.wait(getgenv().WalkDelay) -- Tunggu server register jalan
+    end
 end
 
 -- [[ UI SETUP ]] --
@@ -115,126 +167,76 @@ CreateToggle(TargetPage, "🚜 START GT AUTO PLANT", "EnableGTPlant")
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem")
 
 getgenv().KzoyzPlantLoop = task.spawn(function()
-    local isFirstRow = true
-    local direction = 1 -- 1 = Ke Kanan, -1 = Ke Kiri
-    
-    -- Fungsi Anti-Glitch (Gerak 1 block, pause)
-    local function StepTo(tX, tY, startZ)
-        if not getgenv().EnableGTPlant then return false end
-        local H = workspace.Hitbox:FindFirstChild(LP.Name)
-        if H then
-            local newPos = Vector3.new(tX * getgenv().GridSize, tY * getgenv().GridSize, startZ)
-            H.CFrame = CFrame.new(newPos)
-            if PlayerMovement then pcall(function() PlayerMovement.Position = newPos end) end
-        end
-        task.wait(getgenv().WalkDelay) -- PELAN-PELAN BIAR SERVER GAK MARAH
-        return true
-    end
-
-    while getgenv().EnableGTPlant do
-        local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
-        if not seedSlot then getgenv().EnableGTPlant = false; getgenv().ModFly = false; break end
-
-        local H = workspace.Hitbox:FindFirstChild(LP.Name)
-        if not H then task.wait(0.5) continue end
-        
-        local startZ = H.Position.Z
-        local cX = math.floor(H.Position.X / getgenv().GridSize + 0.5)
-        local cY = math.floor(H.Position.Y / getgenv().GridSize + 0.5)
-        
-        local Map = GetWorldMap()
-
-        -- AWAL MULAI: Harus maksain jalan ke UJUNG KIRI dulu
-        if isFirstRow then
-            direction = 1
-            while cX > 0 and getgenv().EnableGTPlant do
-                if Map[cX-1] and Map[cX-1][cY] then break end -- Kalo nabrak tembok kiri, stop
-                cX = cX - 1
-                StepTo(cX, cY, startZ)
-            end
-            isFirstRow = false
-            task.wait(0.5)
-        end
-
-        -- FASE TANAM (Jalan sebaris)
-        while getgenv().EnableGTPlant do
-            -- 1. Cek kalau bisa nanam di pijakan ini
-            local hasDirt = Map[cX] and Map[cX][cY-1]
-            local isEmpty = Map[cX] and not Map[cX][cY]
-            
-            if hasDirt and isEmpty then
-                RemotePlace:FireServer(Vector2.new(cX, cY), seedSlot)
-                Map[cX][cY] = true -- Tandai lokal biar gak double
-                task.wait(getgenv().PlaceDelay)
+    while true do
+        if getgenv().EnableGTPlant then
+            local seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
+            if not seedSlot then 
+                warn("Seed kosong / tidak valid!")
+                getgenv().EnableGTPlant = false; getgenv().ModFly = false
+                task.wait(2); continue 
             end
             
-            -- 2. Cek apakah bisa maju ke kotak depannya
-            local nX = cX + direction
-            local isNextWall = Map[nX] and Map[nX][cY]
-            local isNextEdge = (nX < 0) or (nX > 99)
-            local isNextHole = Map[nX] and not Map[nX][cY-1] -- Gak ada tanah di depan
+            local H = workspace.Hitbox:FindFirstChild(LP.Name)
+            if not H then task.wait(1); continue end
             
-            if isNextWall or isNextEdge or isNextHole then
-                -- MENTOK! Waktunya cari jalan naik
-                break
-            else
-                -- BISA MAJU, langkahkan kaki 1 grid
-                cX = nX
-                StepTo(cX, cY, startZ)
-            end
-        end
-
-        if not getgenv().EnableGTPlant then break end
-
-        -- FASE CARI ATAP BOLONG BUAT NAIK
-        local holeX = cX
-        local foundHole = false
-        local searchDir = -direction -- Cari lobang ke arah kebalikan
-
-        while holeX >= 0 and holeX <= 99 do
-            -- Cek kalau di atas kepala kosong
-            if not (Map[holeX] and Map[holeX][cY+1]) and not (Map[holeX] and Map[holeX][cY+2]) then
-                foundHole = true
-                break
-            end
-            holeX = holeX + searchDir
-        end
-
-        if foundHole then
-            -- 1. Jalan ke posisi lobang
-            while cX ~= holeX and getgenv().EnableGTPlant do
-                cX = cX + (holeX > cX and 1 or -1)
-                StepTo(cX, cY, startZ)
-            end
+            local myY = math.floor(H.Position.Y / getgenv().GridSize + 0.5)
+            local map = GetWorldMap()
             
-            -- 2. Terbang ke atas ngelewatin lobang
-            getgenv().ModFly = true
-            task.wait(0.3)
+            -- 1. Kumpulin semua list titik tanah yang kosong
+            local targetList = {}
+            local isLeftToRight = true -- Pola Zig-Zag Awal
             
-            while getgenv().EnableGTPlant do
-                cY = cY + 1
-                StepTo(cX, cY, startZ)
+            for y = myY, 60 do -- Mulai dari posisi player sampai batas atas map
+                local rowTargets = {}
+                local rowHasDirt = false
                 
-                -- Sambil naik, liat ke samping, ada ladang baru gak?
-                local checkSideX = cX + (-direction)
-                if Map[checkSideX] and Map[checkSideX][cY-1] then
-                    -- Nemu lantai ladang baru!
-                    break
+                for x = 0, 99 do
+                    -- Syarat ditanam: Grid saat ini kosong & Bawahnya ada block
+                    local isAir = not (map[x] and map[x][y])
+                    local hasDirt = (map[x] and map[x][y-1])
+                    
+                    if isAir and hasDirt then
+                        table.insert(rowTargets, {x = x, y = y})
+                        rowHasDirt = true
+                    end
                 end
                 
-                if cY > 59 then getgenv().EnableGTPlant = false; break end -- Kalo bablas ke langit, matiin
+                -- 2. Sortir ZigZag biar jalannya kayak uler (rapi)
+                if rowHasDirt then
+                    table.sort(rowTargets, function(a, b)
+                        if isLeftToRight then return a.x < b.x else return a.x > b.x end
+                    end)
+                    
+                    for _, t in ipairs(rowTargets) do
+                        table.insert(targetList, t)
+                    end
+                    isLeftToRight = not isLeftToRight -- Putar balik untuk baris atasnya
+                end
             end
             
-            -- 3. Udah sampai lantai baru, matiin fly, pindah 1 blok ke ladang, balik arah
-            getgenv().ModFly = false
-            direction = -direction 
-            task.wait(0.3)
+            -- 3. EKSEKUSI TANAM SATU PERSATU DENGAN SMART WALK
+            if #targetList > 0 then
+                for _, target in ipairs(targetList) do
+                    if not getgenv().EnableGTPlant then break end
+                    
+                    -- Cek seed sebelum tanam
+                    seedSlot = GetSlotByItemID(getgenv().PlantSeedID)
+                    if not seedSlot then getgenv().EnableGTPlant = false; break end
+                    
+                    -- Jalan pelan-pelan & otomatis pakai fly kalau butuh manjat
+                    SmartWalkTo(target.x, target.y, map)
+                    
+                    if getgenv().EnableGTPlant then
+                        RemotePlace:FireServer(Vector2.new(target.x, target.y), seedSlot)
+                        task.wait(getgenv().PlaceDelay)
+                    end
+                end
+            end
             
-            cX = cX + direction
-            StepTo(cX, cY, startZ)
-        else
-            -- Kalau gada lobang sama sekali buat naik, berarti ladang udah full
+            -- Matikan kalau list target udah habis / beres 1 map
             getgenv().EnableGTPlant = false
+            getgenv().ModFly = false
         end
+        task.wait(1)
     end
 end)
