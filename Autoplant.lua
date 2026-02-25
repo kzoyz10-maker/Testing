@@ -11,15 +11,11 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V8 (MANUAL AGE SYSTEM)"
+getgenv().ScriptVersion = "Auto Farm V11 (UI TEXT SCANNER)"
 
 -- ========================================== --
--- [[ KONFIGURASI PENTING ]]
+-- [[ KONFIGURASI ]]
 -- ========================================== --
--- Berapa detik pohon butuh waktu buat tumbuh? (Coba ganti-ganti angka ini)
--- Dirt Sapling biasanya cepet (misal 10-30 detik). Pohon mahal bisa ribuan detik.
-getgenv().MinimumAge = 60  -- <-- GANTI INI KALAU MASIH BREAK BIBIT (Naikkan angkanya)
-
 getgenv().GridSize = 4.5
 getgenv().StepDelay = 0.05   
 getgenv().BreakDelay = 0.15  
@@ -32,6 +28,7 @@ local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
@@ -39,7 +36,7 @@ pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerM
 -- ========================================== --
 -- [[ UI SETUP ]]
 -- ========================================== --
-local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255), Red = Color3.fromRGB(255, 80, 80) }
+local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Red = Color3.fromRGB(255, 80, 80) }
 
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Theme.Text; Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
@@ -56,10 +53,10 @@ function CreateToggle(Parent, Text, Var)
     end) 
 end
 
-CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V8 AGE CHECK)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V11 UI SCAN)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ SISTEM MODFLY ]]
+-- [[ MODFLY SYSTEM ]]
 -- ========================================== --
 if getgenv().KzoyzModFlyHeartbeat then getgenv().KzoyzModFlyHeartbeat:Disconnect(); getgenv().KzoyzModFlyHeartbeat = nil end
 if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
@@ -106,14 +103,10 @@ local function WalkToGrid(tX, tY, startZ)
 end
 
 -- ========================================== --
--- [[ 👶 HITUNG UMUR TANAMAN ]]
+-- [[ 👁️ SISTEM MEMBACA UI (UI SCANNER) ]]
 -- ========================================== --
-local function GetAllRipePlants()
-    local ripePlants = {}
-    local foundMapTable = false
-    -- Gunakan os.time() untuk Unix Timestamp saat ini
-    local currentTime = os.time()
-    
+local function GetAllSaplingLocations()
+    local saplings = {}
     for _, obj in pairs(getgc(true)) do
         if type(obj) == "table" and not isreadonly(obj) then
             local sX, col = next(obj)
@@ -122,40 +115,56 @@ local function GetAllRipePlants()
                 if type(sY) == "number" and type(blockData) == "table" then
                     for gridX, yCol in pairs(obj) do
                         if type(gridX) ~= "number" or type(yCol) ~= "table" then break end
-                        
                         for gridY, bData in pairs(yCol) do
                             if type(gridY) == "number" and type(bData) == "table" then
                                 local fg = rawget(bData, 1) 
                                 if type(fg) == "table" then
                                     local name = rawget(fg, 1)
                                     if type(name) == "string" and string.find(string.lower(name), "sapling") then
-                                        foundMapTable = true 
-                                        
-                                        local details = rawget(fg, 2)
-                                        if type(details) == "table" then
-                                            local plantedTime = rawget(details, "at")
-                                            
-                                            if type(plantedTime) == "number" then
-                                                -- HITUNG UMUR: Waktu Sekarang - Waktu Tanam
-                                                local age = currentTime - plantedTime
-                                                
-                                                -- Kalau umurnya sudah cukup, baru sikat!
-                                                if age >= getgenv().MinimumAge then
-                                                    table.insert(ripePlants, {x = gridX, y = gridY})
-                                                end
-                                            end
-                                        end
+                                        table.insert(saplings, {x = gridX, y = gridY, name = name})
                                     end
                                 end
                             end
                         end
                     end
-                    if foundMapTable then return ripePlants end
+                    if #saplings > 0 then return saplings end
                 end
             end
         end
     end
-    return ripePlants
+    return saplings
+end
+
+-- Fungsi ini bertugas ngebaca semua Text di layar (PlayerGui & HoverPart)
+local function IsUI100Percent()
+    local labelsToScan = {}
+    
+    -- 1. Ambil UI dari Layar Player
+    for _, obj in pairs(LP.PlayerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and obj.Visible then
+            table.insert(labelsToScan, obj)
+        end
+    end
+    
+    -- 2. Ambil UI dari HoverPart (Kadang gamenya nempel UI di Workspace)
+    local hoverPart = workspace:FindFirstChild("HoverPart")
+    if hoverPart then
+        for _, obj in pairs(hoverPart:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Visible then
+                table.insert(labelsToScan, obj)
+            end
+        end
+    end
+    
+    -- Cek satu-satu tulisannya
+    for _, label in ipairs(labelsToScan) do
+        local txt = string.lower(label.Text)
+        if string.find(txt, "100%% grown") or string.find(txt, "punch to harvest") then
+            return true -- BENAR! SUDAH MATANG!
+        end
+    end
+    
+    return false -- BELUM MATANG (atau UI belum muncul)
 end
 
 -- ========================================== --
@@ -168,12 +177,9 @@ if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     while true do
         if getgenv().EnableSmartHarvest then
-            local targetPlants = GetAllRipePlants()
+            local targetPlants = GetAllSaplingLocations()
             
             if #targetPlants > 0 then
-                -- Print Debug biar tau dia ngapain
-                print("🌳 Radar V8: Menemukan " .. #targetPlants .. " tanaman yang umurnya > " .. getgenv().MinimumAge .. " detik.")
-                
                 local HitboxFolder = workspace:FindFirstChild("Hitbox")
                 local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                 
@@ -181,17 +187,28 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     local startZ = MyHitbox.Position.Z
                     for _, plant in ipairs(targetPlants) do
                         if not getgenv().EnableSmartHarvest then break end
-                        WalkToGrid(plant.x, plant.y, startZ)
-                        task.wait(0.1) 
                         
-                        local targetVec = Vector2.new(plant.x, plant.y)
-                        for i = 1, getgenv().HitsPerBlock do
-                            if not getgenv().EnableSmartHarvest then break end
-                            pcall(function() 
-                                if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
-                                else RemoteFist:InvokeServer(targetVec) end
-                            end)
-                            task.wait(getgenv().BreakDelay)
+                        -- 1. Jalan ke lokasi Bibit
+                        WalkToGrid(plant.x, plant.y, startZ)
+                        
+                        -- 2. Tunggu 0.2 Detik biar kotak UI Hijaunya muncul
+                        task.wait(0.2) 
+                        
+                        -- 3. BACA UI LAYAR!
+                        if IsUI100Percent() then
+                            print("✅ V11: Teks '100% Grown' terdeteksi! Memanen " .. plant.name)
+                            local targetVec = Vector2.new(plant.x, plant.y)
+                            for i = 1, getgenv().HitsPerBlock do
+                                if not getgenv().EnableSmartHarvest then break end
+                                pcall(function() 
+                                    if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                                    else RemoteFist:InvokeServer(targetVec) end
+                                end)
+                                task.wait(getgenv().BreakDelay)
+                            end
+                        else
+                            -- Kalau gagal, berarti tulisan masih "X% Grown", tinggalin.
+                            -- print("❌ V11: Belum panen, skip!")
                         end
                     end
                 end
