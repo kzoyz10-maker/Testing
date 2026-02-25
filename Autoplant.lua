@@ -11,18 +11,15 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V12 (STAGE N SCANNER)"
+getgenv().ScriptVersion = "Auto Farm V14 (ULTIMATE AUTO-DATABASE)"
 
 -- ========================================== --
--- [[ KONFIGURASI ]]
+-- [[ KONFIGURASI PENGGUNA ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
 getgenv().StepDelay = 0.05   
 getgenv().BreakDelay = 0.15  
 getgenv().HitsPerBlock = 1   
-
--- INI KUNCINYA: Angka n saat tanaman siap panen
-getgenv().HarvestStage = 3   
 
 getgenv().EnableSmartHarvest = false
 
@@ -56,7 +53,7 @@ function CreateToggle(Parent, Text, Var)
     end) 
 end
 
-CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V12 FAST & SMART)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V14 ULTIMATE)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ MODFLY SYSTEM ]]
@@ -106,11 +103,88 @@ local function WalkToGrid(tX, tY, startZ)
 end
 
 -- ========================================== --
--- [[ 🧠 DETEKTOR TAHAP (STAGE N) ]]
+-- [[ 🕵️‍♂️ AUTO-DATABASE STEALER ]]
 -- ========================================== --
-local function GetRipePlantsByStage()
+local FoundDB = false
+local ItemDB = nil
+local DurationKey = nil
+local DurationCache = {}
+
+local function StealGameDatabase()
+    if FoundDB then return end
+    for _, obj in pairs(getgc(true)) do
+        if type(obj) == "table" and not isreadonly(obj) then
+            -- Cari tabel yang punya data "dirt_sapling"
+            local dirt = rawget(obj, "dirt_sapling")
+            if type(dirt) == "table" then
+                for k, v in pairs(dirt) do
+                    -- Sidik Jari: Dirt durasinya 30 detik!
+                    if v == 30 then 
+                        ItemDB = obj
+                        DurationKey = k
+                        FoundDB = true
+                        print("✅ V14: DATABASE GAME BERHASIL DIRETAS! Kunci Waktu: " .. tostring(k))
+                        return
+                    end
+                end
+            end
+            
+            -- Cek kalau developernya pakai format Array
+            for _, v in pairs(obj) do
+                if type(v) == "table" then
+                    local id = rawget(v, "id") or rawget(v, "name")
+                    if id == "dirt_sapling" then
+                        for k, val in pairs(v) do
+                            if val == 30 then
+                                ItemDB = obj
+                                DurationKey = k
+                                FoundDB = true
+                                print("✅ V14: DATABASE GAME BERHASIL DIRETAS! Kunci Waktu: " .. tostring(k))
+                                return
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function GetPlantDuration(saplingName)
+    -- Kalau udah disimpen, ambil dari cache biar nggak lag
+    if DurationCache[saplingName] then return DurationCache[saplingName] end
+    
+    if not FoundDB then StealGameDatabase() end
+    
+    if FoundDB and ItemDB then
+        local data = rawget(ItemDB, saplingName)
+        if type(data) == "table" and data[DurationKey] then
+            DurationCache[saplingName] = data[DurationKey]
+            return data[DurationKey]
+        end
+        
+        for _, v in pairs(ItemDB) do
+            if type(v) == "table" then
+                local id = rawget(v, "id") or rawget(v, "name")
+                if id == saplingName and v[DurationKey] then
+                    DurationCache[saplingName] = v[DurationKey]
+                    return v[DurationKey]
+                end
+            end
+        end
+    end
+    
+    return 30 -- Cadangan kalau gagal baca db
+end
+
+-- ========================================== --
+-- [[ ⏰ LOGIKA PEMANEN SUPER CERDAS ]]
+-- ========================================== --
+local function GetRipePlants()
     local ripePlants = {}
     local foundMapTable = false
+    -- Pake jam server biar akurat 100% dan instan panen di world baru
+    local currentTime = Workspace:GetServerTimeNow()
     
     for _, obj in pairs(getgc(true)) do
         if type(obj) == "table" and not isreadonly(obj) then
@@ -128,14 +202,21 @@ local function GetRipePlantsByStage()
                                     if type(name) == "string" and string.find(string.lower(name), "sapling") then
                                         foundMapTable = true
                                         
-                                        -- Cek Detail Tabel (isinya 'at' dan 'n')
                                         local details = rawget(fg, 2)
                                         if type(details) == "table" then
-                                            local currentStage = rawget(details, "n")
+                                            local timePlanted = rawget(details, "at")
                                             
-                                            -- Kalau stage-nya udah 3 (atau lebih), berarti MATANG!
-                                            if type(currentStage) == "number" and currentStage >= getgenv().HarvestStage then
-                                                table.insert(ripePlants, {x = gridX, y = gridY, name = name})
+                                            if type(timePlanted) == "number" then
+                                                -- 1. Tanya durasi ke Database otomatis
+                                                local targetDuration = GetPlantDuration(name)
+                                                
+                                                -- 2. Hitung umur (Jam Server sekarang dikurangi Jam ditanam)
+                                                local currentAge = currentTime - timePlanted
+                                                
+                                                -- 3. Kalau udah waktunya, DAFTARKAN PANEN!
+                                                if currentAge >= targetDuration then
+                                                    table.insert(ripePlants, {x = gridX, y = gridY, name = name})
+                                                end
                                             end
                                         end
                                     end
@@ -161,11 +242,9 @@ if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     while true do
         if getgenv().EnableSmartHarvest then
-            local targetPlants = GetRipePlantsByStage()
+            local targetPlants = GetRipePlants()
             
             if #targetPlants > 0 then
-                -- print("🌾 V12: Menemukan " .. #targetPlants .. " tanaman matang (Stage "..getgenv().HarvestStage.."). OTW Panen!")
-                
                 local HitboxFolder = workspace:FindFirstChild("Hitbox")
                 local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                 
@@ -174,7 +253,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     for _, plant in ipairs(targetPlants) do
                         if not getgenv().EnableSmartHarvest then break end
                         
-                        -- Cuma jalan kalau beneran mateng!
                         WalkToGrid(plant.x, plant.y, startZ)
                         task.wait(0.1) 
                         
@@ -189,11 +267,8 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                         end
                     end
                 end
-            else
-                -- DIAM AJA! Nggak usah muter-muter kayak satpam.
-                -- print("⏳ Bot standby... Menunggu tanaman matang.")
             end
         end
-        task.wait(1.5) -- Cek memory tiap 1.5 detik
+        task.wait(1) 
     end
 end)
