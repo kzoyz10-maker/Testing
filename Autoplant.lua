@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V4 (MEMORY SCANNER ALA ROCKHUB)"
+getgenv().ScriptVersion = "Auto Farm V5 (MEMORY SCANNER PERFECTED)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
@@ -52,7 +52,7 @@ function CreateToggle(Parent, Text, Var)
     end) 
 end
 
-CreateToggle(TargetPage, "🚀 START AUTO HARVEST (iyadeeh)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START AUTO HARVEST (MEMORY SCAN V5)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY ]]
@@ -105,56 +105,49 @@ local function WalkToGrid(tX, tY, startZ)
 end
 
 -- ========================================== --
--- [[ 🧠 PENCARI TANAMAN 100% VIA MEMORI CLIENT ]]
+-- [[ 🧠 PENCARI TANAMAN 100% VIA MEMORI CLIENT V5 ]]
 -- ========================================== --
-local MapTableCache = nil
-
--- Fungsi nyari otak game (cuma butuh 1 kali)
-local function GetMapTable(cx, cy)
-    if MapTableCache and rawget(MapTableCache, cx) then return MapTableCache end
-    for _, obj in pairs(getgc(true)) do
-        if type(obj) == "table" then
-            local success, dataX = pcall(function() return rawget(obj, cx) end)
-            if success and type(dataX) == "table" then
-                local success2, dataY = pcall(function() return rawget(dataX, cy) end)
-                if success2 and type(dataY) == "table" then
-                    MapTableCache = obj -- Simpan biar gak lag
-                    return obj
-                end
-            end
-        end
-    end
-    return nil
-end
-
 local function GetAllRipePlants()
     local ripePlants = {}
-    local HitboxFolder = workspace:FindFirstChild("Hitbox")
-    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-    if not MyHitbox then return ripePlants end
-
-    local cx = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
-    local cy = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+    local foundMapTable = false
     
-    local mapTable = GetMapTable(cx, cy)
-    if not mapTable then return ripePlants end
-
-    -- BACA SELURUH MAP INSTAN 0 DETIK!
-    for gridX, col in pairs(mapTable) do
-        if type(gridX) == "number" and type(col) == "table" then
-            for gridY, blockData in pairs(col) do
-                if type(gridY) == "number" and type(blockData) == "table" then
-                    local data = rawget(blockData, 1) -- Ambil Layer [1]
-                    if type(data) == "table" then
-                        local name = rawget(data, 1) -- Ambil Nama (ex: dirt_sapling)
-                        local details = rawget(data, 2) -- Ambil Tabel Detail
+    for _, obj in pairs(getgc(true)) do
+        if type(obj) == "table" and not isreadonly(obj) then
+            -- Cek apakah tabel ini bentuknya Grid X dan Y
+            local sX, col = next(obj)
+            if type(sX) == "number" and type(col) == "table" then
+                local sY, blockData = next(col)
+                if type(sY) == "number" and type(blockData) == "table" then
+                    -- Kita masuk lebih dalam, bongkar isinya!
+                    for gridX, yCol in pairs(obj) do
+                        if type(gridX) ~= "number" or type(yCol) ~= "table" then break end
                         
-                        if type(name) == "string" and string.find(name, "sapling") then
-                            -- CEK JIKA N == 3 (100% GROWN)
-                            if type(details) == "table" and rawget(details, "n") == 3 then
-                                table.insert(ripePlants, {x = gridX, y = gridY})
+                        for gridY, bData in pairs(yCol) do
+                            if type(gridY) == "number" and type(bData) == "table" then
+                                local fg = rawget(bData, 1) -- Ambil blok Layer 1 (Foreground)
+                                
+                                if type(fg) == "table" then
+                                    local name = rawget(fg, 1)
+                                    -- Cek kalau namanya ada tulisan "sapling"
+                                    if type(name) == "string" and string.find(string.lower(name), "sapling") then
+                                        foundMapTable = true -- Fix, kita nemu Buku Map aslinya!
+                                        
+                                        local details = rawget(fg, 2)
+                                        if type(details) == "table" then
+                                            local nVal = rawget(details, "n")
+                                            -- Kalau stage 'n' nya udah 3, berarti 100% Grown!
+                                            if type(nVal) == "number" and nVal >= 3 then
+                                                table.insert(ripePlants, {x = gridX, y = gridY})
+                                            end
+                                        end
+                                    end
+                                end
                             end
                         end
+                    end
+                    
+                    if foundMapTable then
+                        return ripePlants -- Langsung return biar gak muter-muter kelamaan
                     end
                 end
             end
@@ -173,10 +166,10 @@ if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     while true do
         if getgenv().EnableSmartHarvest then
-            -- Cari tanaman matang langsung dari otak game!
             local targetPlants = GetAllRipePlants()
             
             if #targetPlants > 0 then
+                print("🎯 Radar Memori menemukan " .. #targetPlants .. " tanaman matang! Mengeksekusi...")
                 local HitboxFolder = workspace:FindFirstChild("Hitbox")
                 local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                 
@@ -186,11 +179,9 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     for _, plant in ipairs(targetPlants) do
                         if not getgenv().EnableSmartHarvest then break end
                         
-                        -- Jalan ke kordinat grid dari memori
                         WalkToGrid(plant.x, plant.y, startZ)
                         task.wait(0.1) 
                         
-                        -- Pukul
                         local targetVec = Vector2.new(plant.x, plant.y)
                         for i = 1, getgenv().HitsPerBlock do
                             if not getgenv().EnableSmartHarvest then break end
@@ -207,7 +198,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 end
             end
         end
-        -- Cek memori tiap 1 detik
         task.wait(1)
     end
 end)
