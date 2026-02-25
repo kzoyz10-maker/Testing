@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V5 (MEMORY SCANNER PERFECTED)"
+getgenv().ScriptVersion = "Auto Farm V6 (TIME-SYNCED RADAR)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
@@ -52,7 +52,7 @@ function CreateToggle(Parent, Text, Var)
     end) 
 end
 
-CreateToggle(TargetPage, "🚀 START AUTO HARVEST (MEMORY SCAN V5)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V6 TIME-SYNC)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY ]]
@@ -105,12 +105,112 @@ local function WalkToGrid(tX, tY, startZ)
 end
 
 -- ========================================== --
--- [[ 🧠 PENCARI TANAMAN 100% VIA MEMORI CLIENT V5 ]]
+-- [[ ⏰ PENCARI TANAMAN 100% BERDASARKAN WAKTU ]]
 -- ========================================== --
 local function GetAllRipePlants()
     local ripePlants = {}
     local foundMapTable = false
+    -- Ambil waktu server saat ini (dalam detik)
+    local currentTime = workspace:GetServerTimeNow()
     
+    for _, obj in pairs(getgc(true)) do
+        if type(obj) == "table" and not isreadonly(obj) then
+            local sX, col = next(obj)
+            if type(sX) == "number" and type(col) == "table" then
+                local sY, blockData = next(col)
+                if type(sY) == "number" and type(blockData) == "table" then
+                    for gridX, yCol in pairs(obj) do
+                        if type(gridX) ~= "number" or type(yCol) ~= "table" then break end
+                        
+                        for gridY, bData in pairs(yCol) do
+                            if type(gridY) == "number" and type(bData) == "table" then
+                                local fg = rawget(bData, 1) 
+                                
+                                if type(fg) == "table" then
+                                    local name = rawget(fg, 1)
+                                    if type(name) == "string" and string.find(string.lower(name), "sapling") then
+                                        foundMapTable = true 
+                                        
+                                        local details = rawget(fg, 2)
+                                        if type(details) == "table" then
+                                            -- Cek Waktu Matang (at)
+                                            local atVal = rawget(details, "at")
+                                            
+                                            -- Kalau waktu sekarang SUDAH MELEWATI waktu matang (atVal)
+                                            if type(atVal) == "number" then
+                                                if currentTime >= atVal then
+                                                    table.insert(ripePlants, {x = gridX, y = gridY})
+                                                end
+                                            -- Jaga-jaga kalau game ngehapus 'at' pas udah matang
+                                            elseif atVal == nil then
+                                                local nVal = rawget(details, "n")
+                                                if type(nVal) == "number" and nVal >= 3 then
+                                                    table.insert(ripePlants, {x = gridX, y = gridY})
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if foundMapTable then return ripePlants end
+                end
+            end
+        end
+    end
+    return ripePlants
+end
+
+-- ========================================== --
+-- [[ LOGIKA UTAMA: SMART HARVEST MEMORY ]]
+-- ========================================== --
+local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist") 
+
+if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
+
+getgenv().KzoyzAutoFarmLoop = task.spawn(function()
+    while true do
+        if getgenv().EnableSmartHarvest then
+            local targetPlants = GetAllRipePlants()
+            
+            if #targetPlants > 0 then
+                print("⏰ Radar Waktu menemukan " .. #targetPlants .. " tanaman matang! Gaskeun...")
+                local HitboxFolder = workspace:FindFirstChild("Hitbox")
+                local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+                
+                if MyHitbox then
+                    local startZ = MyHitbox.Position.Z
+                    
+                    for _, plant in ipairs(targetPlants) do
+                        if not getgenv().EnableSmartHarvest then break end
+                        
+                        WalkToGrid(plant.x, plant.y, startZ)
+                        task.wait(0.1) 
+                        
+                        local targetVec = Vector2.new(plant.x, plant.y)
+                        for i = 1, getgenv().HitsPerBlock do
+                            if not getgenv().EnableSmartHarvest then break end
+                            pcall(function() 
+                                if RemoteFist:IsA("RemoteEvent") then 
+                                    RemoteFist:FireServer(targetVec) 
+                                else 
+                                    RemoteFist:InvokeServer(targetVec) 
+                                end
+                            end)
+                            task.wait(getgenv().BreakDelay)
+                        end
+                    end
+                end
+            else
+                -- Kalau nggak ada yang matang, dia cuma diem / nunggu
+                -- Nggak bakal nyamperin bibit yang masih tumbuh
+            end
+        end
+        task.wait(1)
+    end
+end)    
     for _, obj in pairs(getgc(true)) do
         if type(obj) == "table" and not isreadonly(obj) then
             -- Cek apakah tabel ini bentuknya Grid X dan Y
