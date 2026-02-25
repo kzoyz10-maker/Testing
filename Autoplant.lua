@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V19 (ADAPTIVE PATHFINDER)"
+getgenv().ScriptVersion = "Auto Farm V20 (FIXED OMNISCIENT AI)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -45,10 +45,10 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V19 (ADAPTIVE AI)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V20 (APEX PREDATOR)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: SCANNER ]]
+-- [[ TAHAP 1: SCANNER (FIXED) ]]
 -- ========================================== --
 local SaplingsData = {}
 local CollisionMap = {}
@@ -63,6 +63,8 @@ local function ScanWorld()
             if type(sX) == "number" and type(col) == "table" then
                 local sY, blockData = next(col)
                 if type(sY) == "number" and type(blockData) == "table" then
+                    
+                    local foundValidMap = false
                     for gridX, yCol in pairs(obj) do
                         if type(gridX) ~= "number" or type(yCol) ~= "table" then break end
                         CollisionMap[gridX] = CollisionMap[gridX] or {}
@@ -73,6 +75,7 @@ local function ScanWorld()
                                 if type(fg) == "table" then
                                     local name = rawget(fg, 1)
                                     if type(name) == "string" then
+                                        foundValidMap = true
                                         if string.find(string.lower(name), "sapling") then
                                             local details = rawget(fg, 2)
                                             if type(details) == "table" and rawget(details, "at") then
@@ -89,7 +92,8 @@ local function ScanWorld()
                             end
                         end
                     end
-                    return 
+                    -- HANYA BERHENTI SCAN JIKA BENAR-BENAR MENDAPATKAN MAP YANG ADA ISINYA
+                    if foundValidMap and #SaplingsData > 0 then return end
                 end
             end
         end
@@ -107,7 +111,7 @@ local function FindSmartPath(startX, startY, targetX, targetY)
     visited[startX .. "," .. startY] = true
     
     local dirs = { {1,0}, {-1,0}, {0,1}, {0,-1} }
-    local maxSearch = 2500 -- Diperbesar biar AI lebih sabar mikir jalan memutar
+    local maxSearch = 2500 
     local count = 0
     
     while #queue > 0 do
@@ -128,7 +132,6 @@ local function FindSmartPath(startX, startY, targetX, targetY)
                 return finalPath
             end
             
-            -- Bot sekarang lebih pintar, memaafkan blok target dan posisi awal
             local isSolid = CollisionMap[nx] and CollisionMap[nx][ny]
             if not visited[key] and not isSolid then
                 visited[key] = true
@@ -170,7 +173,6 @@ local function MoveSmartlyTo(targetX, targetY)
         return true
     else
         warn("⚠️ Jalan Buntu secara Logika! Menggunakan [GHOST-STEP] Paksa perlahan...")
-        -- GHOST STEP: Kalau jalan tertutup, dia jalan lurus pelan-pelan tanpa nembus seketika
         local dx = (targetX > myGridX) and 1 or (targetX < myGridX and -1 or 0)
         local dy = (targetY > myGridY) and 1 or (targetY < myGridY and -1 or 0)
         
@@ -185,7 +187,7 @@ local function MoveSmartlyTo(targetX, targetY)
             local nextRealPos = Vector3.new(tempX * getgenv().GridSize, tempY * getgenv().GridSize, myZ)
             MyHitbox.CFrame = CFrame.new(nextRealPos)
             if PlayerMovement then pcall(function() PlayerMovement.Position = nextRealPos end) end
-            task.wait(0.15) -- Lebih lambat biar server gak curiga
+            task.wait(0.15) 
         end
         return true
     end
@@ -202,7 +204,6 @@ local function AIBelajarWaktu(sapling)
     
     print("👀 Sampai di lokasi! Menunggu UI muncul...")
     
-    -- Tunggu sampai maksimal 3 detik buat UI-nya nongol
     local timer = 0
     while timer < 30 do
         local hover = workspace:FindFirstChild("HoverPart")
@@ -239,7 +240,7 @@ local function AIBelajarWaktu(sapling)
 end
 
 -- ========================================== --
--- [[ TAHAP 5: EKSEKUSI (THE PREDATOR LOOP) ]]
+-- [[ TAHAP 5: EKSEKUSI ]]
 -- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 
@@ -254,7 +255,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 
                 if not getgenv().AIDictionary[sapling.name] then
                     AIBelajarWaktu(sapling)
-                    task.wait(1) -- Jeda bentar biar gak pusing
+                    task.wait(1) 
                 end
                 
                 if getgenv().AIDictionary[sapling.name] then
