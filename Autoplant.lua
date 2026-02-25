@@ -11,24 +11,24 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V14 (ULTIMATE AUTO-DATABASE)"
+getgenv().ScriptVersion = "Auto Farm V18 (APEX PREDATOR - AI PATHFINDER)"
 
 -- ========================================== --
--- [[ KONFIGURASI PENGGUNA ]]
+-- [[ KONFIGURASI ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().StepDelay = 0.05   
+getgenv().StepDelay = 0.06   -- Kecepatan jalan per grid (Jangan terlalu kecil biar gak di-kick server)
 getgenv().BreakDelay = 0.15  
-getgenv().HitsPerBlock = 1   
-
 getgenv().EnableSmartHarvest = false
 
--- ========================================== --
+-- MEMORI AI (Bot akan mengisi ini sendiri)
+getgenv().AIDictionary = getgenv().AIDictionary or {}
+
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
+local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
@@ -37,7 +37,6 @@ pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerM
 -- [[ UI SETUP ]]
 -- ========================================== --
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Red = Color3.fromRGB(255, 80, 80) }
-
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Theme.Text; Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
     local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 40, 0, 20); IndBg.Position = UDim2.new(1, -50, 0.5, -10); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
@@ -52,139 +51,17 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-
-CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V14 ULTIMATE)", "EnableSmartHarvest")
-
--- ========================================== --
--- [[ MODFLY SYSTEM ]]
--- ========================================== --
-if getgenv().KzoyzModFlyHeartbeat then getgenv().KzoyzModFlyHeartbeat:Disconnect(); getgenv().KzoyzModFlyHeartbeat = nil end
-if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
-
-local AirPlat = Instance.new("Part")
-AirPlat.Name = "KzoyzAirWalk"
-AirPlat.Size = Vector3.new(getgenv().GridSize + 1, 1, getgenv().GridSize + 1)
-AirPlat.Anchored = true; AirPlat.CanCollide = true; AirPlat.Transparency = 1 
-AirPlat.Parent = workspace
-getgenv().AirPlatform = AirPlat
-
-getgenv().KzoyzModFlyHeartbeat = RunService.Heartbeat:Connect(function()
-    if getgenv().EnableSmartHarvest then
-        local HitboxFolder = workspace:FindFirstChild("Hitbox")
-        local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-        if MyHitbox then getgenv().AirPlatform.CFrame = CFrame.new(MyHitbox.Position.X, MyHitbox.Position.Y - (getgenv().GridSize / 2), MyHitbox.Position.Z) end
-        if PlayerMovement then pcall(function() PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end) end
-    else
-        getgenv().AirPlatform.CFrame = CFrame.new(0, -9999, 0)
-    end
-end)
-
-local function WalkToGrid(tX, tY, startZ)
-    local HitboxFolder = workspace:FindFirstChild("Hitbox")
-    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-    if not MyHitbox then return end
-
-    local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
-    local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
-
-    local timeout = 0 
-    while (currentX ~= tX or currentY ~= tY) and timeout < 50 do
-        if not getgenv().EnableSmartHarvest then break end
-        if currentX ~= tX then currentX = currentX + (tX > currentX and 1 or -1)
-        elseif currentY ~= tY then currentY = currentY + (tY > currentY and 1 or -1) end
-        
-        local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
-        MyHitbox.CFrame = CFrame.new(newWorldPos)
-        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
-        
-        timeout = timeout + 1
-        task.wait(getgenv().StepDelay)
-    end
-end
+CreateToggle(TargetPage, "🚀 START V18 (AI PATHFINDING)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ 🕵️‍♂️ AUTO-DATABASE STEALER ]]
+-- [[ TAHAP 1: SCANNER RINTANGAN & BIBIT ]]
 -- ========================================== --
-local FoundDB = false
-local ItemDB = nil
-local DurationKey = nil
-local DurationCache = {}
+local SaplingsData = {}
+local CollisionMap = {}
 
-local function StealGameDatabase()
-    if FoundDB then return end
-    for _, obj in pairs(getgc(true)) do
-        if type(obj) == "table" and not isreadonly(obj) then
-            -- Cari tabel yang punya data "dirt_sapling"
-            local dirt = rawget(obj, "dirt_sapling")
-            if type(dirt) == "table" then
-                for k, v in pairs(dirt) do
-                    -- Sidik Jari: Dirt durasinya 30 detik!
-                    if v == 30 then 
-                        ItemDB = obj
-                        DurationKey = k
-                        FoundDB = true
-                        print("✅ V14: DATABASE GAME BERHASIL DIRETAS! Kunci Waktu: " .. tostring(k))
-                        return
-                    end
-                end
-            end
-            
-            -- Cek kalau developernya pakai format Array
-            for _, v in pairs(obj) do
-                if type(v) == "table" then
-                    local id = rawget(v, "id") or rawget(v, "name")
-                    if id == "dirt_sapling" then
-                        for k, val in pairs(v) do
-                            if val == 30 then
-                                ItemDB = obj
-                                DurationKey = k
-                                FoundDB = true
-                                print("✅ V14: DATABASE GAME BERHASIL DIRETAS! Kunci Waktu: " .. tostring(k))
-                                return
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function GetPlantDuration(saplingName)
-    -- Kalau udah disimpen, ambil dari cache biar nggak lag
-    if DurationCache[saplingName] then return DurationCache[saplingName] end
-    
-    if not FoundDB then StealGameDatabase() end
-    
-    if FoundDB and ItemDB then
-        local data = rawget(ItemDB, saplingName)
-        if type(data) == "table" and data[DurationKey] then
-            DurationCache[saplingName] = data[DurationKey]
-            return data[DurationKey]
-        end
-        
-        for _, v in pairs(ItemDB) do
-            if type(v) == "table" then
-                local id = rawget(v, "id") or rawget(v, "name")
-                if id == saplingName and v[DurationKey] then
-                    DurationCache[saplingName] = v[DurationKey]
-                    return v[DurationKey]
-                end
-            end
-        end
-    end
-    
-    return 30 -- Cadangan kalau gagal baca db
-end
-
--- ========================================== --
--- [[ ⏰ LOGIKA PEMANEN SUPER CERDAS ]]
--- ========================================== --
-local function GetRipePlants()
-    local ripePlants = {}
-    local foundMapTable = false
-    -- Pake jam server biar akurat 100% dan instan panen di world baru
-    local currentTime = Workspace:GetServerTimeNow()
+local function ScanWorld()
+    SaplingsData = {}
+    CollisionMap = {}
     
     for _, obj in pairs(getgc(true)) do
         if type(obj) == "table" and not isreadonly(obj) then
@@ -192,80 +69,202 @@ local function GetRipePlants()
             if type(sX) == "number" and type(col) == "table" then
                 local sY, blockData = next(col)
                 if type(sY) == "number" and type(blockData) == "table" then
+                    -- Ketemu Tabel Map Utama!
                     for gridX, yCol in pairs(obj) do
                         if type(gridX) ~= "number" or type(yCol) ~= "table" then break end
+                        CollisionMap[gridX] = CollisionMap[gridX] or {}
+                        
                         for gridY, bData in pairs(yCol) do
                             if type(gridY) == "number" and type(bData) == "table" then
                                 local fg = rawget(bData, 1) 
                                 if type(fg) == "table" then
                                     local name = rawget(fg, 1)
-                                    if type(name) == "string" and string.find(string.lower(name), "sapling") then
-                                        foundMapTable = true
-                                        
-                                        local details = rawget(fg, 2)
-                                        if type(details) == "table" then
-                                            local timePlanted = rawget(details, "at")
-                                            
-                                            if type(timePlanted) == "number" then
-                                                -- 1. Tanya durasi ke Database otomatis
-                                                local targetDuration = GetPlantDuration(name)
-                                                
-                                                -- 2. Hitung umur (Jam Server sekarang dikurangi Jam ditanam)
-                                                local currentAge = currentTime - timePlanted
-                                                
-                                                -- 3. Kalau udah waktunya, DAFTARKAN PANEN!
-                                                if currentAge >= targetDuration then
-                                                    table.insert(ripePlants, {x = gridX, y = gridY, name = name})
-                                                end
+                                    if type(name) == "string" then
+                                        if string.find(string.lower(name), "sapling") then
+                                            -- Ini Bibit
+                                            local details = rawget(fg, 2)
+                                            if type(details) == "table" and rawget(details, "at") then
+                                                table.insert(SaplingsData, {
+                                                    x = gridX, y = gridY, 
+                                                    name = name, at = rawget(details, "at")
+                                                })
                                             end
+                                        else
+                                            -- Ini Blok Keras (Tanah/Batu) -> Jadikan Rintangan!
+                                            CollisionMap[gridX][gridY] = true
                                         end
                                     end
                                 end
                             end
                         end
                     end
-                    if foundMapTable then return ripePlants end
+                    return -- Selesai Scan
                 end
             end
         end
     end
-    return ripePlants
 end
 
 -- ========================================== --
--- [[ LOGIKA AUTO FARM ]]
+-- [[ TAHAP 2: OTAK PATHFINDING (BFS A*) ]]
 -- ========================================== --
-local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist") 
+local function FindSmartPath(startX, startY, targetX, targetY)
+    if startX == targetX and startY == targetY then return {} end
+    
+    local queue = { {x = startX, y = startY, path = {}} }
+    local visited = {}
+    visited[startX .. "," .. startY] = true
+    
+    local dirs = { {1,0}, {-1,0}, {0,1}, {0,-1} } -- Kanan, Kiri, Atas, Bawah
+    local maxSearch = 1500 -- Limit biar gak lag parah kalau jalan buntu
+    local count = 0
+    
+    while #queue > 0 do
+        count = count + 1
+        if count > maxSearch then break end
+        
+        local curr = table.remove(queue, 1)
+        
+        for _, d in ipairs(dirs) do
+            local nx = curr.x + d[1]
+            local ny = curr.y + d[2]
+            local key = nx .. "," .. ny
+            
+            if nx == targetX and ny == targetY then
+                local finalPath = {}
+                for _, p in ipairs(curr.path) do table.insert(finalPath, p) end
+                table.insert(finalPath, {x = nx, y = ny})
+                return finalPath
+            end
+            
+            -- Cek kalau kotak ini BUKAN tembok dan belum pernah dilewati
+            local isSolid = CollisionMap[nx] and CollisionMap[nx][ny]
+            if not visited[key] and not isSolid then
+                visited[key] = true
+                local newPath = {}
+                for _, p in ipairs(curr.path) do table.insert(newPath, p) end
+                table.insert(newPath, {x = nx, y = ny})
+                table.insert(queue, {x = nx, y = ny, path = newPath})
+            end
+        end
+    end
+    return nil -- Jalan buntu terkurung blok!
+end
 
+-- ========================================== --
+-- [[ TAHAP 3: SISTEM BERJALAN ANTI-GLITCH ]]
+-- ========================================== --
+local function MoveSmartlyTo(targetX, targetY)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+    if not MyHitbox then return false end
+    
+    local myZ = MyHitbox.Position.Z
+    local myGridX = math.floor((MyHitbox.Position.X / getgenv().GridSize) + 0.5)
+    local myGridY = math.floor((MyHitbox.Position.Y / getgenv().GridSize) + 0.5)
+    
+    -- Kalau udah di posisi yang sama, gak usah jalan
+    if myGridX == targetX and myGridY == targetY then return true end
+    
+    local safePath = FindSmartPath(myGridX, myGridY, targetX, targetY)
+    
+    if safePath then
+        for _, step in ipairs(safePath) do
+            if not getgenv().EnableSmartHarvest then break end
+            
+            local nextRealPos = Vector3.new(step.x * getgenv().GridSize, step.y * getgenv().GridSize, myZ)
+            MyHitbox.CFrame = CFrame.new(nextRealPos)
+            if PlayerMovement then pcall(function() PlayerMovement.Position = nextRealPos end) end
+            
+            task.wait(getgenv().StepDelay) -- Jeda jalan natural
+        end
+        return true
+    else
+        warn("⚠️ Bot terhalang tembok menuju " .. targetX .. "," .. targetY .. "! Melewati target ini...")
+        return false
+    end
+end
+
+-- ========================================== --
+-- [[ TAHAP 4: THE EYE (AI LEARNING UI) ]]
+-- ========================================== --
+local function AIBelajarWaktu(sapling)
+    print("🧠 AI melihat '" .. sapling.name .. "' untuk pertama kali. Sedang mendekat...")
+    
+    -- AI jalan cerdas cari jalan ke sana
+    local sampai = MoveSmartlyTo(sapling.x, sapling.y)
+    if not sampai then return false end
+    
+    task.wait(0.5) -- Tunggu UI melayang muncul
+    
+    local hover = workspace:FindFirstChild("HoverPart")
+    if hover then
+        for _, v in pairs(hover:GetDescendants()) do
+            if v:IsA("TextLabel") and v.Text ~= "" then
+                local text = string.lower(v.Text)
+                
+                local jam = tonumber(string.match(text, "(%d+)h")) or 0
+                local menit = tonumber(string.match(text, "(%d+)m")) or 0
+                local detik = tonumber(string.match(text, "(%d+)s")) or 0
+                
+                local isReady = string.find(text, "harvest") or string.find(text, "100%%")
+                local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
+                if isReady then sisaWaktuLayar = 0 end
+                
+                local umurSekarang = os.time() - sapling.at
+                local totalDurasi = umurSekarang + sisaWaktuLayar
+                totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
+                
+                getgenv().AIDictionary[sapling.name] = totalDurasi
+                print("🎯 AI HAFAL! " .. sapling.name .. " matang dalam " .. totalDurasi .. " detik!")
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ========================================== --
+-- [[ TAHAP 5: EKSEKUSI (THE PREDATOR LOOP) ]]
+-- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     while true do
         if getgenv().EnableSmartHarvest then
-            local targetPlants = GetRipePlants()
-            
-            if #targetPlants > 0 then
-                local HitboxFolder = workspace:FindFirstChild("Hitbox")
-                local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+            ScanWorld() -- Update Collision Map dan Posisi Sapling
+            local targetPanen = {}
+
+            -- Filter & Belajar
+            for _, sapling in ipairs(SaplingsData) do
+                if not getgenv().EnableSmartHarvest then break end
                 
-                if MyHitbox then
-                    local startZ = MyHitbox.Position.Z
-                    for _, plant in ipairs(targetPlants) do
-                        if not getgenv().EnableSmartHarvest then break end
-                        
-                        WalkToGrid(plant.x, plant.y, startZ)
-                        task.wait(0.1) 
-                        
-                        local targetVec = Vector2.new(plant.x, plant.y)
-                        for i = 1, getgenv().HitsPerBlock do
-                            if not getgenv().EnableSmartHarvest then break end
-                            pcall(function() 
-                                if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
-                                else RemoteFist:InvokeServer(targetVec) end
-                            end)
-                            task.wait(getgenv().BreakDelay)
-                        end
+                if not getgenv().AIDictionary[sapling.name] then
+                    AIBelajarWaktu(sapling)
+                end
+                
+                if getgenv().AIDictionary[sapling.name] then
+                    local umur = os.time() - sapling.at
+                    local targetMatang = getgenv().AIDictionary[sapling.name]
+                    
+                    if umur >= targetMatang then
+                        table.insert(targetPanen, sapling)
                     end
+                end
+            end
+            
+            -- Panen yang sudah 100% matang dengan AI Pathfinding
+            for _, panen in ipairs(targetPanen) do
+                if not getgenv().EnableSmartHarvest then break end
+                
+                local bisaJalan = MoveSmartlyTo(panen.x, panen.y)
+                if bisaJalan then
+                    task.wait(0.1)
+                    pcall(function() 
+                        local targetVec = Vector2.new(panen.x, panen.y)
+                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                        else RemoteFist:InvokeServer(targetVec) end
+                    end)
+                    task.wait(getgenv().BreakDelay)
                 end
             end
         end
