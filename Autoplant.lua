@@ -11,11 +11,15 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V7 (STRICT TIME ONLY)"
+getgenv().ScriptVersion = "Auto Farm V8 (MANUAL AGE SYSTEM)"
 
 -- ========================================== --
--- [[ KONFIGURASI UTAMA ]]
+-- [[ KONFIGURASI PENTING ]]
 -- ========================================== --
+-- Berapa detik pohon butuh waktu buat tumbuh? (Coba ganti-ganti angka ini)
+-- Dirt Sapling biasanya cepet (misal 10-30 detik). Pohon mahal bisa ribuan detik.
+getgenv().MinimumAge = 60  -- <-- GANTI INI KALAU MASIH BREAK BIBIT (Naikkan angkanya)
+
 getgenv().GridSize = 4.5
 getgenv().StepDelay = 0.05   
 getgenv().BreakDelay = 0.15  
@@ -52,10 +56,10 @@ function CreateToggle(Parent, Text, Var)
     end) 
 end
 
-CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V7 STRICT)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V8 AGE CHECK)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ SISTEM FULL MODFLY ]]
+-- [[ SISTEM MODFLY ]]
 -- ========================================== --
 if getgenv().KzoyzModFlyHeartbeat then getgenv().KzoyzModFlyHeartbeat:Disconnect(); getgenv().KzoyzModFlyHeartbeat = nil end
 if workspace:FindFirstChild("KzoyzAirWalk") then workspace.KzoyzAirWalk:Destroy() end
@@ -78,9 +82,6 @@ getgenv().KzoyzModFlyHeartbeat = RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ========================================== --
--- [[ JALAN KE KORDINAT ]]
--- ========================================== --
 local function WalkToGrid(tX, tY, startZ)
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
@@ -105,12 +106,12 @@ local function WalkToGrid(tX, tY, startZ)
 end
 
 -- ========================================== --
--- [[ 🛡️ PENCARI TANAMAN (STRICT MODE) ]]
+-- [[ 👶 HITUNG UMUR TANAMAN ]]
 -- ========================================== --
 local function GetAllRipePlants()
     local ripePlants = {}
     local foundMapTable = false
-    -- Kita pakai os.time() karena lebih umum untuk timestamp Unix
+    -- Gunakan os.time() untuk Unix Timestamp saat ini
     local currentTime = os.time()
     
     for _, obj in pairs(getgc(true)) do
@@ -125,7 +126,6 @@ local function GetAllRipePlants()
                         for gridY, bData in pairs(yCol) do
                             if type(gridY) == "number" and type(bData) == "table" then
                                 local fg = rawget(bData, 1) 
-                                
                                 if type(fg) == "table" then
                                     local name = rawget(fg, 1)
                                     if type(name) == "string" and string.find(string.lower(name), "sapling") then
@@ -133,17 +133,16 @@ local function GetAllRipePlants()
                                         
                                         local details = rawget(fg, 2)
                                         if type(details) == "table" then
-                                            local atVal = rawget(details, "at")
+                                            local plantedTime = rawget(details, "at")
                                             
-                                            -- LOGIKA BARU: HANYA JIKA ADA 'at' DAN WAKTU SUDAH LEWAT
-                                            if type(atVal) == "number" then
-                                                -- Kita kasih toleransi +1 detik biar gak glitch
-                                                if currentTime >= atVal then
+                                            if type(plantedTime) == "number" then
+                                                -- HITUNG UMUR: Waktu Sekarang - Waktu Tanam
+                                                local age = currentTime - plantedTime
+                                                
+                                                -- Kalau umurnya sudah cukup, baru sikat!
+                                                if age >= getgenv().MinimumAge then
                                                     table.insert(ripePlants, {x = gridX, y = gridY})
                                                 end
-                                            else
-                                                -- Kalau gak ada 'at', ANGGAP BELUM MATANG. JANGAN DISENTUH.
-                                                -- (Hapus logika 'n' yang bikin error kemarin)
                                             end
                                         end
                                     end
@@ -151,7 +150,6 @@ local function GetAllRipePlants()
                             end
                         end
                     end
-                    
                     if foundMapTable then return ripePlants end
                 end
             end
@@ -161,7 +159,7 @@ local function GetAllRipePlants()
 end
 
 -- ========================================== --
--- [[ LOGIKA UTAMA: SMART HARVEST MEMORY ]]
+-- [[ LOGIKA AUTO FARM ]]
 -- ========================================== --
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist") 
 
@@ -173,18 +171,16 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             local targetPlants = GetAllRipePlants()
             
             if #targetPlants > 0 then
-                -- Debug Print biar kita tau dia deteksi apa
-                print("🛡️ STRICT MODE: Menemukan " .. #targetPlants .. " tanaman SIAP PANEN (Waktu Valid).")
+                -- Print Debug biar tau dia ngapain
+                print("🌳 Radar V8: Menemukan " .. #targetPlants .. " tanaman yang umurnya > " .. getgenv().MinimumAge .. " detik.")
                 
                 local HitboxFolder = workspace:FindFirstChild("Hitbox")
                 local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                 
                 if MyHitbox then
                     local startZ = MyHitbox.Position.Z
-                    
                     for _, plant in ipairs(targetPlants) do
                         if not getgenv().EnableSmartHarvest then break end
-                        
                         WalkToGrid(plant.x, plant.y, startZ)
                         task.wait(0.1) 
                         
@@ -192,11 +188,8 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                         for i = 1, getgenv().HitsPerBlock do
                             if not getgenv().EnableSmartHarvest then break end
                             pcall(function() 
-                                if RemoteFist:IsA("RemoteEvent") then 
-                                    RemoteFist:FireServer(targetVec) 
-                                else 
-                                    RemoteFist:InvokeServer(targetVec) 
-                                end
+                                if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                                else RemoteFist:InvokeServer(targetVec) end
                             end)
                             task.wait(getgenv().BreakDelay)
                         end
