@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V6 (TIME-SYNCED RADAR)"
+getgenv().ScriptVersion = "Auto Farm V7 (STRICT TIME ONLY)"
 
 -- ========================================== --
 -- [[ KONFIGURASI UTAMA ]]
@@ -52,7 +52,7 @@ function CreateToggle(Parent, Text, Var)
     end) 
 end
 
-CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V6 TIME-SYNC)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START AUTO HARVEST (V7 STRICT)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ SISTEM FULL MODFLY ]]
@@ -105,13 +105,13 @@ local function WalkToGrid(tX, tY, startZ)
 end
 
 -- ========================================== --
--- [[ ⏰ PENCARI TANAMAN 100% BERDASARKAN WAKTU ]]
+-- [[ 🛡️ PENCARI TANAMAN (STRICT MODE) ]]
 -- ========================================== --
 local function GetAllRipePlants()
     local ripePlants = {}
     local foundMapTable = false
-    -- Ambil waktu server saat ini (dalam detik)
-    local currentTime = workspace:GetServerTimeNow()
+    -- Kita pakai os.time() karena lebih umum untuk timestamp Unix
+    local currentTime = os.time()
     
     for _, obj in pairs(getgc(true)) do
         if type(obj) == "table" and not isreadonly(obj) then
@@ -133,20 +133,17 @@ local function GetAllRipePlants()
                                         
                                         local details = rawget(fg, 2)
                                         if type(details) == "table" then
-                                            -- Cek Waktu Matang (at)
                                             local atVal = rawget(details, "at")
                                             
-                                            -- Kalau waktu sekarang SUDAH MELEWATI waktu matang (atVal)
+                                            -- LOGIKA BARU: HANYA JIKA ADA 'at' DAN WAKTU SUDAH LEWAT
                                             if type(atVal) == "number" then
+                                                -- Kita kasih toleransi +1 detik biar gak glitch
                                                 if currentTime >= atVal then
                                                     table.insert(ripePlants, {x = gridX, y = gridY})
                                                 end
-                                            -- Jaga-jaga kalau game ngehapus 'at' pas udah matang
-                                            elseif atVal == nil then
-                                                local nVal = rawget(details, "n")
-                                                if type(nVal) == "number" and nVal >= 3 then
-                                                    table.insert(ripePlants, {x = gridX, y = gridY})
-                                                end
+                                            else
+                                                -- Kalau gak ada 'at', ANGGAP BELUM MATANG. JANGAN DISENTUH.
+                                                -- (Hapus logika 'n' yang bikin error kemarin)
                                             end
                                         end
                                     end
@@ -176,7 +173,9 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             local targetPlants = GetAllRipePlants()
             
             if #targetPlants > 0 then
-                print("⏰ Radar Waktu menemukan " .. #targetPlants .. " tanaman matang! Gaskeun...")
+                -- Debug Print biar kita tau dia deteksi apa
+                print("🛡️ STRICT MODE: Menemukan " .. #targetPlants .. " tanaman SIAP PANEN (Waktu Valid).")
+                
                 local HitboxFolder = workspace:FindFirstChild("Hitbox")
                 local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
                 
@@ -203,9 +202,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                         end
                     end
                 end
-            else
-                -- Kalau nggak ada yang matang, dia cuma diem / nunggu
-                -- Nggak bakal nyamperin bibit yang masih tumbuh
             end
         end
         task.wait(1)
