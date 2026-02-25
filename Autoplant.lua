@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V20 (FIXED OMNISCIENT AI)"
+getgenv().ScriptVersion = "Auto Farm V21 (PERFECT PATHFINDER)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -45,10 +45,10 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V20 (APEX PREDATOR)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V21 (SMART NAVIGATION)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: SCANNER (FIXED) ]]
+-- [[ TAHAP 1: SCANNER (FIXED SOLID BLOCKS) ]]
 -- ========================================== --
 local SaplingsData = {}
 local CollisionMap = {}
@@ -73,18 +73,21 @@ local function ScanWorld()
                             if type(gridY) == "number" and type(bData) == "table" then
                                 local fg = rawget(bData, 1) 
                                 if type(fg) == "table" then
-                                    local name = rawget(fg, 1)
-                                    if type(name) == "string" then
-                                        foundValidMap = true
-                                        if string.find(string.lower(name), "sapling") then
-                                            local details = rawget(fg, 2)
-                                            if type(details) == "table" and rawget(details, "at") then
-                                                table.insert(SaplingsData, {
-                                                    x = gridX, y = gridY, 
-                                                    name = name, at = rawget(details, "at")
-                                                })
-                                            end
-                                        else
+                                    local nameOrId = rawget(fg, 1)
+                                    foundValidMap = true
+                                    
+                                    -- CEK: Apakah ini bibit?
+                                    if type(nameOrId) == "string" and string.find(string.lower(nameOrId), "sapling") then
+                                        local details = rawget(fg, 2)
+                                        if type(details) == "table" and rawget(details, "at") then
+                                            table.insert(SaplingsData, {
+                                                x = gridX, y = gridY, 
+                                                name = nameOrId, at = rawget(details, "at")
+                                            })
+                                        end
+                                    else
+                                        -- JIKA BUKAN BIBIT & BUKAN UDARA KOSONG, INI ADALAH TEMBOK/LANTAI!
+                                        if nameOrId ~= 0 and nameOrId ~= "air" and nameOrId ~= "" and nameOrId ~= nil then
                                             CollisionMap[gridX][gridY] = true
                                         end
                                     end
@@ -92,7 +95,6 @@ local function ScanWorld()
                             end
                         end
                     end
-                    -- HANYA BERHENTI SCAN JIKA BENAR-BENAR MENDAPATKAN MAP YANG ADA ISINYA
                     if foundValidMap and #SaplingsData > 0 then return end
                 end
             end
@@ -111,7 +113,7 @@ local function FindSmartPath(startX, startY, targetX, targetY)
     visited[startX .. "," .. startY] = true
     
     local dirs = { {1,0}, {-1,0}, {0,1}, {0,-1} }
-    local maxSearch = 2500 
+    local maxSearch = 3000 -- Diperluas biar bisa muter jauh
     local count = 0
     
     while #queue > 0 do
@@ -146,7 +148,7 @@ local function FindSmartPath(startX, startY, targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 3: SISTEM BERJALAN & GHOST-STEP ]]
+-- [[ TAHAP 3: SISTEM BERJALAN ANTI-GRAVITASI ]]
 -- ========================================== --
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
@@ -158,11 +160,15 @@ local function MoveSmartlyTo(targetX, targetY)
     
     if myGridX == targetX and myGridY == targetY then return true end
     
-    print("🗺️ AI mencari rute dari ("..myGridX..","..myGridY..") menuju ("..targetX..","..targetY..")")
+    print("🗺️ AI mencari rute muter dari ("..myGridX..","..myGridY..") menuju ("..targetX..","..targetY..")")
     local safePath = FindSmartPath(myGridX, myGridY, targetX, targetY)
     
     if safePath then
-        print("✅ Rute Aman Ditemukan! Menjalankan " .. #safePath .. " langkah...")
+        print("✅ Rute Aman Ditemukan! Mengaktifkan Anti-Gravitasi...")
+        
+        -- BEKUKAN KARAKTER BIAR GAK JATUH DITARIK GRAVITASI PAS JALAN
+        pcall(function() MyHitbox.Anchored = true end)
+        
         for _, step in ipairs(safePath) do
             if not getgenv().EnableSmartHarvest then break end
             local nextRealPos = Vector3.new(step.x * getgenv().GridSize, step.y * getgenv().GridSize, myZ)
@@ -170,25 +176,18 @@ local function MoveSmartlyTo(targetX, targetY)
             if PlayerMovement then pcall(function() PlayerMovement.Position = nextRealPos end) end
             task.wait(getgenv().StepDelay)
         end
+        
+        -- LEPAS BEKU SETELAH SAMPAI
+        pcall(function() MyHitbox.Anchored = false end)
         return true
     else
-        warn("⚠️ Jalan Buntu secara Logika! Menggunakan [GHOST-STEP] Paksa perlahan...")
-        local dx = (targetX > myGridX) and 1 or (targetX < myGridX and -1 or 0)
-        local dy = (targetY > myGridY) and 1 or (targetY < myGridY and -1 or 0)
-        
-        local tempX = myGridX
-        local tempY = myGridY
-        
-        while tempX ~= targetX or tempY ~= targetY do
-            if not getgenv().EnableSmartHarvest then break end
-            if tempX ~= targetX then tempX = tempX + dx end
-            if tempY ~= targetY then tempY = tempY + dy end
-            
-            local nextRealPos = Vector3.new(tempX * getgenv().GridSize, tempY * getgenv().GridSize, myZ)
-            MyHitbox.CFrame = CFrame.new(nextRealPos)
-            if PlayerMovement then pcall(function() PlayerMovement.Position = nextRealPos end) end
-            task.wait(0.15) 
-        end
+        warn("⚠️ Terkurung Total! Mencoba teleport aman...")
+        -- Fallback: Kalau beneran terkunci, dia pelan-pelan pindah lurus (tapi di-anchor biar gak nge-glitch parah)
+        pcall(function() MyHitbox.Anchored = true end)
+        local targetRealPos = Vector3.new(targetX * getgenv().GridSize, targetY * getgenv().GridSize, myZ)
+        MyHitbox.CFrame = CFrame.new(targetRealPos)
+        task.wait(0.5)
+        pcall(function() MyHitbox.Anchored = false end)
         return true
     end
 end
@@ -197,12 +196,8 @@ end
 -- [[ TAHAP 4: THE EYE (AI LEARNING UI) ]]
 -- ========================================== --
 local function AIBelajarWaktu(sapling)
-    print("🧠 AI melihat '" .. sapling.name .. "' untuk pertama kali. Sedang mendekat...")
-    
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
-    
-    print("👀 Sampai di lokasi! Menunggu UI muncul...")
     
     local timer = 0
     while timer < 30 do
@@ -225,7 +220,7 @@ local function AIBelajarWaktu(sapling)
                         totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
                         
                         getgenv().AIDictionary[sapling.name] = totalDurasi
-                        print("🎯 AI HAFAL! " .. sapling.name .. " matang dalam " .. totalDurasi .. " detik!")
+                        print("🎯 AI HAFAL! " .. sapling.name .. " butuh " .. totalDurasi .. " detik!")
                         return true
                     end
                 end
@@ -234,8 +229,6 @@ local function AIBelajarWaktu(sapling)
         timer = timer + 1
         task.wait(0.1)
     end
-    
-    warn("❌ UI tidak muncul atau gagal terbaca!")
     return false
 end
 
@@ -252,7 +245,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
 
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
-                
                 if not getgenv().AIDictionary[sapling.name] then
                     AIBelajarWaktu(sapling)
                     task.wait(1) 
@@ -261,7 +253,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 if getgenv().AIDictionary[sapling.name] then
                     local umur = os.time() - sapling.at
                     local targetMatang = getgenv().AIDictionary[sapling.name]
-                    
                     if umur >= targetMatang then
                         table.insert(targetPanen, sapling)
                     end
@@ -270,8 +261,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             
             for _, panen in ipairs(targetPanen) do
                 if not getgenv().EnableSmartHarvest then break end
-                
-                print("🌾 PANEN TIME! Menuju ke " .. panen.name)
                 local bisaJalan = MoveSmartlyTo(panen.x, panen.y)
                 if bisaJalan then
                     task.wait(0.1)
