@@ -17,7 +17,7 @@ getgenv().ScriptVersion = "Auto Farm V40 (TWEEN & ID BYPASS)"
 -- [[ KONFIGURASI ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().WalkSpeed = 16     
+getgenv().WalkSpeed = 22     
 getgenv().BreakDelay = 0.15  
 getgenv().EnableSmartHarvest = false
 
