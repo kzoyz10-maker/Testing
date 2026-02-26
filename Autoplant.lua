@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V25 (2D TERRACE SCANNER)"
+getgenv().ScriptVersion = "Auto Farm V26 (RAYCAST + NOCLIP)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -26,10 +26,13 @@ getgenv().AIDictionary = getgenv().AIDictionary or {}
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
+
+local NoclipLoop
 
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
@@ -39,15 +42,32 @@ function CreateToggle(Parent, Text, Var)
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
         
-        -- ANTI BREAKDANCE
         if not getgenv()[Var] then
+            if NoclipLoop then NoclipLoop:Disconnect() NoclipLoop = nil end
             pcall(function()
                 local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
                 if MyHitbox then 
-                    MyHitbox.Anchored = false 
-                    MyHitbox.Velocity = Vector3.new(0,0,0)
+                    MyHitbox.Anchored = false
+                    MyHitbox.Velocity = Vector3.new(0,0,0) 
+                    MyHitbox.RotVelocity = Vector3.new(0,0,0)
                 end
             end)
+        else
+            -- ABSOLUTE NOCLIP BIAR GAK GASING
+            if not NoclipLoop then
+                NoclipLoop = RunService.Stepped:Connect(function()
+                    if LP.Character then
+                        for _, v in pairs(LP.Character:GetDescendants()) do
+                            if v:IsA("BasePart") and v.CanCollide then 
+                                v.CanCollide = false 
+                            end
+                        end
+                    end
+                    -- Pastikan Hitbox Custom juga tembus pandang
+                    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+                    if MyHitbox and MyHitbox.CanCollide then MyHitbox.CanCollide = false end
+                end)
+            end
         end
         
         if getgenv()[Var] then 
@@ -57,28 +77,33 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V25 (ALGORITMA CELAH 100)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V26 (RAYCAST & NOCLIP)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: SENSOR 2D PIXEL PRESISI ]]
+-- [[ TAHAP 1: SENSOR RAYCAST 2D ]]
 -- ========================================== --
 local function IsCellEmpty(x, y, z)
-    local center = CFrame.new(x * getgenv().GridSize, y * getgenv().GridSize, z)
-    -- Ukuran box dibikin 3.8 (cukup lebar buat nebak lantai/plafon 4.5, tapi aman dari blok tetangga)
-    local size = Vector3.new(3.8, 3.8, 3.8) 
+    local origin = Vector3.new(x * getgenv().GridSize, y * getgenv().GridSize, z)
     
-    local params = OverlapParams.new()
+    local params = RaycastParams.new()
     params.FilterDescendantsInstances = {LP.Character, workspace:FindFirstChild("Hitbox"), workspace:FindFirstChild("HoverPart")}
     params.FilterType = Enum.RaycastFilterType.Exclude
 
-    local parts = workspace:GetPartBoundsInBox(center, size, params)
-    for _, p in ipairs(parts) do
-        -- Hanya baca yang BENAR-BENAR fisik keras
-        if p:IsA("BasePart") and p.CanCollide then
-            return false -- DITOLAK: Ada tembok/lantai!
+    -- Tembak laser ke Atas, Bawah, Kiri, Kanan sepanjang 3.5 Studs
+    local directions = {
+        Vector3.new(0, 3.5, 0),   -- Cek Plafon
+        Vector3.new(0, -3.5, 0),  -- Cek Lantai
+        Vector3.new(3.5, 0, 0),   -- Cek Kanan
+        Vector3.new(-3.5, 0, 0)   -- Cek Kiri
+    }
+
+    for _, dir in ipairs(directions) do
+        local result = workspace:Raycast(origin, dir, params)
+        if result and result.Instance.CanCollide then
+            return false -- DITOLAK: Laser nabrak blok fisik!
         end
     end
-    return true -- AMAN: Bisa dilewatin
+    return true -- AMAN
 end
 
 local SaplingsData = {}
@@ -115,7 +140,7 @@ local function ScanWorld()
 end
 
 -- ========================================== --
--- [[ TAHAP 2: ALGORITMA "CELAH 100" ]]
+-- [[ TAHAP 2: ALGORITMA "CELAH 100" (SMART PATHING) ]]
 -- ========================================== --
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
