@@ -11,13 +11,13 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V28 (INTERNAL MAP HACK)"
+getgenv().ScriptVersion = "Auto Farm V29 (SMART LERP WALKER)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().StepDelay = 0.08   
+getgenv().WalkSpeed = 16     -- Kecepatan wajar, JANGAN dicepetin biar gak di-rubberband server!
 getgenv().BreakDelay = 0.15  
 getgenv().EnableSmartHarvest = false
 
@@ -29,7 +29,6 @@ local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
--- AKSES LANGSUNG KE DATA MAP SERVER
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 
 local PlayerMovement
@@ -42,17 +41,6 @@ function CreateToggle(Parent, Text, Var)
 
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
-        
-        if not getgenv()[Var] then
-            pcall(function()
-                local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-                if MyHitbox then 
-                    MyHitbox.Anchored = false
-                    MyHitbox.Velocity = Vector3.new(0,0,0) 
-                end
-            end)
-        end
-        
         if getgenv()[Var] then 
             Dot:TweenPosition(UDim2.new(1, -18, 0.5, -8), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Color3.fromRGB(255, 80, 80) 
         else 
@@ -60,29 +48,27 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V28 (MAP HACK PATHFINDER)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V29 (SMART LERP WALKER)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: BACA DATABASE SERVER ]]
+-- [[ TAHAP 1: RADAR MAP SERVER ]]
 -- ========================================== --
 local function IsTileSolid(gridX, gridY)
-    -- Kalau gak ada data di kordinat ini, berarti kosong (bisa dilewati)
-    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then 
-        return false 
-    end
+    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
     
-    -- Cek isi kordinat (Layer 1 biasanya lantai tanah, Layer 2 ke atas bangunan/tanaman)
-    for layer, tileData in pairs(RawWorldTiles[gridX][gridY]) do
+    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         if layer > 1 then
-            local tileName = type(tileData) == "table" and tileData[1] or tileData
-            if type(tileName) == "string" then
-                -- Abaikan kalau itu tanaman (sapling), karena bisa ditembus
-                if string.find(string.lower(tileName), "sapling") then continue end
-                -- Abaikan shadow/area markers
-                if string.find(string.lower(tileName), "lock_area") then continue end
+            local name = type(data) == "table" and data[1] or data
+            if type(name) == "string" then
+                name = string.lower(name)
+                -- Filter nama yang BISA ditembus
+                if string.find(name, "sapling") then continue end
+                if string.find(name, "lock_area") then continue end
+                if string.find(name, "dirt") then continue end
+                if string.find(name, "grass") then continue end
+                if string.find(name, "path") then continue end
                 
-                -- Sisanya (Pagar, Tembok, Mesin) = BISA BIKIN NYANGKUT!
-                return true
+                return true -- Kena halangan keras!
             end
         end
     end
@@ -90,7 +76,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: BREADTH-FIRST SEARCH (PATHFINDING) ]]
+-- [[ TAHAP 2: BREADTH-FIRST SEARCH ]]
 -- ========================================== --
 local function FindPath(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -99,15 +85,11 @@ local function FindPath(startX, startY, targetX, targetY)
     local visited = {}
     visited[startX .. "," .. startY] = true
 
-    local maxSearch = 400 -- Batas cari biar gak lag kalau kejauhan
-    local searchCount = 0
+    local maxSearch = 600
+    local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
-    local directions = {
-        {1, 0}, {-1, 0}, {0, 1}, {0, -1} -- Kanan, Kiri, Atas, Bawah
-    }
-
-    while #queue > 0 and searchCount < maxSearch do
-        searchCount = searchCount + 1
+    while #queue > 0 and maxSearch > 0 do
+        maxSearch = maxSearch - 1
         local current = table.remove(queue, 1)
 
         if current.x == targetX and current.y == targetY then
@@ -118,8 +100,11 @@ local function FindPath(startX, startY, targetX, targetY)
             local nextX = current.x + dir[1]
             local nextY = current.y + dir[2]
             local posKey = nextX .. "," .. nextY
+            
+            -- Pengecualian: Boleh nabrak JIKA itu adalah tujuan akhir (tanaman di atas pot)
+            local isTarget = (nextX == targetX and nextY == targetY)
 
-            if not visited[posKey] and not IsTileSolid(nextX, nextY) then
+            if not visited[posKey] and (isTarget or not IsTileSolid(nextX, nextY)) then
                 visited[posKey] = true
                 local newPath = {unpack(current.path)}
                 table.insert(newPath, {x = nextX, y = nextY})
@@ -127,12 +112,42 @@ local function FindPath(startX, startY, targetX, targetY)
             end
         end
     end
-    return nil -- Rute Buntu
+    return nil
 end
 
 -- ========================================== --
--- [[ TAHAP 3: EKSEKUSI PERGERAKAN JALUR ]]
+-- [[ TAHAP 3: MOVEMENT JALAN MULUS (ANTI-RUBBERBAND) ]]
 -- ========================================== --
+local function SmoothWalkTo(targetPos)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if not MyHitbox then return false end
+    
+    local startPos = MyHitbox.Position
+    local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
+    
+    -- Hitung durasi perjalanan biar kecepatan = 16 walkspeed
+    local duration = dist / getgenv().WalkSpeed
+    if duration <= 0 then return true end
+    
+    local t = 0
+    while t < duration do
+        if not getgenv().EnableSmartHarvest then return false end
+        local dt = RunService.Heartbeat:Wait()
+        t = t + dt
+        
+        local alpha = math.clamp(t / duration, 0, 1)
+        local currentPos = startPos:Lerp(targetPos, alpha)
+        
+        MyHitbox.CFrame = CFrame.new(currentPos)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+    end
+    
+    -- Snap akhir pas nyampe biar presisi
+    MyHitbox.CFrame = CFrame.new(targetPos)
+    if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
+    return true
+end
+
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
@@ -143,29 +158,20 @@ local function MoveSmartlyTo(targetX, targetY)
 
     if myGridX == targetX and myGridY == targetY then return true end
 
-    -- Hitung Rute!
     local route = FindPath(myGridX, myGridY, targetX, targetY)
     
     if not route then
-        print("⚠️ Gak nemu jalan ke: X"..targetX.." Y"..targetY.." (Kepentok Objek)")
+        print("⚠️ Buntu! Map tertutup buat ke X"..targetX.." Y"..targetY)
         return false
     end
 
-    pcall(function() MyHitbox.Anchored = true end)
-
-    -- Jalan ngikutin Rute yang udah dihitung AI
+    -- Jalan mulus nyusuri rute tanpa noclip instan
     for _, stepPos in ipairs(route) do
         if not getgenv().EnableSmartHarvest then break end
-        
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
-        MyHitbox.CFrame = CFrame.new(pos)
-        if PlayerMovement then pcall(function() PlayerMovement.Position = pos end) end
-        
-        MyHitbox.Velocity = Vector3.new(0,0,0)
-        task.wait(getgenv().StepDelay)
+        if not SmoothWalkTo(pos) then return false end
     end
 
-    pcall(function() MyHitbox.Anchored = false end)
     return true
 end
 
