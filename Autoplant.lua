@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V31 (PARANOID A* & BOUNDARY)"
+getgenv().ScriptVersion = "Auto Farm V33 (PURE DATABASE)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -49,52 +49,56 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V31 (PARANOID A* + BOUNDARY)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V33 (PURE DATABASE)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR SENSOR PARANOID & BATAS MAP ]]
+-- [[ TAHAP 1: RADAR MURNI DATABASE & CACHE ]]
 -- ========================================== --
+local BlockSolidityCache = {}
+
 local function IsTileSolid(gridX, gridY)
-    -- 1. BATAS MUTLAK MAP (Jangan sampai bablas lewat dari 0 atau 100!)
+    -- BATAS MUTLAK MAP (Gak boleh nyari jalan di luar X=0 dan X=100)
     if gridX < 0 or gridX > 100 then return true end
-    if gridY < 0 or gridY > 200 then return true end 
 
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
     
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
-        local name = type(data) == "table" and data[1] or data
-        if type(name) == "string" then
-            name = string.lower(name)
-            
-            -- Pengecualian mutlak (Pasti bisa ditembus, seperti tanaman/udara)
-            if string.find(name, "sapling") or string.find(name, "lock_area") or string.find(name, "path") or string.find(name, "bg") or string.find(name, "air") then 
-                continue 
-            end
-            
-            local isSolid = false
-            
-            -- 2. PENGECEKAN KATA KUNCI KASAR (Paranoid Check)
-            -- Kalau namanya ada unsur tanah/tembok/batu, PASTI SOLID, gak peduli di layer mana!
-            if string.find(name, "dirt") or string.find(name, "soil") or string.find(name, "block") or string.find(name, "wall") or string.find(name, "fence") or string.find(name, "rock") or string.find(name, "glass") then
-                isSolid = true
-            end
-
-            -- 3. BACA DATABASE SERVER SEBAGAI BACKUP
-            if not isSolid then
-                pcall(function()
-                    local itemData = ItemsManager.RequestItemData(name)
-                    if itemData then
-                        if itemData.Tile and itemData.Tile.Rule == 2 then isSolid = true end
-                        local t = itemData.Type
-                        if t == "Block" or t == "Wall" or t == "Fence" or t == "Machine" or t == "Soil" then
-                            isSolid = true
-                        end
-                    end
-                end)
-            end
-
-            if isSolid then return true end
+        local rawName = type(data) == "table" and data[1] or data
+        local nameStr = tostring(rawName):lower()
+        
+        -- PENGECUALIAN MUTLAK (Benda yang PASTI tembus seperti bibit, udara, atau background)
+        if string.find(nameStr, "sapling") or string.find(nameStr, "lock_area") or string.find(nameStr, "bg") or string.find(nameStr, "air") then 
+            continue 
         end
+        
+        -- 1. CEK CACHE (Biar enteng gak lag)
+        if BlockSolidityCache[rawName] ~= nil then
+            if BlockSolidityCache[rawName] == true then return true end
+            continue
+        end
+
+        -- 2. BACA LANGSUNG DARI DATABASE GAME MURNI
+        local isSolid = false
+        pcall(function()
+            local itemData = ItemsManager.RequestItemData(rawName)
+            if itemData then
+                -- Cek Rule dan Solid dari metadata bawaan gamenya
+                if itemData.Tile and (itemData.Tile.Rule == 2 or itemData.Tile.Solid) then 
+                    isSolid = true 
+                end
+                
+                -- Cek Type bawaan database
+                local t = tostring(itemData.Type):lower()
+                if t == "block" or t == "wall" or t == "fence" or t == "machine" or t == "soil" then
+                    isSolid = true
+                end
+            end
+        end)
+        
+        -- 3. SIMPAN KE CACHE BIAR HAFAL
+        BlockSolidityCache[rawName] = isSolid
+
+        if isSolid then return true end
     end
     return false
 end
@@ -120,7 +124,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     gScore[startKey] = 0
     fScore[startKey] = heuristic(startX, startY)
 
-    local maxIterations = 4000 
+    local maxIterations = 5000 
     local iterations = 0
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
@@ -163,7 +167,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
 
             local isTarget = (nextX == targetX and nextY == targetY)
             
-            -- Cek nabrak (Kalau solid, rute ini ditolak dan AI akan dipaksa nyari celah lain)
+            -- Cek nabrak (Minta data ke database via cache)
             if not isTarget and IsTileSolid(nextX, nextY) then
                 closedSet[nextKey] = true
                 continue
