@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V34 (PHYSICAL RADAR)"
+getgenv().ScriptVersion = "Auto Farm V35 (HYBRID DATABASE)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -49,55 +49,79 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V34 (PHYSICAL RADAR)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V35 (HYBRID DATABASE)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: SENSOR FISIK 3D (RAYCAST) ]]
+-- [[ TAHAP 1: HYBRID RADAR (DATABASE + DICTIONARY CACHE) ]]
 -- ========================================== --
+local BlockSolidityCache = {}
+
 local function IsTileSolid(gridX, gridY)
     if gridX < 0 or gridX > 100 then return true end
-
-    -- 1. Intip Data Mentah buat bahan Debugging
-    if RawWorldTiles[gridX] and RawWorldTiles[gridX][gridY] then
-        for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
-            local rawName = type(data) == "table" and data[1] or data
-            -- Kita print di konsol apa wujud aslinya (Biar ketahuan ID atau teks)
-            if math.random(1, 100) == 1 then -- Print sesekali biar gak lag
-                print("🔍 [X-RAY] Posisi X:"..gridX.." Y:"..gridY.." Data: "..tostring(rawName).." Tipe: "..type(rawName))
-            end
+    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
+    
+    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
+        local rawName = type(data) == "table" and data[1] or data
+        local nameStr = tostring(rawName):lower()
+        
+        -- 1. PENGECUALIAN MUTLAK (Pasti Tembus)
+        if string.find(nameStr, "sapling") or string.find(nameStr, "seed") or string.find(nameStr, "bg") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
+            continue 
         end
-    end
-
-    -- 2. Radar Fisik Langsung ke Dunia
-    local MyChar = LP.Character
-    if not MyChar then return false end
-    
-    local MyZ = MyChar:GetPivot().Position.Z
-    local targetPos = Vector3.new(gridX * getgenv().GridSize, gridY * getgenv().GridSize, MyZ)
-    
-    local params = OverlapParams.new()
-    -- Filter biar diri sendiri & Hitbox player gak dianggap tembok
-    params.FilterDescendantsInstances = {MyChar, workspace:FindFirstChild("Hitbox"), workspace:FindFirstChild("Players")}
-    params.FilterType = Enum.RaycastFilterType.Exclude
-
-    -- Cek ada benda fisik ukuran 3x3 di posisi itu gak
-    local partsInBox = workspace:GetPartBoundsInBox(CFrame.new(targetPos), Vector3.new(2.5, 2.5, 2.5), params)
-    
-    for _, part in ipairs(partsInBox) do
-        local pName = part.Name:lower()
-        -- Kalau yang kedeteksi cuma background atau tanaman, gas tembus!
-        if string.find(pName, "bg") or string.find(pName, "sapling") or string.find(pName, "air") then
+        
+        -- Cek Cache Biar Super Mulus (Gak ngelag)
+        if BlockSolidityCache[rawName] ~= nil then
+            if BlockSolidityCache[rawName] == true then return true end
             continue
         end
-        -- Kalau ada benda padat (entah namanya block/part/mesh), anggap TEMBOK!
-        return true
-    end
 
+        local isSolid = false
+
+        -- 2. CEK DATABASE GAME (Lebih Lengkap)
+        pcall(function()
+            local itemData = ItemsManager.RequestItemData(rawName)
+            if itemData then
+                local t = tostring(itemData.Type):lower()
+                local category = tostring(itemData.Category):lower()
+                
+                -- Cek tipe-tipe benda padat dari database
+                if t == "block" or t == "soil" or t == "wall" or t == "fence" or t == "solid" or t == "machine" or category == "block" then
+                    isSolid = true
+                end
+                
+                -- Cek Boolean collision dari metadata
+                if itemData.Solid or itemData.Collidable or itemData.Collision then
+                    isSolid = true
+                end
+                
+                -- Cek di dalam folder/tabel Tile database
+                if itemData.Tile and (itemData.Tile.Solid or itemData.Tile.Collidable) then
+                    isSolid = true
+                end
+            end
+        end)
+
+        -- 3. KAMUS BACKUP (Kalau Database nge-bug atau game pakai ID rahasia)
+        if not isSolid then
+            local solidKeywords = {"dirt", "grass", "stone", "brick", "wood", "sand", "glass", "rock", "metal", "block", "platform", "soil"}
+            for _, kw in ipairs(solidKeywords) do
+                if string.find(nameStr, kw) then
+                    isSolid = true
+                    break
+                end
+            end
+        end
+        
+        -- Simpan ke memori bot biar gak mikir dua kali
+        BlockSolidityCache[rawName] = isSolid
+
+        if isSolid then return true end
+    end
     return false
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR (A*) PARANOID MAP LIMIT ]]
+-- [[ TAHAP 2: A-STAR (A*) ENGINE (SMOOTH & ANTI MENTOK) ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -182,7 +206,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 3: MOVEMENT ]]
+-- [[ TAHAP 3: MOVEMENT LERP ]]
 -- ========================================== --
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -225,7 +249,6 @@ local function MoveSmartlyTo(targetX, targetY)
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     
     if not route then
-        print("⚠️ [A* ERROR] Buntu total menuju X:"..targetX.." Y:"..targetY)
         return false
     end
 
@@ -289,7 +312,6 @@ local function AIBelajarWaktu(sapling)
                         totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
                         
                         getgenv().AIDictionary[sapling.name] = totalDurasi
-                        print("🎯 AI HAFAL! " .. sapling.name .. " butuh " .. totalDurasi .. " detik!")
                         return true
                     end
                 end
