@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V22 (GAP SCANNER & ANTI-BREAKDANCE)"
+getgenv().ScriptVersion = "Auto Farm V23 (REAL PHYSICS SCANNER)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -39,10 +39,10 @@ function CreateToggle(Parent, Text, Var)
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
         
-        -- ANTI BREAKDANCE: Lepas Anchor paksa kalau toggle dimatikan
+        -- ANTI BREAKDANCE
         if not getgenv()[Var] then
             pcall(function()
-                local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+                local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
                 if MyHitbox then MyHitbox.Anchored = false end
             end)
         end
@@ -54,18 +54,42 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V22 (SMART GAP SCANNER)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V23 (PHYSICS GAP SCANNER)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: SCANNER & COLLISION ]]
+-- [[ TAHAP 1: RADAR FISIK (CANCALLIDE CHECK) ]]
+-- ========================================== --
+local function IsSolidReal(gridX, gridY, currentZ)
+    -- Ubah koordinat grid jadi posisi asli di game
+    local realPos = CFrame.new(gridX * getgenv().GridSize, gridY * getgenv().GridSize, currentZ)
+    -- Bikin hitbox deteksi sedikit lebih kecil biar gak nyenggol blok tetangga
+    local size = Vector3.new(getgenv().GridSize * 0.6, getgenv().GridSize * 0.6, getgenv().GridSize * 0.6) 
+    
+    local overlapParams = OverlapParams.new()
+    -- Abaikan tubuh karakter kita, hitbox kita, dan UI bawaan game
+    local ignoreList = {LP.Character, workspace:FindFirstChild("Hitbox"), workspace:FindFirstChild("HoverPart")}
+    overlapParams.FilterDescendantsInstances = ignoreList
+    overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+
+    -- Cek apa saja yang ada di dalam box imajiner ini
+    local parts = workspace:GetPartBoundsInBox(realPos, size, overlapParams)
+    
+    for _, part in ipairs(parts) do
+        -- KUNCI UTAMA: Cek apakah blok itu benar-benar keras (CanCollide)
+        if part:IsA("BasePart") and part.CanCollide then
+            return true -- TERHALANG!
+        end
+    end
+    return false -- AMAN / KOSONG
+end
+
+-- ========================================== --
+-- [[ TAHAP 2: SCANNER BIBIT ONLY (CEPAT) ]]
 -- ========================================== --
 local SaplingsData = {}
-local CollisionMap = {}
 
 local function ScanWorld()
     SaplingsData = {}
-    CollisionMap = {}
-    
     for _, obj in pairs(getgc(true)) do
         if type(obj) == "table" and not isreadonly(obj) then
             local sX, col = next(obj)
@@ -74,20 +98,15 @@ local function ScanWorld()
                 if type(sY) == "number" and type(blockData) == "table" then
                     for gridX, yCol in pairs(obj) do
                         if type(gridX) ~= "number" or type(yCol) ~= "table" then break end
-                        CollisionMap[gridX] = CollisionMap[gridX] or {}
                         for gridY, bData in pairs(yCol) do
                             if type(gridY) == "number" and type(bData) == "table" then
                                 local fg = rawget(bData, 1) 
                                 if type(fg) == "table" then
-                                    local nameOrId = rawget(fg, 1)
-                                    if type(nameOrId) == "string" and string.find(string.lower(nameOrId), "sapling") then
+                                    local name = rawget(fg, 1)
+                                    if type(name) == "string" and string.find(string.lower(name), "sapling") then
                                         local details = rawget(fg, 2)
                                         if type(details) == "table" and rawget(details, "at") then
-                                            table.insert(SaplingsData, {x = gridX, y = gridY, name = nameOrId, at = rawget(details, "at")})
-                                        end
-                                    else
-                                        if nameOrId ~= 0 and nameOrId ~= "air" and nameOrId ~= "" and nameOrId ~= nil then
-                                            CollisionMap[gridX][gridY] = true
+                                            table.insert(SaplingsData, {x = gridX, y = gridY, name = name, at = rawget(details, "at")})
                                         end
                                     end
                                 end
@@ -101,35 +120,11 @@ local function ScanWorld()
     end
 end
 
-local function IsSolid(x, y)
-    return CollisionMap[x] and CollisionMap[x][y]
-end
-
 -- ========================================== --
--- [[ TAHAP 2: GAP SCANNER (PENCARI CELAH X) ]]
--- ========================================== --
--- Ide dari Bos: Nyari celah ke kiri/kanan sampai 100 blok buat naik/turun
-local function FindGapX(startX, currentY, directionY)
-    print("🔍 Lantai beda! Mencari celah kosong ke atas/bawah...")
-    for dist = 0, 100 do
-        for _, dirX in ipairs({1, -1}) do
-            local checkX = startX + (dist * dirX)
-            -- Cek apakah blok di atas/bawahnya kosong
-            if not IsSolid(checkX, currentY + directionY) and not IsSolid(checkX, currentY) then
-                print("✅ Celah ditemukan di X: " .. checkX)
-                return checkX
-            end
-        end
-    end
-    print("⚠️ Celah tidak ketemu di radius 100! Terpaksa tembus.")
-    return startX
-end
-
--- ========================================== --
--- [[ TAHAP 3: MOVEMENT SYSTEM ]]
+-- [[ TAHAP 3: MOVEMENT DENGAN REAL PHYSICS ]]
 -- ========================================== --
 local function MoveSmartlyTo(targetX, targetY)
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
@@ -148,17 +143,35 @@ local function MoveSmartlyTo(targetX, targetY)
     local myGridX = math.floor((MyHitbox.Position.X / getgenv().GridSize) + 0.5)
     local myGridY = math.floor((MyHitbox.Position.Y / getgenv().GridSize) + 0.5)
 
-    -- LOGIKA PERGERAKAN:
-    -- 1. Samakan lantai (Y) dulu dengan mencari celah (X)
+    -- Kalo pas nyala kebetulan nyangkut di dalam blok, geser ke atas dulu
+    if IsSolidReal(myGridX, myGridY, myZ) then
+         myGridY = myGridY + 1
+         TeleportStep(myGridX, myGridY)
+    end
+
+    -- 1. SAMAKAN LANTAI (Y) DENGAN MENCARI CELAH (X)
     while myGridY ~= targetY do
         if not getgenv().EnableSmartHarvest then break end
         
         local dirY = (targetY > myGridY) and 1 or -1
+        local gapX = myGridX
+        local foundGap = false
         
-        -- Cari celah buat naik/turun
-        local gapX = FindGapX(myGridX, myGridY, dirY)
+        print("🔍 Lantai beda! Pindai fisik celah...")
+        for dist = 0, 100 do
+            for _, dirX in ipairs({1, -1}) do
+                local checkX = myGridX + (dist * dirX)
+                -- Cek secara FISIK apakah ruang di atas/bawahnya dan posisi saat ini kosong
+                if not IsSolidReal(checkX, myGridY + dirY, myZ) and not IsSolidReal(checkX, myGridY, myZ) then
+                    gapX = checkX
+                    foundGap = true
+                    break
+                end
+            end
+            if foundGap then break end
+        end
         
-        -- Jalan ke celah X tersebut
+        -- Berjalan ke celah tersebut
         local dirX = (gapX > myGridX) and 1 or (gapX < myGridX and -1 or 0)
         while myGridX ~= gapX do
             if not getgenv().EnableSmartHarvest then break end
@@ -166,20 +179,41 @@ local function MoveSmartlyTo(targetX, targetY)
             if not TeleportStep(myGridX, myGridY) then break end
         end
         
-        -- Naik/Turun di celah itu
+        -- Naik/Turun di celah yang sudah dipastikan aman fisiknya
         myGridY = myGridY + dirY
         if not TeleportStep(myGridX, myGridY) then break end
     end
 
-    -- 2. Kalau lantai udah sama, tinggal jalan lurus ke target X
+    -- 2. BERJALAN LURUS KE TARGET (X)
     local dirX = (targetX > myGridX) and 1 or (targetX < myGridX and -1 or 0)
     while myGridX ~= targetX do
         if not getgenv().EnableSmartHarvest then break end
-        myGridX = myGridX + dirX
-        if not TeleportStep(myGridX, myGridY) then break end
+        local nextX = myGridX + dirX
+        
+        -- Kalau ada tembok di depan, coba lompatin!
+        if IsSolidReal(nextX, myGridY, myZ) then
+            print("🧱 Ada objek padat (CanCollide) di X:"..nextX..". Mencoba lompat...")
+            if not IsSolidReal(myGridX, myGridY + 1, myZ) and not IsSolidReal(nextX, myGridY + 1, myZ) then
+                myGridY = myGridY + 1
+                TeleportStep(myGridX, myGridY)
+                myGridX = nextX
+                TeleportStep(myGridX, myGridY)
+                -- Turun lagi kalau bisa
+                if not IsSolidReal(myGridX, myGridY - 1, myZ) then
+                    myGridY = myGridY - 1
+                    TeleportStep(myGridX, myGridY)
+                end
+            else
+                print("⚠️ Gagal melompat, nyerah di kordinat ini.")
+                break 
+            end
+        else
+            myGridX = nextX
+            if not TeleportStep(myGridX, myGridY) then break end
+        end
     end
 
-    -- ANTI BREAKDANCE SETELAH JALAN SELESAI
+    -- ANTI BREAKDANCE
     pcall(function() MyHitbox.Anchored = false end)
     return myGridX == targetX and myGridY == targetY
 end
