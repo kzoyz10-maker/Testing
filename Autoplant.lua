@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V33 (PURE DATABASE)"
+getgenv().ScriptVersion = "Auto Farm V34 (PHYSICAL RADAR)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -49,69 +49,60 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V33 (PURE DATABASE)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V34 (PHYSICAL RADAR)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR MURNI DATABASE & CACHE ]]
+-- [[ TAHAP 1: SENSOR FISIK 3D (RAYCAST) ]]
 -- ========================================== --
-local BlockSolidityCache = {}
-
 local function IsTileSolid(gridX, gridY)
-    -- BATAS MUTLAK MAP (Gak boleh nyari jalan di luar X=0 dan X=100)
     if gridX < 0 or gridX > 100 then return true end
 
-    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
-    
-    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
-        local rawName = type(data) == "table" and data[1] or data
-        local nameStr = tostring(rawName):lower()
-        
-        -- PENGECUALIAN MUTLAK (Benda yang PASTI tembus seperti bibit, udara, atau background)
-        if string.find(nameStr, "sapling") or string.find(nameStr, "lock_area") or string.find(nameStr, "bg") or string.find(nameStr, "air") then 
-            continue 
+    -- 1. Intip Data Mentah buat bahan Debugging
+    if RawWorldTiles[gridX] and RawWorldTiles[gridX][gridY] then
+        for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
+            local rawName = type(data) == "table" and data[1] or data
+            -- Kita print di konsol apa wujud aslinya (Biar ketahuan ID atau teks)
+            if math.random(1, 100) == 1 then -- Print sesekali biar gak lag
+                print("🔍 [X-RAY] Posisi X:"..gridX.." Y:"..gridY.." Data: "..tostring(rawName).." Tipe: "..type(rawName))
+            end
         end
-        
-        -- 1. CEK CACHE (Biar enteng gak lag)
-        if BlockSolidityCache[rawName] ~= nil then
-            if BlockSolidityCache[rawName] == true then return true end
+    end
+
+    -- 2. Radar Fisik Langsung ke Dunia
+    local MyChar = LP.Character
+    if not MyChar then return false end
+    
+    local MyZ = MyChar:GetPivot().Position.Z
+    local targetPos = Vector3.new(gridX * getgenv().GridSize, gridY * getgenv().GridSize, MyZ)
+    
+    local params = OverlapParams.new()
+    -- Filter biar diri sendiri & Hitbox player gak dianggap tembok
+    params.FilterDescendantsInstances = {MyChar, workspace:FindFirstChild("Hitbox"), workspace:FindFirstChild("Players")}
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    -- Cek ada benda fisik ukuran 3x3 di posisi itu gak
+    local partsInBox = workspace:GetPartBoundsInBox(CFrame.new(targetPos), Vector3.new(2.5, 2.5, 2.5), params)
+    
+    for _, part in ipairs(partsInBox) do
+        local pName = part.Name:lower()
+        -- Kalau yang kedeteksi cuma background atau tanaman, gas tembus!
+        if string.find(pName, "bg") or string.find(pName, "sapling") or string.find(pName, "air") then
             continue
         end
-
-        -- 2. BACA LANGSUNG DARI DATABASE GAME MURNI
-        local isSolid = false
-        pcall(function()
-            local itemData = ItemsManager.RequestItemData(rawName)
-            if itemData then
-                -- Cek Rule dan Solid dari metadata bawaan gamenya
-                if itemData.Tile and (itemData.Tile.Rule == 2 or itemData.Tile.Solid) then 
-                    isSolid = true 
-                end
-                
-                -- Cek Type bawaan database
-                local t = tostring(itemData.Type):lower()
-                if t == "block" or t == "wall" or t == "fence" or t == "machine" or t == "soil" then
-                    isSolid = true
-                end
-            end
-        end)
-        
-        -- 3. SIMPAN KE CACHE BIAR HAFAL
-        BlockSolidityCache[rawName] = isSolid
-
-        if isSolid then return true end
+        -- Kalau ada benda padat (entah namanya block/part/mesh), anggap TEMBOK!
+        return true
     end
+
     return false
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR (A*) DENGAN PENCEGAHAN NABRAK ]]
+-- [[ TAHAP 2: A-STAR (A*) PARANOID MAP LIMIT ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
 
-    local function heuristic(x, y)
-        return math.abs(x - targetX) + math.abs(y - targetY)
-    end
+    local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
 
     local openSet = {}
     local closedSet = {}
@@ -161,13 +152,11 @@ local function FindPathAStar(startX, startY, targetX, targetY)
             local nextY = current.y + dir[2]
             local nextKey = nextX .. "," .. nextY
 
-            -- JANGAN PERNAH cari rute keluar dari batas X 0 - 100
             if nextX < 0 or nextX > 100 then continue end
             if closedSet[nextKey] then continue end
 
             local isTarget = (nextX == targetX and nextY == targetY)
             
-            -- Cek nabrak (Minta data ke database via cache)
             if not isTarget and IsTileSolid(nextX, nextY) then
                 closedSet[nextKey] = true
                 continue
@@ -193,7 +182,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 3: LERP MOVEMENT MULUS ]]
+-- [[ TAHAP 3: MOVEMENT ]]
 -- ========================================== --
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -236,7 +225,7 @@ local function MoveSmartlyTo(targetX, targetY)
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     
     if not route then
-        print("⚠️ Buntu! Harus muter / cari celah manual ke X"..targetX.." Y"..targetY)
+        print("⚠️ [A* ERROR] Buntu total menuju X:"..targetX.." Y:"..targetY)
         return false
     end
 
@@ -250,7 +239,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 4: SCAN & FARM LOGIC ]]
+-- [[ TAHAP 4: FARM LOGIC ]]
 -- ========================================== --
 local SaplingsData = {}
 local function ScanWorld()
