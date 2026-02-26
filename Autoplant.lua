@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V30 (A* PATHFINDER)"
+getgenv().ScriptVersion = "Auto Farm V31 (PARANOID A* & BOUNDARY)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -29,7 +29,6 @@ local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
--- Ambil Map dan Database Item dari Server
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
 
@@ -50,12 +49,16 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V30 (TRUE A* PATHFINDER)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V31 (PARANOID A* + BOUNDARY)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR MAP MENGGUNAKAN SERVER DATA ]]
+-- [[ TAHAP 1: RADAR SENSOR PARANOID & BATAS MAP ]]
 -- ========================================== --
 local function IsTileSolid(gridX, gridY)
+    -- 1. BATAS MUTLAK MAP (Jangan sampai bablas lewat dari 0 atau 100!)
+    if gridX < 0 or gridX > 100 then return true end
+    if gridY < 0 or gridY > 200 then return true end 
+
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
     
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
@@ -63,44 +66,45 @@ local function IsTileSolid(gridX, gridY)
         if type(name) == "string" then
             name = string.lower(name)
             
-            -- Pengecualian mutlak (Tanaman & Area Marker bisa dilewati)
-            if string.find(name, "sapling") or string.find(name, "lock_area") then continue end
+            -- Pengecualian mutlak (Pasti bisa ditembus, seperti tanaman/udara)
+            if string.find(name, "sapling") or string.find(name, "lock_area") or string.find(name, "path") or string.find(name, "bg") or string.find(name, "air") then 
+                continue 
+            end
             
             local isSolid = false
             
-            -- Baca Property Asli dari game!
-            pcall(function()
-                local itemData = ItemsManager.RequestItemData(name)
-                if itemData then
-                    -- Rule 2 artinya blok saling menyambung (Pagar/Tembok) = SOLID!
-                    if itemData.Tile and itemData.Tile.Rule == 2 then isSolid = true end
-                    -- Kalau kategori itemnya adalah Block fisik
-                    if itemData.Type == "Block" or itemData.Type == "Wall" or itemData.Type == "Fence" or itemData.Type == "Machine" then
-                        isSolid = true
+            -- 2. PENGECEKAN KATA KUNCI KASAR (Paranoid Check)
+            -- Kalau namanya ada unsur tanah/tembok/batu, PASTI SOLID, gak peduli di layer mana!
+            if string.find(name, "dirt") or string.find(name, "soil") or string.find(name, "block") or string.find(name, "wall") or string.find(name, "fence") or string.find(name, "rock") or string.find(name, "glass") then
+                isSolid = true
+            end
+
+            -- 3. BACA DATABASE SERVER SEBAGAI BACKUP
+            if not isSolid then
+                pcall(function()
+                    local itemData = ItemsManager.RequestItemData(name)
+                    if itemData then
+                        if itemData.Tile and itemData.Tile.Rule == 2 then isSolid = true end
+                        local t = itemData.Type
+                        if t == "Block" or t == "Wall" or t == "Fence" or t == "Machine" or t == "Soil" then
+                            isSolid = true
+                        end
                     end
-                end
-            end)
+                end)
+            end
 
             if isSolid then return true end
-
-            -- Kalau dia ditaruh di Layer 2 ke atas dan bukan lantai/karpet = Anggap Solid
-            if layer > 1 then
-                if not string.find(name, "floor") and not string.find(name, "rug") and not string.find(name, "path") then
-                    return true
-                end
-            end
         end
     end
     return false
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR (A*) ALGORITHM ]]
+-- [[ TAHAP 2: A-STAR (A*) DENGAN PENCEGAHAN NABRAK ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
 
-    -- Hitung estimasi jarak
     local function heuristic(x, y)
         return math.abs(x - targetX) + math.abs(y - targetY)
     end
@@ -116,7 +120,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     gScore[startKey] = 0
     fScore[startKey] = heuristic(startX, startY)
 
-    local maxIterations = 3000 -- Kuat nyari celah walau jarak 100+ kotak
+    local maxIterations = 4000 
     local iterations = 0
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
@@ -124,7 +128,6 @@ local function FindPathAStar(startX, startY, targetX, targetY)
         iterations = iterations + 1
         if iterations > maxIterations then break end
 
-        -- Ambil rute paling potensial
         local current = openSet[1]
         local currentIndex = 1
         for i = 2, #openSet do
@@ -134,7 +137,6 @@ local function FindPathAStar(startX, startY, targetX, targetY)
             end
         end
 
-        -- Kalau sampai tujuan
         if current.x == targetX and current.y == targetY then
             local path = {}
             local currKey = current.key
@@ -155,10 +157,13 @@ local function FindPathAStar(startX, startY, targetX, targetY)
             local nextY = current.y + dir[2]
             local nextKey = nextX .. "," .. nextY
 
+            -- JANGAN PERNAH cari rute keluar dari batas X 0 - 100
+            if nextX < 0 or nextX > 100 then continue end
             if closedSet[nextKey] then continue end
 
             local isTarget = (nextX == targetX and nextY == targetY)
-            -- Cek nabrak atau tidak
+            
+            -- Cek nabrak (Kalau solid, rute ini ditolak dan AI akan dipaksa nyari celah lain)
             if not isTarget and IsTileSolid(nextX, nextY) then
                 closedSet[nextKey] = true
                 continue
@@ -180,11 +185,11 @@ local function FindPathAStar(startX, startY, targetX, targetY)
             end
         end
     end
-    return nil -- Beneran gak ada celah masuk sama sekali
+    return nil 
 end
 
 -- ========================================== --
--- [[ TAHAP 3: MOVEMENT JALAN MULUS ]]
+-- [[ TAHAP 3: LERP MOVEMENT MULUS ]]
 -- ========================================== --
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -224,11 +229,10 @@ local function MoveSmartlyTo(targetX, targetY)
 
     if myGridX == targetX and myGridY == targetY then return true end
 
-    -- A* Pathfinding dipanggil di sini!
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     
     if not route then
-        print("⚠️ Buntu Total! Gak ada celah buat masuk ke X"..targetX.." Y"..targetY)
+        print("⚠️ Buntu! Harus muter / cari celah manual ke X"..targetX.." Y"..targetY)
         return false
     end
 
