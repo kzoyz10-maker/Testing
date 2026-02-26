@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V23 (REAL PHYSICS SCANNER)"
+getgenv().ScriptVersion = "Auto Farm V24 (TRUE 2D GRID PATHFINDING)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -54,40 +54,32 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V23 (PHYSICS GAP SCANNER)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V24 (TRUE 2D PATHFINDING)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR FISIK (CANCALLIDE CHECK) ]]
+-- [[ TAHAP 1: RADAR FISIK & MEMORY ]]
 -- ========================================== --
 local function IsSolidReal(gridX, gridY, currentZ)
-    -- Ubah koordinat grid jadi posisi asli di game
     local realPos = CFrame.new(gridX * getgenv().GridSize, gridY * getgenv().GridSize, currentZ)
-    -- Bikin hitbox deteksi sedikit lebih kecil biar gak nyenggol blok tetangga
-    local size = Vector3.new(getgenv().GridSize * 0.6, getgenv().GridSize * 0.6, getgenv().GridSize * 0.6) 
+    -- Hitbox dibikin 50% dari ukuran grid biar gak nyangkut pinggiran
+    local size = Vector3.new(getgenv().GridSize * 0.5, getgenv().GridSize * 0.5, getgenv().GridSize * 0.5) 
     
     local overlapParams = OverlapParams.new()
-    -- Abaikan tubuh karakter kita, hitbox kita, dan UI bawaan game
     local ignoreList = {LP.Character, workspace:FindFirstChild("Hitbox"), workspace:FindFirstChild("HoverPart")}
     overlapParams.FilterDescendantsInstances = ignoreList
     overlapParams.FilterType = Enum.RaycastFilterType.Exclude
 
-    -- Cek apa saja yang ada di dalam box imajiner ini
     local parts = workspace:GetPartBoundsInBox(realPos, size, overlapParams)
     
     for _, part in ipairs(parts) do
-        -- KUNCI UTAMA: Cek apakah blok itu benar-benar keras (CanCollide)
         if part:IsA("BasePart") and part.CanCollide then
-            return true -- TERHALANG!
+            return true -- TERHALANG TEMBOK/LANTAI
         end
     end
-    return false -- AMAN / KOSONG
+    return false -- AMAN
 end
 
--- ========================================== --
--- [[ TAHAP 2: SCANNER BIBIT ONLY (CEPAT) ]]
--- ========================================== --
 local SaplingsData = {}
-
 local function ScanWorld()
     SaplingsData = {}
     for _, obj in pairs(getgc(true)) do
@@ -121,101 +113,98 @@ local function ScanWorld()
 end
 
 -- ========================================== --
--- [[ TAHAP 3: MOVEMENT DENGAN REAL PHYSICS ]]
+-- [[ TAHAP 2: OTAK 2D PATHFINDING (BFS) ]]
+-- ========================================== --
+local function CalculateGridPath(startX, startY, targetX, targetY, myZ)
+    if startX == targetX and startY == targetY then return {} end
+
+    local queue = { {x = startX, y = startY, path = {}} }
+    local visited = {}
+    visited[startX .. "," .. startY] = true
+    
+    -- Cache biar gamenya gak lag waktu radar fisiknya ngecek ribuan rute
+    local collisionCache = {}
+    local function isBlocked(x, y)
+        if collisionCache[x] and collisionCache[x][y] ~= nil then return collisionCache[x][y] end
+        local solid = IsSolidReal(x, y, myZ)
+        collisionCache[x] = collisionCache[x] or {}
+        collisionCache[x][y] = solid
+        return solid
+    end
+
+    -- 4 Arah Pixel: Kanan, Kiri, Bawah, Atas
+    local dirs = { {1,0}, {-1,0}, {0,-1}, {0,1} } 
+    local iterations = 0
+
+    while #queue > 0 do
+        iterations = iterations + 1
+        if iterations > 2000 then 
+            warn("Rute terlalu jauh atau buntu total!")
+            return nil 
+        end
+
+        local curr = table.remove(queue, 1)
+
+        -- Kalo udah sampe target
+        if curr.x == targetX and curr.y == targetY then
+            return curr.path 
+        end
+
+        for _, d in ipairs(dirs) do
+            local nx = curr.x + d[1]
+            local ny = curr.y + d[2]
+            local key = nx .. "," .. ny
+
+            if not visited[key] then
+                if not isBlocked(nx, ny) then
+                    visited[key] = true
+                    local newPath = {}
+                    for _, p in ipairs(curr.path) do table.insert(newPath, p) end
+                    table.insert(newPath, {x = nx, y = ny})
+                    table.insert(queue, {x = nx, y = ny, path = newPath})
+                end
+            end
+        end
+    end
+    return nil -- Buntu
+end
+
+-- ========================================== --
+-- [[ TAHAP 3: SISTEM BERJALAN KOTAK DEMI KOTAK ]]
 -- ========================================== --
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
-    
-    local function TeleportStep(x, y)
-        if not getgenv().EnableSmartHarvest then return false end
-        local pos = Vector3.new(x * getgenv().GridSize, y * getgenv().GridSize, myZ)
-        MyHitbox.CFrame = CFrame.new(pos)
-        if PlayerMovement then pcall(function() PlayerMovement.Position = pos end) end
-        task.wait(getgenv().StepDelay)
-        return true
-    end
-
-    pcall(function() MyHitbox.Anchored = true end)
-
     local myGridX = math.floor((MyHitbox.Position.X / getgenv().GridSize) + 0.5)
     local myGridY = math.floor((MyHitbox.Position.Y / getgenv().GridSize) + 0.5)
 
-    -- Kalo pas nyala kebetulan nyangkut di dalam blok, geser ke atas dulu
-    if IsSolidReal(myGridX, myGridY, myZ) then
-         myGridY = myGridY + 1
-         TeleportStep(myGridX, myGridY)
-    end
+    if myGridX == targetX and myGridY == targetY then return true end
 
-    -- 1. SAMAKAN LANTAI (Y) DENGAN MENCARI CELAH (X)
-    while myGridY ~= targetY do
-        if not getgenv().EnableSmartHarvest then break end
-        
-        local dirY = (targetY > myGridY) and 1 or -1
-        local gapX = myGridX
-        local foundGap = false
-        
-        print("🔍 Lantai beda! Pindai fisik celah...")
-        for dist = 0, 100 do
-            for _, dirX in ipairs({1, -1}) do
-                local checkX = myGridX + (dist * dirX)
-                -- Cek secara FISIK apakah ruang di atas/bawahnya dan posisi saat ini kosong
-                if not IsSolidReal(checkX, myGridY + dirY, myZ) and not IsSolidReal(checkX, myGridY, myZ) then
-                    gapX = checkX
-                    foundGap = true
-                    break
-                end
-            end
-            if foundGap then break end
-        end
-        
-        -- Berjalan ke celah tersebut
-        local dirX = (gapX > myGridX) and 1 or (gapX < myGridX and -1 or 0)
-        while myGridX ~= gapX do
+    print("🗺️ AI Menggambar Rute 2D dari ("..myGridX..","..myGridY..") ke ("..targetX..","..targetY..")")
+    local safePath = CalculateGridPath(myGridX, myGridY, targetX, targetY, myZ)
+
+    if safePath then
+        pcall(function() MyHitbox.Anchored = true end)
+
+        -- JALAN KOTAK DEMI KOTAK MENGHINDARI TEMBOK
+        for _, step in ipairs(safePath) do
             if not getgenv().EnableSmartHarvest then break end
-            myGridX = myGridX + dirX
-            if not TeleportStep(myGridX, myGridY) then break end
+            
+            local pos = Vector3.new(step.x * getgenv().GridSize, step.y * getgenv().GridSize, myZ)
+            MyHitbox.CFrame = CFrame.new(pos)
+            if PlayerMovement then pcall(function() PlayerMovement.Position = pos end) end
+            
+            task.wait(getgenv().StepDelay) -- Delay biar mulus diliat mata
         end
-        
-        -- Naik/Turun di celah yang sudah dipastikan aman fisiknya
-        myGridY = myGridY + dirY
-        if not TeleportStep(myGridX, myGridY) then break end
-    end
 
-    -- 2. BERJALAN LURUS KE TARGET (X)
-    local dirX = (targetX > myGridX) and 1 or (targetX < myGridX and -1 or 0)
-    while myGridX ~= targetX do
-        if not getgenv().EnableSmartHarvest then break end
-        local nextX = myGridX + dirX
-        
-        -- Kalau ada tembok di depan, coba lompatin!
-        if IsSolidReal(nextX, myGridY, myZ) then
-            print("🧱 Ada objek padat (CanCollide) di X:"..nextX..". Mencoba lompat...")
-            if not IsSolidReal(myGridX, myGridY + 1, myZ) and not IsSolidReal(nextX, myGridY + 1, myZ) then
-                myGridY = myGridY + 1
-                TeleportStep(myGridX, myGridY)
-                myGridX = nextX
-                TeleportStep(myGridX, myGridY)
-                -- Turun lagi kalau bisa
-                if not IsSolidReal(myGridX, myGridY - 1, myZ) then
-                    myGridY = myGridY - 1
-                    TeleportStep(myGridX, myGridY)
-                end
-            else
-                print("⚠️ Gagal melompat, nyerah di kordinat ini.")
-                break 
-            end
-        else
-            myGridX = nextX
-            if not TeleportStep(myGridX, myGridY) then break end
-        end
+        pcall(function() MyHitbox.Anchored = false end)
+        return true
+    else
+        warn("⚠️ AI Nyerah! Tanamannya terkurung total, Skip dulu.")
+        return false -- Kalo buntu, JANGAN PAKSA INSTANT TELEPORT! Skip aja tanamannya.
     end
-
-    -- ANTI BREAKDANCE
-    pcall(function() MyHitbox.Anchored = false end)
-    return myGridX == targetX and myGridY == targetY
 end
 
 -- ========================================== --
@@ -223,7 +212,7 @@ end
 -- ========================================== --
 local function AIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
-    if not sampai then return false end
+    if not sampai then return false end -- Kalo ga bisa dijangkau, gausah belajar
     
     local timer = 0
     while timer < 30 do
