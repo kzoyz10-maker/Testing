@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V36 (ULTIMATE DATABASE)"
+getgenv().ScriptVersion = "Auto Farm V37 (INVERTED LOGIC)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -29,10 +29,9 @@ local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
--- Ambil Manager Sesuai Kode Asli Game
+-- Ambil Manager
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
-local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
@@ -51,17 +50,12 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V36 (DECRYPTED DATABASE)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V37 (INVERTED LOGIC)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: DECRYPTOR & DATABASE RADAR ]]
+-- [[ TAHAP 1: RADAR TANPA KAMUS (BLACKLIST) ]]
 -- ========================================== --
 local BlockSolidityCache = {}
-
--- Fungsi bawaan game untuk bersihin akhiran "_sapling"
-local function getBaseId(p11)
-    if type(p11) == "string" then return p11:gsub("_sapling$", "") else return p11 end
-end
 
 local function IsTileSolid(gridX, gridY)
     if gridX < 0 or gridX > 100 then return true end
@@ -70,7 +64,7 @@ local function IsTileSolid(gridX, gridY)
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         
-        -- TRANSLATE ANGKA JADI TEKS MENGGUNAKAN MAP GAME!
+        -- TRANSLATE ANGKA JADI TEKS MENGGUNAKAN MAP GAME
         local tileString = rawId
         if type(rawId) == "number" and WorldManager.NumberToStringMap then
             tileString = WorldManager.NumberToStringMap[rawId] or rawId
@@ -78,41 +72,34 @@ local function IsTileSolid(gridX, gridY)
         
         local nameStr = tostring(tileString):lower()
         
-        -- Pengecualian mutlak (Tembus)
-        if string.find(nameStr, "sapling") or string.find(nameStr, "bg") or string.find(nameStr, "air") then continue end
-        
-        -- Cek Memori Bot
+        -- Cek Cache biar gak buang performa
         if BlockSolidityCache[nameStr] ~= nil then
             if BlockSolidityCache[nameStr] == true then return true end
             continue
         end
 
-        local isSolid = false
-
-        -- BACA DATABASE LANGSUNG (ItemsManager.ItemsData)
-        local baseId = getBaseId(tileString)
-        local itemData = ItemsManager.ItemsData[baseId]
-        
-        if itemData then
-            local t = tostring(itemData.Type):lower()
-            -- Cek parameter standar
-            if t == "block" or t == "soil" or t == "wall" or t == "machine" or t == "solid" then
-                isSolid = true
-            end
-            -- Cek parameter boolean dari tabel Tile
-            if itemData.Tile and (itemData.Tile.Solid or itemData.Tile.Collidable) then
-                isSolid = true
-            end
+        -- LOGIKA TERBALIK (BLACKLIST)
+        -- Kalau ketemu background, tanaman, atau udara -> Tembus (Bukan tembok)
+        if string.find(nameStr, "bg") or 
+           string.find(nameStr, "background") or 
+           string.find(nameStr, "sapling") or 
+           string.find(nameStr, "seed") or 
+           string.find(nameStr, "air") or 
+           string.find(nameStr, "water") then 
+            BlockSolidityCache[nameStr] = false
+            continue 
         end
-
-        BlockSolidityCache[nameStr] = isSolid
-        if isSolid then return true end
+        
+        -- KALAU BUKAN BACKGROUND DAN BUKAN TANAMAN, BERARTI 100% TEMBOK/BLOCK!
+        BlockSolidityCache[nameStr] = true
+        return true
     end
+    
     return false
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR (A*) SMOOTH ENGINE ]]
+-- [[ TAHAP 2: A-STAR (A*) ENGINE ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -197,7 +184,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 3: LERP MOVEMENT ]]
+-- [[ TAHAP 3: MOVEMENT LERP ]]
 -- ========================================== --
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -263,7 +250,6 @@ local function ScanWorld()
                         local rawId = type(data) == "table" and data[1] or data
                         local tileInfo = type(data) == "table" and data[2] or nil
                         
-                        -- DECRYPT UNTUK DETEKSI SAPLING!
                         local tileString = rawId
                         if type(rawId) == "number" and WorldManager.NumberToStringMap then
                             tileString = WorldManager.NumberToStringMap[rawId] or rawId
