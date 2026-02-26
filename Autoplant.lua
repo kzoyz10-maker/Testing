@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V38 (PRECISION HARVEST)"
+getgenv().ScriptVersion = "Auto Farm V39 (PERFECT GRID & DEEP SCAN)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -51,7 +51,7 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V38 (PRECISION HARVEST)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V39 (PERFECT GRID & DEEP SCAN)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
@@ -87,7 +87,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR MOVEMENT ]]
+-- [[ TAHAP 2: A-STAR & PERFECT SNAP ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -169,22 +169,25 @@ local function SmoothWalkTo(targetPos)
     local startPos = MyHitbox.Position
     local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
     local duration = dist / getgenv().WalkSpeed
-    if duration <= 0 then return true end
     
-    local t = 0
-    while t < duration do
-        if not getgenv().EnableSmartHarvest then return false end
-        local dt = RunService.Heartbeat:Wait()
-        t = t + dt
-        local alpha = math.clamp(t / duration, 0, 1)
-        local currentPos = startPos:Lerp(targetPos, alpha)
-        
-        MyHitbox.CFrame = CFrame.new(currentPos)
-        if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+    if duration > 0 then 
+        local t = 0
+        while t < duration do
+            if not getgenv().EnableSmartHarvest then return false end
+            local dt = RunService.Heartbeat:Wait()
+            t = t + dt
+            local alpha = math.clamp(t / duration, 0, 1)
+            local currentPos = startPos:Lerp(targetPos, alpha)
+            
+            MyHitbox.CFrame = CFrame.new(currentPos)
+            if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+        end
     end
     
+    -- PERFECT SNAP: Paksa bot diem pas di tengah Grid biar gak motong tikungan!
     MyHitbox.CFrame = CFrame.new(targetPos)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
+    task.wait(0.02) -- Jeda mikroskopis biar Physics Engine gamenya sinkron!
     return true
 end
 
@@ -193,8 +196,9 @@ local function MoveSmartlyTo(targetX, targetY)
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
-    local myGridX = math.floor((MyHitbox.Position.X / getgenv().GridSize) + 0.5)
-    local myGridY = math.floor((MyHitbox.Position.Y / getgenv().GridSize) + 0.5)
+    -- Gunakan math.round untuk kalkulasi akurat
+    local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
+    local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
 
     if myGridX == targetX and myGridY == targetY then return true end
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
@@ -209,7 +213,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 3: DATABASE HARVEST LOGIC ]]
+-- [[ TAHAP 3: RECURSIVE DEEP SCANNER DATABASE ]]
 -- ========================================== --
 local SaplingsData = {}
 
@@ -240,7 +244,25 @@ local function ScanWorld()
     end
 end
 
--- MENCURI DATA DURASI LANGSUNG DARI SOURCE CODE GAME
+-- Fungsi mengerikan yang bakal ngebongkar isi Database secara brutal
+local function DeepFindGrowTime(tbl)
+    if type(tbl) ~= "table" then return nil end
+    for k, v in pairs(tbl) do
+        if type(v) == "number" and type(k) == "string" then
+            local kl = k:lower()
+            -- Cari semua kata kunci waktu yang mungkin dipake Developer!
+            if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
+                if v > 0 then return v end
+            end
+        elseif type(v) == "table" then
+            -- Kalau ketemu folder/table lagi, masuk dan obrak-abrik lagi!
+            local res = DeepFindGrowTime(v)
+            if res then return res end
+        end
+    end
+    return nil
+end
+
 local function GetExactGrowTime(saplingName)
     if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
     
@@ -248,10 +270,10 @@ local function GetExactGrowTime(saplingName)
         local baseId = string.gsub(saplingName, "_sapling", "")
         local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
         if itemData then
-            -- Deteksi segala kemungkinan nama parameter waktu dari dev-nya
-            local growTime = itemData.GrowTime or itemData.GrowthTime or itemData.Time or itemData.HarvestTime
-            if type(growTime) == "number" then
-                getgenv().AIDictionary[saplingName] = growTime
+            -- Panggil si Deep Scanner!
+            local foundTime = DeepFindGrowTime(itemData)
+            if foundTime then
+                getgenv().AIDictionary[saplingName] = foundTime
             end
         end
     end)
@@ -259,7 +281,9 @@ local function GetExactGrowTime(saplingName)
     return getgenv().AIDictionary[saplingName] or nil
 end
 
--- FALLBACK JIKA DATABASE GAGAL BACA
+-- ========================================== --
+-- [[ TAHAP 4: FARM LOGIC ]]
+-- ========================================== --
 local function BackupAIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
@@ -280,7 +304,6 @@ local function BackupAIBelajarWaktu(sapling)
                         local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
                         if isReady then sisaWaktuLayar = 0 end
                         
-                        -- Pake os.time biar sync sama waktu server
                         local umurSekarang = os.time() - sapling.at
                         local totalDurasi = umurSekarang + sisaWaktuLayar
                         totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
@@ -308,21 +331,17 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 
-                -- Coba curi dari database dulu
+                -- LANGSUNG OBRAK ABRIK DATABASE BUAT CARI UMUR
                 local targetMatang = GetExactGrowTime(sapling.name)
                 
-                -- Kalau database di-hide dev, baru pake AI Backup
                 if not targetMatang then
                     BackupAIBelajarWaktu(sapling)
                     targetMatang = getgenv().AIDictionary[sapling.name]
                 end
                 
                 if targetMatang then
-                    -- Hitung umur asli berdasar stamp waktu dari server
                     local umurServer1 = os.time() - sapling.at
                     local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                    
-                    -- Pake nilai tertinggi buat antisipasi lag
                     local umurAsli = math.max(umurServer1, umurServer2)
 
                     if umurAsli >= targetMatang then
