@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V39 (PERFECT GRID & DEEP SCAN)"
+getgenv().ScriptVersion = "Auto Farm V40 (TWEEN & ID BYPASS)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -27,6 +27,7 @@ local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
 -- Ambil Manager
@@ -51,7 +52,7 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V39 (PERFECT GRID & DEEP SCAN)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V40 (TWEEN & ID BYPASS)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
@@ -87,7 +88,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & PERFECT SNAP ]]
+-- [[ TAHAP 2: A-STAR & TWEEN MOVEMENT ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -171,23 +172,32 @@ local function SmoothWalkTo(targetPos)
     local duration = dist / getgenv().WalkSpeed
     
     if duration > 0 then 
-        local t = 0
-        while t < duration do
-            if not getgenv().EnableSmartHarvest then return false end
-            local dt = RunService.Heartbeat:Wait()
-            t = t + dt
-            local alpha = math.clamp(t / duration, 0, 1)
-            local currentPos = startPos:Lerp(targetPos, alpha)
-            
-            MyHitbox.CFrame = CFrame.new(currentPos)
-            if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+        -- BUNUH MOMENTUM FISIKA BIAR GAK NGEPOT DI TIKUNGAN
+        MyHitbox.Velocity = Vector3.new(0,0,0)
+        MyHitbox.RotVelocity = Vector3.new(0,0,0)
+
+        -- PAKE TWEEN LINEAR BIAR JALANNYA KAKU TAPI LURUS PRESISI
+        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+        local tween = TweenService:Create(MyHitbox, tweenInfo, {CFrame = CFrame.new(targetPos)})
+        
+        local syncConn
+        if PlayerMovement then
+            syncConn = RunService.Heartbeat:Connect(function()
+                pcall(function() PlayerMovement.Position = MyHitbox.Position end)
+            end)
         end
+        
+        tween:Play()
+        tween.Completed:Wait()
+        
+        if syncConn then syncConn:Disconnect() end
     end
     
-    -- PERFECT SNAP: Paksa bot diem pas di tengah Grid biar gak motong tikungan!
+    -- SNAP TERAKHIR DAN REM LAGI
     MyHitbox.CFrame = CFrame.new(targetPos)
+    MyHitbox.Velocity = Vector3.new(0,0,0)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
-    task.wait(0.02) -- Jeda mikroskopis biar Physics Engine gamenya sinkron!
+    task.wait(0.01) -- Jeda biar mesin gamenya nafas
     return true
 end
 
@@ -196,7 +206,6 @@ local function MoveSmartlyTo(targetX, targetY)
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
-    -- Gunakan math.round untuk kalkulasi akurat
     local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
     local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
 
@@ -213,7 +222,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 3: RECURSIVE DEEP SCANNER DATABASE ]]
+-- [[ TAHAP 3: DEEP SCANNER WITH RAW ID ]]
 -- ========================================== --
 local SaplingsData = {}
 
@@ -234,7 +243,8 @@ local function ScanWorld()
                         
                         if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
                             if tileInfo and tileInfo.at then
-                                table.insert(SaplingsData, {x = x, y = y, name = tileString, at = tileInfo.at})
+                                -- SIMPAN RAW ID (ANGKA) UNTUK BYPASS DATABASE
+                                table.insert(SaplingsData, {x = x, y = y, name = tileString, rawId = rawId, at = tileInfo.at})
                             end
                         end
                     end
@@ -244,18 +254,15 @@ local function ScanWorld()
     end
 end
 
--- Fungsi mengerikan yang bakal ngebongkar isi Database secara brutal
 local function DeepFindGrowTime(tbl)
     if type(tbl) ~= "table" then return nil end
     for k, v in pairs(tbl) do
         if type(v) == "number" and type(k) == "string" then
             local kl = k:lower()
-            -- Cari semua kata kunci waktu yang mungkin dipake Developer!
             if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
                 if v > 0 then return v end
             end
         elseif type(v) == "table" then
-            -- Kalau ketemu folder/table lagi, masuk dan obrak-abrik lagi!
             local res = DeepFindGrowTime(v)
             if res then return res end
         end
@@ -263,22 +270,28 @@ local function DeepFindGrowTime(tbl)
     return nil
 end
 
-local function GetExactGrowTime(saplingName)
-    if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
+local function GetExactGrowTime(saplingData)
+    if getgenv().AIDictionary[saplingData.name] then return getgenv().AIDictionary[saplingData.name] end
     
     pcall(function()
-        local baseId = string.gsub(saplingName, "_sapling", "")
-        local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
+        -- TEMBAK PAKAI ANGKA (RAW ID) DULU KARENA DATABASE BIASANYA PAKE ANGKA
+        local itemData = ItemsManager.ItemsData[saplingData.rawId]
+        
+        -- KALAU GAGAL, BARU TEMBAK PAKAI NAMA (BASE STRING)
+        if not itemData then
+            local baseId = string.gsub(saplingData.name, "_sapling", "")
+            itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingData.name]
+        end
+        
         if itemData then
-            -- Panggil si Deep Scanner!
             local foundTime = DeepFindGrowTime(itemData)
             if foundTime then
-                getgenv().AIDictionary[saplingName] = foundTime
+                getgenv().AIDictionary[saplingData.name] = foundTime
             end
         end
     end)
     
-    return getgenv().AIDictionary[saplingName] or nil
+    return getgenv().AIDictionary[saplingData.name] or nil
 end
 
 -- ========================================== --
@@ -331,8 +344,8 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 
-                -- LANGSUNG OBRAK ABRIK DATABASE BUAT CARI UMUR
-                local targetMatang = GetExactGrowTime(sapling.name)
+                -- LANGSUNG TEMBAK DATABASE PAKAI ID ANGKA ASLI
+                local targetMatang = GetExactGrowTime(sapling)
                 
                 if not targetMatang then
                     BackupAIBelajarWaktu(sapling)
