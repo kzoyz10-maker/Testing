@@ -11,13 +11,13 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V29 (SMART LERP WALKER)"
+getgenv().ScriptVersion = "Auto Farm V30 (A* PATHFINDER)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().WalkSpeed = 16     -- Kecepatan wajar, JANGAN dicepetin biar gak di-rubberband server!
+getgenv().WalkSpeed = 16     
 getgenv().BreakDelay = 0.15  
 getgenv().EnableSmartHarvest = false
 
@@ -29,7 +29,9 @@ local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
+-- Ambil Map dan Database Item dari Server
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
+local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
@@ -48,27 +50,44 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V29 (SMART LERP WALKER)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V30 (TRUE A* PATHFINDER)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR MAP SERVER ]]
+-- [[ TAHAP 1: RADAR MAP MENGGUNAKAN SERVER DATA ]]
 -- ========================================== --
 local function IsTileSolid(gridX, gridY)
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
     
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
-        if layer > 1 then
-            local name = type(data) == "table" and data[1] or data
-            if type(name) == "string" then
-                name = string.lower(name)
-                -- Filter nama yang BISA ditembus
-                if string.find(name, "sapling") then continue end
-                if string.find(name, "lock_area") then continue end
-                if string.find(name, "dirt") then continue end
-                if string.find(name, "grass") then continue end
-                if string.find(name, "path") then continue end
-                
-                return true -- Kena halangan keras!
+        local name = type(data) == "table" and data[1] or data
+        if type(name) == "string" then
+            name = string.lower(name)
+            
+            -- Pengecualian mutlak (Tanaman & Area Marker bisa dilewati)
+            if string.find(name, "sapling") or string.find(name, "lock_area") then continue end
+            
+            local isSolid = false
+            
+            -- Baca Property Asli dari game!
+            pcall(function()
+                local itemData = ItemsManager.RequestItemData(name)
+                if itemData then
+                    -- Rule 2 artinya blok saling menyambung (Pagar/Tembok) = SOLID!
+                    if itemData.Tile and itemData.Tile.Rule == 2 then isSolid = true end
+                    -- Kalau kategori itemnya adalah Block fisik
+                    if itemData.Type == "Block" or itemData.Type == "Wall" or itemData.Type == "Fence" or itemData.Type == "Machine" then
+                        isSolid = true
+                    end
+                end
+            end)
+
+            if isSolid then return true end
+
+            -- Kalau dia ditaruh di Layer 2 ke atas dan bukan lantai/karpet = Anggap Solid
+            if layer > 1 then
+                if not string.find(name, "floor") and not string.find(name, "rug") and not string.find(name, "path") then
+                    return true
+                end
             end
         end
     end
@@ -76,47 +95,96 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: BREADTH-FIRST SEARCH ]]
+-- [[ TAHAP 2: A-STAR (A*) ALGORITHM ]]
 -- ========================================== --
-local function FindPath(startX, startY, targetX, targetY)
+local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
-    
-    local queue = {{x = startX, y = startY, path = {}}}
-    local visited = {}
-    visited[startX .. "," .. startY] = true
 
-    local maxSearch = 600
+    -- Hitung estimasi jarak
+    local function heuristic(x, y)
+        return math.abs(x - targetX) + math.abs(y - targetY)
+    end
+
+    local openSet = {}
+    local closedSet = {}
+    local cameFrom = {}
+    local gScore = {}
+    local fScore = {}
+
+    local startKey = startX .. "," .. startY
+    table.insert(openSet, {x = startX, y = startY, key = startKey})
+    gScore[startKey] = 0
+    fScore[startKey] = heuristic(startX, startY)
+
+    local maxIterations = 3000 -- Kuat nyari celah walau jarak 100+ kotak
+    local iterations = 0
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
-    while #queue > 0 and maxSearch > 0 do
-        maxSearch = maxSearch - 1
-        local current = table.remove(queue, 1)
+    while #openSet > 0 do
+        iterations = iterations + 1
+        if iterations > maxIterations then break end
 
-        if current.x == targetX and current.y == targetY then
-            return current.path
+        -- Ambil rute paling potensial
+        local current = openSet[1]
+        local currentIndex = 1
+        for i = 2, #openSet do
+            if fScore[openSet[i].key] < fScore[current.key] then
+                current = openSet[i]
+                currentIndex = i
+            end
         end
+
+        -- Kalau sampai tujuan
+        if current.x == targetX and current.y == targetY then
+            local path = {}
+            local currKey = current.key
+            while cameFrom[currKey] do
+                local node = cameFrom[currKey]
+                table.insert(path, 1, {x = current.x, y = current.y})
+                current = node
+                currKey = node.x .. "," .. node.y
+            end
+            return path
+        end
+
+        table.remove(openSet, currentIndex)
+        closedSet[current.key] = true
 
         for _, dir in ipairs(directions) do
             local nextX = current.x + dir[1]
             local nextY = current.y + dir[2]
-            local posKey = nextX .. "," .. nextY
-            
-            -- Pengecualian: Boleh nabrak JIKA itu adalah tujuan akhir (tanaman di atas pot)
-            local isTarget = (nextX == targetX and nextY == targetY)
+            local nextKey = nextX .. "," .. nextY
 
-            if not visited[posKey] and (isTarget or not IsTileSolid(nextX, nextY)) then
-                visited[posKey] = true
-                local newPath = {unpack(current.path)}
-                table.insert(newPath, {x = nextX, y = nextY})
-                table.insert(queue, {x = nextX, y = nextY, path = newPath})
+            if closedSet[nextKey] then continue end
+
+            local isTarget = (nextX == targetX and nextY == targetY)
+            -- Cek nabrak atau tidak
+            if not isTarget and IsTileSolid(nextX, nextY) then
+                closedSet[nextKey] = true
+                continue
+            end
+
+            local tentative_gScore = gScore[current.key] + 1
+            if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
+                cameFrom[nextKey] = current
+                gScore[nextKey] = tentative_gScore
+                fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
+
+                local inOpenSet = false
+                for _, node in ipairs(openSet) do
+                    if node.key == nextKey then inOpenSet = true; break end
+                end
+                if not inOpenSet then
+                    table.insert(openSet, {x = nextX, y = nextY, key = nextKey})
+                end
             end
         end
     end
-    return nil
+    return nil -- Beneran gak ada celah masuk sama sekali
 end
 
 -- ========================================== --
--- [[ TAHAP 3: MOVEMENT JALAN MULUS (ANTI-RUBBERBAND) ]]
+-- [[ TAHAP 3: MOVEMENT JALAN MULUS ]]
 -- ========================================== --
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -125,7 +193,6 @@ local function SmoothWalkTo(targetPos)
     local startPos = MyHitbox.Position
     local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
     
-    -- Hitung durasi perjalanan biar kecepatan = 16 walkspeed
     local duration = dist / getgenv().WalkSpeed
     if duration <= 0 then return true end
     
@@ -142,7 +209,6 @@ local function SmoothWalkTo(targetPos)
         if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
     end
     
-    -- Snap akhir pas nyampe biar presisi
     MyHitbox.CFrame = CFrame.new(targetPos)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
     return true
@@ -158,14 +224,14 @@ local function MoveSmartlyTo(targetX, targetY)
 
     if myGridX == targetX and myGridY == targetY then return true end
 
-    local route = FindPath(myGridX, myGridY, targetX, targetY)
+    -- A* Pathfinding dipanggil di sini!
+    local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     
     if not route then
-        print("⚠️ Buntu! Map tertutup buat ke X"..targetX.." Y"..targetY)
+        print("⚠️ Buntu Total! Gak ada celah buat masuk ke X"..targetX.." Y"..targetY)
         return false
     end
 
-    -- Jalan mulus nyusuri rute tanpa noclip instan
     for _, stepPos in ipairs(route) do
         if not getgenv().EnableSmartHarvest then break end
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
