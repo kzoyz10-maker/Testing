@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V37 (INVERTED LOGIC)"
+getgenv().ScriptVersion = "Auto Farm V38 (PRECISION HARVEST)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -32,6 +32,7 @@ local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 -- Ambil Manager
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
+local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
@@ -50,10 +51,10 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V37 (INVERTED LOGIC)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V38 (PRECISION HARVEST)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR TANPA KAMUS (BLACKLIST) ]]
+-- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
 -- ========================================== --
 local BlockSolidityCache = {}
 
@@ -63,49 +64,34 @@ local function IsTileSolid(gridX, gridY)
     
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
-        
-        -- TRANSLATE ANGKA JADI TEKS MENGGUNAKAN MAP GAME
         local tileString = rawId
         if type(rawId) == "number" and WorldManager.NumberToStringMap then
             tileString = WorldManager.NumberToStringMap[rawId] or rawId
         end
-        
         local nameStr = tostring(tileString):lower()
         
-        -- Cek Cache biar gak buang performa
         if BlockSolidityCache[nameStr] ~= nil then
             if BlockSolidityCache[nameStr] == true then return true end
             continue
         end
 
-        -- LOGIKA TERBALIK (BLACKLIST)
-        -- Kalau ketemu background, tanaman, atau udara -> Tembus (Bukan tembok)
-        if string.find(nameStr, "bg") or 
-           string.find(nameStr, "background") or 
-           string.find(nameStr, "sapling") or 
-           string.find(nameStr, "seed") or 
-           string.find(nameStr, "air") or 
-           string.find(nameStr, "water") then 
+        if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
             BlockSolidityCache[nameStr] = false
             continue 
         end
         
-        -- KALAU BUKAN BACKGROUND DAN BUKAN TANAMAN, BERARTI 100% TEMBOK/BLOCK!
         BlockSolidityCache[nameStr] = true
         return true
     end
-    
     return false
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR (A*) ENGINE ]]
+-- [[ TAHAP 2: A-STAR MOVEMENT ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
-
     local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
-
     local openSet = {}
     local closedSet = {}
     local cameFrom = {}
@@ -128,10 +114,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
         local current = openSet[1]
         local currentIndex = 1
         for i = 2, #openSet do
-            if fScore[openSet[i].key] < fScore[current.key] then
-                current = openSet[i]
-                currentIndex = i
-            end
+            if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end
         end
 
         if current.x == targetX and current.y == targetY then
@@ -153,12 +136,10 @@ local function FindPathAStar(startX, startY, targetX, targetY)
             local nextX = current.x + dir[1]
             local nextY = current.y + dir[2]
             local nextKey = nextX .. "," .. nextY
-
             if nextX < 0 or nextX > 100 then continue end
             if closedSet[nextKey] then continue end
 
             local isTarget = (nextX == targetX and nextY == targetY)
-            
             if not isTarget and IsTileSolid(nextX, nextY) then
                 closedSet[nextKey] = true
                 continue
@@ -174,25 +155,19 @@ local function FindPathAStar(startX, startY, targetX, targetY)
                 for _, node in ipairs(openSet) do
                     if node.key == nextKey then inOpenSet = true; break end
                 end
-                if not inOpenSet then
-                    table.insert(openSet, {x = nextX, y = nextY, key = nextKey})
-                end
+                if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
             end
         end
     end
     return nil 
 end
 
--- ========================================== --
--- [[ TAHAP 3: MOVEMENT LERP ]]
--- ========================================== --
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
     
     local startPos = MyHitbox.Position
     local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
-    
     local duration = dist / getgenv().WalkSpeed
     if duration <= 0 then return true end
     
@@ -201,7 +176,6 @@ local function SmoothWalkTo(targetPos)
         if not getgenv().EnableSmartHarvest then return false end
         local dt = RunService.Heartbeat:Wait()
         t = t + dt
-        
         local alpha = math.clamp(t / duration, 0, 1)
         local currentPos = startPos:Lerp(targetPos, alpha)
         
@@ -223,7 +197,6 @@ local function MoveSmartlyTo(targetX, targetY)
     local myGridY = math.floor((MyHitbox.Position.Y / getgenv().GridSize) + 0.5)
 
     if myGridX == targetX and myGridY == targetY then return true end
-
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     if not route then return false end
 
@@ -232,14 +205,14 @@ local function MoveSmartlyTo(targetX, targetY)
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         if not SmoothWalkTo(pos) then return false end
     end
-
     return true
 end
 
 -- ========================================== --
--- [[ TAHAP 4: FARM LOGIC ]]
+-- [[ TAHAP 3: DATABASE HARVEST LOGIC ]]
 -- ========================================== --
 local SaplingsData = {}
+
 local function ScanWorld()
     SaplingsData = {}
     for x, yCol in pairs(RawWorldTiles) do
@@ -267,7 +240,27 @@ local function ScanWorld()
     end
 end
 
-local function AIBelajarWaktu(sapling)
+-- MENCURI DATA DURASI LANGSUNG DARI SOURCE CODE GAME
+local function GetExactGrowTime(saplingName)
+    if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
+    
+    pcall(function()
+        local baseId = string.gsub(saplingName, "_sapling", "")
+        local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
+        if itemData then
+            -- Deteksi segala kemungkinan nama parameter waktu dari dev-nya
+            local growTime = itemData.GrowTime or itemData.GrowthTime or itemData.Time or itemData.HarvestTime
+            if type(growTime) == "number" then
+                getgenv().AIDictionary[saplingName] = growTime
+            end
+        end
+    end)
+    
+    return getgenv().AIDictionary[saplingName] or nil
+end
+
+-- FALLBACK JIKA DATABASE GAGAL BACA
+local function BackupAIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
     
@@ -287,7 +280,8 @@ local function AIBelajarWaktu(sapling)
                         local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
                         if isReady then sisaWaktuLayar = 0 end
                         
-                        local umurSekarang = workspace:GetServerTimeNow() - sapling.at
+                        -- Pake os.time biar sync sama waktu server
+                        local umurSekarang = os.time() - sapling.at
                         local totalDurasi = umurSekarang + sisaWaktuLayar
                         totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
                         
@@ -313,15 +307,25 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
 
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
-                if not getgenv().AIDictionary[sapling.name] then
-                    AIBelajarWaktu(sapling)
-                    task.wait(1) 
+                
+                -- Coba curi dari database dulu
+                local targetMatang = GetExactGrowTime(sapling.name)
+                
+                -- Kalau database di-hide dev, baru pake AI Backup
+                if not targetMatang then
+                    BackupAIBelajarWaktu(sapling)
+                    targetMatang = getgenv().AIDictionary[sapling.name]
                 end
                 
-                if getgenv().AIDictionary[sapling.name] then
-                    local umur = workspace:GetServerTimeNow() - sapling.at
-                    local targetMatang = getgenv().AIDictionary[sapling.name]
-                    if umur >= targetMatang then
+                if targetMatang then
+                    -- Hitung umur asli berdasar stamp waktu dari server
+                    local umurServer1 = os.time() - sapling.at
+                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
+                    
+                    -- Pake nilai tertinggi buat antisipasi lag
+                    local umurAsli = math.max(umurServer1, umurServer2)
+
+                    if umurAsli >= targetMatang then
                         table.insert(targetPanen, sapling)
                     end
                 end
