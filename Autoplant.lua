@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V26 (RAYCAST + NOCLIP)"
+getgenv().ScriptVersion = "Auto Farm V27 (SAFE GRID WALKER)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -32,8 +32,6 @@ local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
-local NoclipLoop
-
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
     local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 40, 0, 20); IndBg.Position = UDim2.new(1, -50, 0.5, -10); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
@@ -42,8 +40,8 @@ function CreateToggle(Parent, Text, Var)
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
         
+        -- Reset Fisik saat dimatikan
         if not getgenv()[Var] then
-            if NoclipLoop then NoclipLoop:Disconnect() NoclipLoop = nil end
             pcall(function()
                 local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
                 if MyHitbox then 
@@ -52,22 +50,6 @@ function CreateToggle(Parent, Text, Var)
                     MyHitbox.RotVelocity = Vector3.new(0,0,0)
                 end
             end)
-        else
-            -- ABSOLUTE NOCLIP BIAR GAK GASING
-            if not NoclipLoop then
-                NoclipLoop = RunService.Stepped:Connect(function()
-                    if LP.Character then
-                        for _, v in pairs(LP.Character:GetDescendants()) do
-                            if v:IsA("BasePart") and v.CanCollide then 
-                                v.CanCollide = false 
-                            end
-                        end
-                    end
-                    -- Pastikan Hitbox Custom juga tembus pandang
-                    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
-                    if MyHitbox and MyHitbox.CanCollide then MyHitbox.CanCollide = false end
-                end)
-            end
         end
         
         if getgenv()[Var] then 
@@ -77,33 +59,28 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V26 (RAYCAST & NOCLIP)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V27 (SAFE WALKER)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: SENSOR RAYCAST 2D ]]
+-- [[ TAHAP 1: RADAR GRID 4 ARAH ]]
 -- ========================================== --
-local function IsCellEmpty(x, y, z)
-    local origin = Vector3.new(x * getgenv().GridSize, y * getgenv().GridSize, z)
+local function IsCellEmpty(gridX, gridY, fixedZ)
+    local centerPos = CFrame.new(gridX * getgenv().GridSize, gridY * getgenv().GridSize, fixedZ)
     
-    local params = RaycastParams.new()
+    -- Hitbox deteksi dibikin KECIL (2.5 studs) biar gak false alarm nyenggol balok tetangga
+    local scanSize = Vector3.new(2.5, 2.5, 2.5) 
+    
+    local params = OverlapParams.new()
     params.FilterDescendantsInstances = {LP.Character, workspace:FindFirstChild("Hitbox"), workspace:FindFirstChild("HoverPart")}
     params.FilterType = Enum.RaycastFilterType.Exclude
 
-    -- Tembak laser ke Atas, Bawah, Kiri, Kanan sepanjang 3.5 Studs
-    local directions = {
-        Vector3.new(0, 3.5, 0),   -- Cek Plafon
-        Vector3.new(0, -3.5, 0),  -- Cek Lantai
-        Vector3.new(3.5, 0, 0),   -- Cek Kanan
-        Vector3.new(-3.5, 0, 0)   -- Cek Kiri
-    }
-
-    for _, dir in ipairs(directions) do
-        local result = workspace:Raycast(origin, dir, params)
-        if result and result.Instance.CanCollide then
-            return false -- DITOLAK: Laser nabrak blok fisik!
+    local parts = workspace:GetPartBoundsInBox(centerPos, scanSize, params)
+    for _, p in ipairs(parts) do
+        if p:IsA("BasePart") and p.CanCollide then
+            return false -- ADA BALOK!
         end
     end
-    return true -- AMAN
+    return true -- KOSONG AMAN
 end
 
 local SaplingsData = {}
@@ -140,7 +117,7 @@ local function ScanWorld()
 end
 
 -- ========================================== --
--- [[ TAHAP 2: ALGORITMA "CELAH 100" (SMART PATHING) ]]
+-- [[ TAHAP 2: SMART STEPPING (NO NOCLIP) ]]
 -- ========================================== --
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -152,99 +129,76 @@ local function MoveSmartlyTo(targetX, targetY)
 
     if myGridX == targetX and myGridY == targetY then return true end
 
-    local function TeleportStep(x, y)
+    -- Fungsi jalan 1 kotak yang SANGAT AMAN
+    local function SafeStep(nextX, nextY)
         if not getgenv().EnableSmartHarvest then return false end
-        local pos = Vector3.new(x * getgenv().GridSize, y * getgenv().GridSize, myZ)
+        
+        if not IsCellEmpty(nextX, nextY, myZ) then 
+            return false 
+        end
+
+        local pos = Vector3.new(nextX * getgenv().GridSize, nextY * getgenv().GridSize, myZ)
         MyHitbox.CFrame = CFrame.new(pos)
         if PlayerMovement then pcall(function() PlayerMovement.Position = pos end) end
         
-        -- NETRALKAN FISIK BIAR GAK GASING
         MyHitbox.Velocity = Vector3.new(0,0,0)
         MyHitbox.RotVelocity = Vector3.new(0,0,0)
         
+        myGridX = nextX
+        myGridY = nextY
         task.wait(getgenv().StepDelay)
         return true
     end
 
     pcall(function() MyHitbox.Anchored = true end)
 
-    -- LOGIKA 1: JIKA BEDA LANTAI, CARI CELAH X 0 - 100
-    while myGridY ~= targetY do
-        if not getgenv().EnableSmartHarvest then break end
-        local dirY = targetY > myGridY and 1 or -1
+    local stuckCounter = 0
+    while (myGridX ~= targetX or myGridY ~= targetY) and getgenv().EnableSmartHarvest do
+        local moved = false
         
-        local gapX = nil
-        print("🔍 Beda lantai! Menyapu koordinat X dari 0 - 100...")
-        
-        for dist = 0, 100 do
-            for _, dirX in ipairs({1, -1}) do
-                local checkX = myGridX + (dist * dirX)
-                
-                -- Cek apakah sepanjang jalan ke checkX itu kosong (gak kehalang tembok)
-                local pathClear = true
-                local stepX = checkX > myGridX and 1 or -1
-                for tempX = myGridX, checkX, stepX do
-                    if not IsCellEmpty(tempX, myGridY, myZ) then
-                        pathClear = false
-                        break
-                    end
-                end
-                
-                -- Kalau jalannya kosong, cek apakah di koordinat itu atap/lantainya bolong!
-                if pathClear and IsCellEmpty(checkX, myGridY + dirY, myZ) then
-                    gapX = checkX
-                    print("✅ Celah ditemukan di X: " .. gapX)
-                    break
-                end
-            end
-            if gapX then break end
-        end
-
-        if not gapX then
-            print("⚠️ Mentok! Gak ada celah sama sekali di radius 100.")
-            break -- Nyerah daripada maksa nembus
-        end
-
-        -- Jalan perlahan ke celah yang ketemu
-        local moveDirX = gapX > myGridX and 1 or (gapX < myGridX and -1 or 0)
-        while myGridX ~= gapX do
-            if not getgenv().EnableSmartHarvest then break end
-            myGridX = myGridX + moveDirX
-            TeleportStep(myGridX, myGridY)
-        end
-
-        -- Turun/Naik melewati celah tersebut selama mungkin!
-        while myGridY ~= targetY and IsCellEmpty(myGridX, myGridY + dirY, myZ) do
-            if not getgenv().EnableSmartHarvest then break end
-            myGridY = myGridY + dirY
-            TeleportStep(myGridX, myGridY)
-        end
-    end
-
-    -- LOGIKA 2: JIKA LANTAI SUDAH SAMA, JALAN LURUS KE TARGET
-    local moveDirX = targetX > myGridX and 1 or (targetX < myGridX and -1 or 0)
-    while myGridX ~= targetX do
-        if not getgenv().EnableSmartHarvest then break end
-        
-        if IsCellEmpty(myGridX + moveDirX, myGridY, myZ) then
-            myGridX = myGridX + moveDirX
-            TeleportStep(myGridX, myGridY)
-        else
-            -- Kalau nabrak pager/tembok kecil, lompatin perlahan!
-            if IsCellEmpty(myGridX, myGridY + 1, myZ) and IsCellEmpty(myGridX + moveDirX, myGridY + 1, myZ) then
-                myGridY = myGridY + 1
-                TeleportStep(myGridX, myGridY)
-                myGridX = myGridX + moveDirX
-                TeleportStep(myGridX, myGridY)
-                -- Turun lagi sehabis lompat
-                if IsCellEmpty(myGridX, myGridY - 1, myZ) then
-                    myGridY = myGridY - 1
-                    TeleportStep(myGridX, myGridY)
-                end
+        -- PRIORITAS 1: SAMAKAN LANTAI (Y) DULU
+        if myGridY ~= targetY then
+            local dirY = targetY > myGridY and 1 or -1
+            
+            if SafeStep(myGridX, myGridY + dirY) then
+                moved = true
             else
-                print("🛑 Kehalang tembok tebal, skip target.")
-                break 
+                local dirX = targetX > myGridX and 1 or -1
+                if targetX == myGridX then dirX = 1 end 
+                
+                if SafeStep(myGridX + dirX, myGridY) then
+                    moved = true
+                elseif SafeStep(myGridX - dirX, myGridY) then 
+                    moved = true
+                end
             end
+            
+        -- PRIORITAS 2: JALAN LURUS (X) KALAU LANTAI UDAH SAMA
+        else
+            local dirX = targetX > myGridX and 1 or -1
+            
+            if SafeStep(myGridX + dirX, myGridY) then
+                moved = true
+            else
+                -- Kalau nabrak tembok kecil, LOMPATIN
+                if IsCellEmpty(myGridX, myGridY + 1, myZ) and IsCellEmpty(myGridX + dirX, myGridY + 1, myZ) then
+                    SafeStep(myGridX, myGridY + 1)
+                    SafeStep(myGridX + dirX, myGridY)
+                    SafeStep(myGridX, myGridY - 1)
+                    moved = true
+                end
+            end
+        end
+
+        -- ANTI STUCK: Menyerah kalau macet total
+        if not moved then
+            stuckCounter = stuckCounter + 1
+            if stuckCounter > 5 then
+                print("⚠️ Buntu total! AI skip tanaman ini buat cegah lag.")
+                break
+            end
+        else
+            stuckCounter = 0 
         end
     end
 
