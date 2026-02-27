@@ -11,10 +11,10 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V44 (UI CHECKER & STRICT WALK)"
+getgenv().ScriptVersion = "Auto Farm V45 (CUSTOM INPUT & SMOOTH WALK)"
 
 -- ========================================== --
--- [[ KONFIGURASI ]]
+-- [[ KONFIGURASI AWAL ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
 getgenv().WalkSpeed = 16     
@@ -37,6 +37,9 @@ local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsMana
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
+-- ========================================== --
+-- [[ BIKIN UI MENU (TOGGLE & INPUT) ]]
+-- ========================================== --
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
     local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 40, 0, 20); IndBg.Position = UDim2.new(1, -50, 0.5, -10); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
@@ -51,7 +54,47 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V44 (UI CHECKER & STRICT WALK)", "EnableSmartHarvest")
+
+function CreateInput(Parent, Text, Var, DefaultValue)
+    local Frame = Instance.new("Frame", Parent)
+    Frame.Size = UDim2.new(1, -10, 0, 40)
+    Frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    
+    local Label = Instance.new("TextLabel", Frame)
+    Label.Size = UDim2.new(0.6, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Text
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.Font = Enum.Font.GothamBold
+    Label.TextSize = 13
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local TextBox = Instance.new("TextBox", Frame)
+    TextBox.Size = UDim2.new(0.3, 0, 0.7, 0)
+    TextBox.Position = UDim2.new(0.65, 0, 0.15, 0)
+    TextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.Font = Enum.Font.Gotham
+    TextBox.TextSize = 13
+    TextBox.Text = tostring(DefaultValue)
+    TextBox.ClearTextOnFocus = false
+
+    getgenv()[Var] = DefaultValue
+
+    TextBox.FocusLost:Connect(function()
+        local num = tonumber(TextBox.Text)
+        if num then
+            getgenv()[Var] = num
+        else
+            TextBox.Text = tostring(getgenv()[Var]) 
+        end
+    end)
+end
+
+CreateToggle(TargetPage, "🚀 START V45 AUTO FARM", "EnableSmartHarvest")
+CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
+CreateInput(TargetPage, "⏳ Break Delay", "BreakDelay", 0.15)
 
 -- ========================================== --
 -- [[ TAHAP 1: RADAR INVERTED ]]
@@ -86,7 +129,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: STRICT MOVEMENT (ANTI NEMBUS) ]]
+-- [[ TAHAP 2: MOVEMENT MULUS TAPI AKURAT ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -170,7 +213,7 @@ local function SmoothWalkTo(targetPos)
     local duration = dist / getgenv().WalkSpeed
     
     if duration > 0 then 
-        -- MATIKAN FISIKA BIAR GAK NEMBUS TIKUNGAN
+        -- PERGERAKAN LAMA YANG GAK NGACO TAPI TETEP ANCHORED
         pcall(function() MyHitbox.Anchored = true end)
 
         local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
@@ -187,8 +230,6 @@ local function SmoothWalkTo(targetPos)
         tween.Completed:Wait()
         
         if syncConn then syncConn:Disconnect() end
-        
-        -- NYALAKAN FISIKA LAGI
         pcall(function() MyHitbox.Anchored = false end)
     end
     
@@ -216,15 +257,13 @@ local function MoveSmartlyTo(targetX, targetY)
         if not getgenv().EnableSmartHarvest then break end
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         if not SmoothWalkTo(pos) then return false end
-        
-        -- JEDA PENTING BIAR TIKUNGANNYA PATAH 90 DERAJAT
-        task.wait(0.05) 
+        -- JEDA 0.05 SUDAH DIHAPUS BIAR GAK NGACO/MACET
     end
     return true
 end
 
 -- ========================================== --
--- [[ TAHAP 3: BACA DATABASE & BACA UI ]]
+-- [[ TAHAP 3: BACA DB & CEK UI 1x AJA ]]
 -- ========================================== --
 local SaplingsData = {}
 
@@ -287,7 +326,6 @@ local function GetExactGrowTime(saplingData)
     return getgenv().AIDictionary[saplingData.name] or nil
 end
 
--- FUNGSI CEK UI DIKEMBALIKAN (TAPI LEBIH PINTAR)
 local function BackupAIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
@@ -300,15 +338,13 @@ local function BackupAIBelajarWaktu(sapling)
                 if v:IsA("TextLabel") and v.Text ~= "" then
                     local text = string.lower(v.Text)
                     
-                    -- Kalau udah mateng
                     local isReady = string.find(text, "harvest") or string.find(text, "100%%") or string.find(text, "ready") or string.find(text, "grown")
                     if isReady then
                         local umurSekarang = os.time() - sapling.at
-                        getgenv().AIDictionary[sapling.name] = umurSekarang -- Simpan ke otak biar yg lain gak usah dicek
+                        getgenv().AIDictionary[sapling.name] = umurSekarang
                         return true
                     end
 
-                    -- Kalau belum mateng, baca sisa waktunya
                     local jam = tonumber(string.match(text, "(%d+)h")) or 0
                     local menit = tonumber(string.match(text, "(%d+)m")) or 0
                     local detik = tonumber(string.match(text, "(%d+)s")) or 0
@@ -324,7 +360,7 @@ local function BackupAIBelajarWaktu(sapling)
                         local umurSekarang = os.time() - sapling.at
                         local totalDurasi = umurSekarang + sisaWaktuLayar
                         totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
-                        getgenv().AIDictionary[sapling.name] = totalDurasi -- Simpan ke otak
+                        getgenv().AIDictionary[sapling.name] = totalDurasi
                         return true
                     end
                 end
@@ -352,7 +388,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 
                 local targetMatang = GetExactGrowTime(sapling)
                 
-                -- KALAU GAK KETEMU DI DATABASE, DIA BAKAL NYAMPERIN BUAT CEK UI (1x SAJA)
                 if not targetMatang then
                     local berhasilBaca = BackupAIBelajarWaktu(sapling)
                     if berhasilBaca then
