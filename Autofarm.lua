@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.90) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.95) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.90 (Dynamic Scan Inv + Smart Drop)" 
+getgenv().ScriptVersion = "Auto Farm v8.95 (Real Inventory Scan & Fixed UI Scroll)" 
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -36,7 +36,7 @@ getgenv().BreakDelayMs = 150;
 getgenv().WaitDropMs = 250;  
 getgenv().WalkSpeedMs = 100; 
 
--- NEW: Target Settings (Dynamic Scan)
+-- Target Settings
 getgenv().TargetFarmBlock = "Auto (Equipped)"
 getgenv().AutoDropSapling = false
 getgenv().SaplingThreshold = 50
@@ -49,14 +49,60 @@ getgenv().HoldCFrame = nil
 local PlayerMovement
 task.spawn(function() pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
 
-local function FindInventoryModule()
+-- MODULE INVENTORY ASLI (Dari Bos)
+local InventoryMod
+pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
+
+local UIManager
+pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
+
+local function GetSlotByItemID(targetID)
+    if not InventoryMod or not InventoryMod.Stacks then return nil end
+    for slotIndex, data in pairs(InventoryMod.Stacks) do
+        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
+            if not data.Amount or data.Amount > 0 then return slotIndex end
+        end
+    end
+    return nil
+end
+
+local function GetItemAmountByID(targetID)
+    local total = 0
+    if not InventoryMod or not InventoryMod.Stacks then return total end
+    for _, data in pairs(InventoryMod.Stacks) do
+        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
+            total = total + (data.Amount or 1)
+        end
+    end
+    return total
+end
+
+local function ScanAvailableItems()
+    local items = {}; local dict = {}
+    pcall(function()
+        if InventoryMod and InventoryMod.Stacks then
+            for _, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and data.Id then
+                    local itemID = tostring(data.Id)
+                    if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
+                end
+            end
+        end
+    end)
+    if #items == 0 then items = {"Kosong"} end
+    table.sort(items)
+    return items
+end
+
+-- Fallback buat cari slot Hotbar (kalau pilih "Auto (Equipped)")
+local function FindHotbarModule()
     local Candidates = {}
     for _, v in pairs(RS:GetDescendants()) do if v:IsA("ModuleScript") and (v.Name:match("Inventory") or v.Name:match("Hotbar") or v.Name:match("Client")) then table.insert(Candidates, v) end end
     if LP:FindFirstChild("PlayerScripts") then for _, v in pairs(LP.PlayerScripts:GetDescendants()) do if v:IsA("ModuleScript") and (v.Name:match("Inventory") or v.Name:match("Hotbar")) then table.insert(Candidates, v) end end end
     for _, module in pairs(Candidates) do local success, result = pcall(require, module); if success and type(result) == "table" then if result.GetSelectedHotbarItem or result.GetSelectedItem or result.GetEquippedItem then return result end end end
     return nil
 end
-getgenv().GameInventoryModule = FindInventoryModule()
+getgenv().GameInventoryModule = FindHotbarModule()
 
 -- UI Theme
 local Theme = { 
@@ -70,7 +116,6 @@ function CreateToggle(Parent, Text, Var)
     local T = Instance.new("TextLabel"); T.Parent = Btn; T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left; 
     local IndBg = Instance.new("Frame"); IndBg.Parent = Btn; IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30); Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
     local Dot = Instance.new("Frame"); Dot.Parent = IndBg; Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
-    
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
         if getgenv()[Var] then 
@@ -89,38 +134,24 @@ function CreateInput(Parent, Text, Default, Var)
     TextBox.FocusLost:Connect(function() local num = tonumber(TextBox.Text); if num then getgenv()[Var] = math.floor(num) else TextBox.Text = tostring(getgenv()[Var]) end end)
 end
 
--- ========================================================= --
--- FUNGSI SCAN INVENTORY DINAMIS
--- ========================================================= --
-local function GetInventoryItemNames()
-    local items = {}
-    local hash = {}
-    if getgenv().GameInventoryModule and type(getgenv().GameInventoryModule.Inventory) == "table" then
-        for _, data in pairs(getgenv().GameInventoryModule.Inventory) do
-            if type(data) == "table" and data.id and not hash[data.id] then
-                hash[data.id] = true
-                table.insert(items, data.id)
-            end
-        end
-    end
-    table.sort(items)
-    return items
-end
-
 function CreateDynamicDropdown(Parent, Text, DefaultText, GetOptionsFunc, Callback)
     local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
     local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; 
     
     local Btn = Instance.new("TextButton"); Btn.Parent = Frame; Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Btn.Size = UDim2.new(0.4, 0, 0, 25); Btn.Position = UDim2.new(1, -10, 0.5, 0); Btn.AnchorPoint = Vector2.new(1, 0.5); Btn.Font = Enum.Font.GothamSemibold; Btn.TextSize = 12; Btn.TextColor3 = Color3.new(1,1,1); Btn.Text = DefaultText; Btn.TextTruncate = Enum.TextTruncate.AtEnd; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
     
-    local DropdownList = Instance.new("ScrollingFrame"); DropdownList.Parent = Frame; DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); DropdownList.Size = UDim2.new(0.4, 0, 0, 120); DropdownList.Position = UDim2.new(1, -10, 1, 0); DropdownList.AnchorPoint = Vector2.new(1, 0); DropdownList.ScrollBarThickness = 2; DropdownList.Visible = false; DropdownList.ZIndex = 50; Instance.new("UICorner", DropdownList).CornerRadius = UDim.new(0, 4)
+    local DropdownList = Instance.new("ScrollingFrame"); DropdownList.Parent = Frame; DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); DropdownList.Size = UDim2.new(0.4, 0, 0, 150); DropdownList.Position = UDim2.new(1, -10, 1, 0); DropdownList.AnchorPoint = Vector2.new(1, 0); DropdownList.ScrollBarThickness = 3; DropdownList.Visible = false; DropdownList.ZIndex = 50; Instance.new("UICorner", DropdownList).CornerRadius = UDim.new(0, 4)
+    
     local UIListLayout = Instance.new("UIListLayout"); UIListLayout.Parent = DropdownList; UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    -- [[ FIX UI SCROLL: Otomatis nyesuain ukuran daleman biar ga mentok! ]]
+    UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        DropdownList.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+    end)
     
     Btn.MouseButton1Click:Connect(function()
         if not DropdownList.Visible then
             for _, v in pairs(DropdownList:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
             local Options = GetOptionsFunc()
-            DropdownList.CanvasSize = UDim2.new(0,0,0, #Options * 25)
             for _, opt in ipairs(Options) do
                 local OptBtn = Instance.new("TextButton"); OptBtn.Parent = DropdownList; OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundTransparency = 1; OptBtn.Text = opt; OptBtn.TextColor3 = Color3.new(1,1,1); OptBtn.Font = Enum.Font.GothamSemibold; OptBtn.TextSize = 11; OptBtn.TextTruncate = Enum.TextTruncate.AtEnd; OptBtn.ZIndex = 51
                 OptBtn.MouseButton1Click:Connect(function()
@@ -164,18 +195,15 @@ function CreateTileSelectorButton(Parent)
     end)
 end
 
--- Inject elemen ke UI
+-- Inject UI
 local TitleFarm = Instance.new("TextLabel", TargetPage); TitleFarm.Text = "--- FARM SETTINGS ---"; TitleFarm.TextColor3 = Theme.Purple; TitleFarm.BackgroundTransparency = 1; TitleFarm.Size = UDim2.new(1, 0, 0, 20); TitleFarm.Font = Enum.Font.GothamBold; TitleFarm.TextSize = 14
 CreateToggle(TargetPage, "Auto Farm", "MasterAutoFarm") 
 
--- DROPDOWN 1: Pilih Farm Block
 CreateDynamicDropdown(TargetPage, "Target Farm Block", "Auto (Equipped)", function()
     local opts = {"Auto (Equipped)"}
-    for _, item in ipairs(GetInventoryItemNames()) do table.insert(opts, item) end
+    for _, item in ipairs(ScanAvailableItems()) do table.insert(opts, item) end
     return opts
-end, function(selected)
-    getgenv().TargetFarmBlock = selected
-end)
+end, function(selected) getgenv().TargetFarmBlock = selected end)
 
 CreateToggle(TargetPage, "Auto Collect", "AutoCollect") 
 CreateToggle(TargetPage, "Only Collect Sapling", "AutoSaplingMode") 
@@ -190,12 +218,9 @@ local TitleDrop = Instance.new("TextLabel", TargetPage); TitleDrop.Text = "--- A
 CreateToggle(TargetPage, "Enable Auto Drop Sapling", "AutoDropSapling")
 CreateInput(TargetPage, "Drop Threshold (Amount)", 50, "SaplingThreshold")
 
--- DROPDOWN 2: Pilih Target Seed/Sapling buat di Drop
 CreateDynamicDropdown(TargetPage, "Target Drop Seed", "Select Sapling...", function()
-    return GetInventoryItemNames()
-end, function(selected)
-    getgenv().TargetSaplingName = selected
-end)
+    return ScanAvailableItems()
+end, function(selected) getgenv().TargetSaplingName = selected end)
 
 local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
@@ -215,9 +240,7 @@ getgenv().KzoyzHeartbeat = RunService.Heartbeat:Connect(function()
                 local char = LP.Character
                 if char and char:FindFirstChild("HumanoidRootPart") then char.HumanoidRootPart.CFrame = getgenv().HoldCFrame end
             end
-            if PlayerMovement then
-                pcall(function() PlayerMovement.VelocityY = 0; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true; PlayerMovement.Jumping = false end)
-            end
+            if PlayerMovement then pcall(function() PlayerMovement.VelocityY = 0; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true; PlayerMovement.Jumping = false end) end
         end
     end
 end)
@@ -291,36 +314,12 @@ local function WalkGridSync(TargetX, TargetY)
     end
 end
 
-local function GetInventoryItemInfo(itemName)
-    if not getgenv().GameInventoryModule then return nil, 0 end
-    local inv = getgenv().GameInventoryModule.Inventory
-    if type(inv) ~= "table" then return nil, 0 end
-    
-    for slotStr, itemData in pairs(inv) do
-        if type(itemData) == "table" and itemData.id and itemData.amount then
-            if string.lower(itemData.id) == string.lower(itemName) then
-                return tonumber(slotStr) or slotStr, itemData.amount
-            end
-        end
-    end
-    return nil, 0
-end
-
 local function FindEmptyGridNearPlayer(BaseX, BaseY)
-    local offsets = {
-        {x=1, y=0}, {x=-1, y=0}, {x=0, y=1}, {x=0, y=-1},
-        {x=1, y=1}, {x=-1, y=-1}, {x=1, y=-1}, {x=-1, y=1},
-        {x=2, y=0}, {x=-2, y=0}, {x=0, y=2}, {x=0, y=-2}
-    }
+    local offsets = { {x=1, y=0}, {x=-1, y=0}, {x=0, y=1}, {x=0, y=-1}, {x=1, y=1}, {x=-1, y=-1}, {x=1, y=-1}, {x=-1, y=1}, {x=2, y=0}, {x=-2, y=0}, {x=0, y=2}, {x=0, y=-2} }
     for _, offset in ipairs(offsets) do
-        local checkX = BaseX + offset.x
-        local checkY = BaseY + offset.y
+        local checkX = BaseX + offset.x; local checkY = BaseY + offset.y
         local isFarmTile = false
-        for _, farmOffset in ipairs(getgenv().SelectedTiles) do
-            if (BaseX + farmOffset.x) == checkX and (BaseY + farmOffset.y) == checkY then
-                isFarmTile = true; break
-            end
-        end
+        for _, farmOffset in ipairs(getgenv().SelectedTiles) do if (BaseX + farmOffset.x) == checkX and (BaseY + farmOffset.y) == checkY then isFarmTile = true; break end end
         if not isFarmTile and not CheckDropsAtGrid(checkX, checkY) then return checkX, checkY end
     end
     return BaseX, BaseY 
@@ -329,7 +328,7 @@ end
 -- Simpan Main Loop ke global variable
 getgenv().KzoyzFarmLoop = task.spawn(function() 
     while true do 
-        if getgenv().MasterAutoFarm and getgenv().GameInventoryModule then 
+        if getgenv().MasterAutoFarm and InventoryMod then 
             local PosX, PosY = GetPlayerGridPosition()
             
             if PosX and PosY then 
@@ -337,18 +336,16 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                 local BaseY = math.floor(PosY / getgenv().GridSize + 0.5)
                 local ItemIndex 
                 
-                -- [[ LOGIKA PENENTUAN BLOCK FARM ]] --
                 if getgenv().TargetFarmBlock and getgenv().TargetFarmBlock ~= "Auto (Equipped)" then
-                    ItemIndex, _ = GetInventoryItemInfo(getgenv().TargetFarmBlock)
+                    ItemIndex = GetSlotByItemID(getgenv().TargetFarmBlock)
                 else
-                    if getgenv().GameInventoryModule.GetSelectedHotbarItem then 
+                    if getgenv().GameInventoryModule and getgenv().GameInventoryModule.GetSelectedHotbarItem then 
                         _, ItemIndex = getgenv().GameInventoryModule.GetSelectedHotbarItem() 
-                    elseif getgenv().GameInventoryModule.GetSelectedItem then 
+                    elseif getgenv().GameInventoryModule and getgenv().GameInventoryModule.GetSelectedItem then 
                         _, ItemIndex = getgenv().GameInventoryModule.GetSelectedItem() 
                     end 
                 end
                 
-                -- [[ FASE 1: PLACE SEMUA TILE ]] --
                 if ItemIndex then
                     for _, offset in ipairs(getgenv().SelectedTiles) do 
                         if not getgenv().MasterAutoFarm then break end 
@@ -357,7 +354,6 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                     end
                 end
 
-                -- [[ FASE 2: BREAK SEMUA TILE ]] --
                 for _, offset in ipairs(getgenv().SelectedTiles) do 
                     if not getgenv().MasterAutoFarm then break end 
                     local TGrid = Vector2.new(BaseX + offset.x, BaseY + offset.y) 
@@ -367,7 +363,6 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                     end
                 end
                 
-                -- [[ FASE 3: COLLECT SEMUA DROP KALAU ADA ]] --
                 if getgenv().AutoCollect then
                     task.wait(getgenv().WaitDropMs / 1000) 
                     local TilesToCollect = {}
@@ -417,9 +412,10 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                     end
                 end
                 
-                -- [[ FASE 4: SMART AUTO DROP SAPLING & RESTORE UI ]] --
                 if getgenv().AutoDropSapling and getgenv().TargetSaplingName ~= "Select Sapling..." then
-                    local sapSlot, sapAmount = GetInventoryItemInfo(getgenv().TargetSaplingName)
+                    local sapSlot = GetSlotByItemID(getgenv().TargetSaplingName)
+                    local sapAmount = GetItemAmountByID(getgenv().TargetSaplingName)
+                    
                     if sapSlot and sapAmount >= getgenv().SaplingThreshold then
                         local dropX, dropY = FindEmptyGridNearPlayer(BaseX, BaseY)
                         
@@ -439,16 +435,16 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                         
                         pcall(function() RemoteDrop:FireServer(sapSlot, sapAmount) end)
                         pcall(function() 
-                            local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent")
-                            ManagerRemote:FireServer(unpack({{ ButtonAction = "drp", Inputs = { amt = tostring(sapAmount) } }}))
+                            if UIManager and type(UIManager.FireEvent) == "function" then
+                                UIManager:FireEvent("drp", { amt = tostring(sapAmount) })
+                            else
+                                local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent")
+                                ManagerRemote:FireServer(unpack({{ ButtonAction = "drp", Inputs = { amt = tostring(sapAmount) } }}))
+                            end
                         end)
                         
-                        -- [[ MEMBERSIHKAN UI PROMPT ]] --
                         pcall(function()
-                            local UIManager
-                            pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
                             if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
-                            
                             for _, gui in pairs(LP.PlayerGui:GetDescendants()) do
                                 if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end
                             end
