@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.70) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.85) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.70 (Mass Phase & Selectable Center)" 
+getgenv().ScriptVersion = "Auto Farm v8.85 (Smart Auto Drop + UI Restore)" 
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -35,6 +35,12 @@ getgenv().HitCount = 3;
 getgenv().BreakDelayMs = 150; 
 getgenv().WaitDropMs = 250;  
 getgenv().WalkSpeedMs = 100; 
+
+-- NEW: Auto Drop Sapling Config
+getgenv().AutoDropSapling = false
+getgenv().SaplingThreshold = 50
+getgenv().TargetBlockType = "Dirt" -- Default Block
+getgenv().TargetSaplingName = "Dirt Sapling"
 
 getgenv().SelectedTiles = {{x = 0, y = 1}}
 getgenv().IsGhosting = false
@@ -83,6 +89,26 @@ function CreateInput(Parent, Text, Default, Var)
     TextBox.FocusLost:Connect(function() local num = tonumber(TextBox.Text); if num then getgenv()[Var] = math.floor(num) else TextBox.Text = tostring(getgenv()[Var]) end end)
 end
 
+function CreateDropdown(Parent, Text, Options, DefaultIndex, Callback)
+    local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; 
+    
+    local Btn = Instance.new("TextButton"); Btn.Parent = Frame; Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Btn.Size = UDim2.new(0.4, 0, 0, 25); Btn.Position = UDim2.new(1, -10, 0.5, 0); Btn.AnchorPoint = Vector2.new(1, 0.5); Btn.Font = Enum.Font.GothamSemibold; Btn.TextSize = 12; Btn.TextColor3 = Color3.new(1,1,1); Btn.Text = Options[DefaultIndex] or "Select"; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+    
+    local DropdownList = Instance.new("ScrollingFrame"); DropdownList.Parent = Frame; DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); DropdownList.Size = UDim2.new(0.4, 0, 0, 100); DropdownList.Position = UDim2.new(1, -10, 1, 0); DropdownList.AnchorPoint = Vector2.new(1, 0); DropdownList.CanvasSize = UDim2.new(0,0,0, #Options * 25); DropdownList.ScrollBarThickness = 2; DropdownList.Visible = false; DropdownList.ZIndex = 10; Instance.new("UICorner", DropdownList).CornerRadius = UDim.new(0, 4)
+    local UIListLayout = Instance.new("UIListLayout"); UIListLayout.Parent = DropdownList; UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    for i, opt in ipairs(Options) do
+        local OptBtn = Instance.new("TextButton"); OptBtn.Parent = DropdownList; OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundTransparency = 1; OptBtn.Text = opt; OptBtn.TextColor3 = Color3.new(1,1,1); OptBtn.Font = Enum.Font.GothamSemibold; OptBtn.TextSize = 12; OptBtn.ZIndex = 11
+        OptBtn.MouseButton1Click:Connect(function()
+            Btn.Text = opt; DropdownList.Visible = false
+            if Callback then Callback(opt) end
+        end)
+    end
+    
+    Btn.MouseButton1Click:Connect(function() DropdownList.Visible = not DropdownList.Visible end)
+end
+
 function CreateTileSelectorButton(Parent)
     local Btn = Instance.new("TextButton"); Btn.Parent = Parent; Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 40); Btn.Text = "📝 Select Farm Tiles"; Btn.TextColor3 = Theme.Text; Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.AutoButtonColor = true; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
     Btn.MouseButton1Click:Connect(function()
@@ -98,13 +124,11 @@ function CreateTileSelectorButton(Parent)
             for _, x in ipairs(xLevels) do
                 local Tile = Instance.new("TextButton"); Tile.Parent = GridContainer; Tile.Text = ""; Tile.Font = Enum.Font.GothamBold; Tile.TextSize = 10; Tile.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Tile).CornerRadius = UDim.new(0, 8)
                 
-                -- Tetap berikan teks "YOU" di posisi tengah (0,0) agar user tau posisi karakternya
                 if x == 0 and y == 0 then Tile.Text = "I'm Here" end 
 
                 local isSelected = false
                 for _, v in ipairs(getgenv().SelectedTiles) do if v.x == x and v.y == y then isSelected = true; break end end
                 
-                -- Sekarang posisi YOU juga menggunakan sistem warna yang sama
                 Tile.BackgroundColor3 = isSelected and Theme.TileOn or Theme.TileOff
                 
                 Tile.MouseButton1Click:Connect(function()
@@ -121,6 +145,7 @@ function CreateTileSelectorButton(Parent)
 end
 
 -- Inject elemen ke UI
+local TitleFarm = Instance.new("TextLabel", TargetPage); TitleFarm.Text = "--- FARM SETTINGS ---"; TitleFarm.TextColor3 = Theme.Purple; TitleFarm.BackgroundTransparency = 1; TitleFarm.Size = UDim2.new(1, 0, 0, 20); TitleFarm.Font = Enum.Font.GothamBold; TitleFarm.TextSize = 14
 CreateToggle(TargetPage, "Auto Farm", "MasterAutoFarm") 
 CreateToggle(TargetPage, "Auto Collect", "AutoCollect") 
 CreateToggle(TargetPage, "Only Collect Sapling", "AutoSaplingMode") 
@@ -131,9 +156,20 @@ CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs")
 CreateInput(TargetPage, "Hit Count", 3, "HitCount") 
 CreateTileSelectorButton(TargetPage) 
 
+local TitleDrop = Instance.new("TextLabel", TargetPage); TitleDrop.Text = "--- AUTO DROP SAPLING ---"; TitleDrop.TextColor3 = Theme.Purple; TitleDrop.BackgroundTransparency = 1; TitleDrop.Size = UDim2.new(1, 0, 0, 20); TitleDrop.Font = Enum.Font.GothamBold; TitleDrop.TextSize = 14
+CreateToggle(TargetPage, "Enable Auto Drop Sapling", "AutoDropSapling")
+CreateInput(TargetPage, "Drop Threshold (Amount)", 50, "SaplingThreshold")
+
+local SeedOptions = {"Dirt", "Wood", "Stone", "Sand", "Grass", "Leaves", "Glass", "Lava", "Obsidian", "Marble"}
+CreateDropdown(TargetPage, "Target Seed Block", SeedOptions, 1, function(selected)
+    getgenv().TargetBlockType = selected
+    getgenv().TargetSaplingName = selected .. " Sapling"
+end)
+
 local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
+local RemoteDrop = Remotes:WaitForChild("PlayerDrop")
 
 getgenv().KzoyzAntiAFK = LP.Idled:Connect(function()
     if getgenv().AntiAFK then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end
@@ -226,6 +262,52 @@ local function WalkGridSync(TargetX, TargetY)
     end
 end
 
+-- ========================================== --
+-- [[ LOGIKA SMART DROP (Cari Celah) ]]
+-- ========================================== --
+local function GetInventorySaplingInfo()
+    if not getgenv().GameInventoryModule then return nil, 0 end
+    local inv = getgenv().GameInventoryModule.Inventory
+    if type(inv) ~= "table" then return nil, 0 end
+    
+    for slotStr, itemData in pairs(inv) do
+        if type(itemData) == "table" and itemData.id and itemData.amount then
+            if string.lower(itemData.id) == string.lower(getgenv().TargetSaplingName) then
+                return tonumber(slotStr), itemData.amount
+            end
+        end
+    end
+    return nil, 0
+end
+
+local function FindEmptyGridNearPlayer(BaseX, BaseY)
+    local offsets = {
+        {x=1, y=0}, {x=-1, y=0}, {x=0, y=1}, {x=0, y=-1},
+        {x=1, y=1}, {x=-1, y=-1}, {x=1, y=-1}, {x=-1, y=1},
+        {x=2, y=0}, {x=-2, y=0}, {x=0, y=2}, {x=0, y=-2}
+    }
+    
+    for _, offset in ipairs(offsets) do
+        local checkX = BaseX + offset.x
+        local checkY = BaseY + offset.y
+        
+        local isFarmTile = false
+        for _, farmOffset in ipairs(getgenv().SelectedTiles) do
+            if (BaseX + farmOffset.x) == checkX and (BaseY + farmOffset.y) == checkY then
+                isFarmTile = true
+                break
+            end
+        end
+        
+        if not isFarmTile then
+            if not CheckDropsAtGrid(checkX, checkY) then
+                return checkX, checkY
+            end
+        end
+    end
+    return BaseX, BaseY 
+end
+
 -- Simpan Main Loop ke global variable
 getgenv().KzoyzFarmLoop = task.spawn(function() 
     while true do 
@@ -264,7 +346,6 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                 if getgenv().AutoCollect then
                     task.wait(getgenv().WaitDropMs / 1000) 
                     
-                    -- Kumpulin dulu daftar tile yang ada sapling/dropnya
                     local TilesToCollect = {}
                     for _, offset in ipairs(getgenv().SelectedTiles) do
                         local tx = BaseX + offset.x
@@ -272,7 +353,6 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                         if CheckDropsAtGrid(tx, ty) then table.insert(TilesToCollect, {x = tx, y = ty}) end
                     end
                     
-                    -- Eksekusi Ghosting hanya jika ada drop
                     if #TilesToCollect > 0 and getgenv().MasterAutoFarm then
                         local char = LP.Character
                         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -292,7 +372,6 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                             for _, track in ipairs(tracks) do track:Stop(0) end
                         end
                         
-                        -- Karakter jalan ngambil tiap titik drop secara beruntun
                         for _, tile in ipairs(TilesToCollect) do
                             if not getgenv().MasterAutoFarm then break end
                             WalkGridSync(tile.x, tile.y)
@@ -303,9 +382,8 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                         end
                         
                         task.wait(0.1)
-                        WalkGridSync(BaseX, BaseY) -- Balik ke posisi awal
+                        WalkGridSync(BaseX, BaseY) 
                         
-                        -- Lepaskan Ghosting
                         if hrp and ExactHrpCF then 
                             hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
                             if MyHitbox and ExactHitboxCF then MyHitbox.CFrame = ExactHitboxCF; MyHitbox.AssemblyLinearVelocity = Vector3.zero end
@@ -318,6 +396,61 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                         getgenv().IsGhosting = false 
                     end
                 end
+                
+                -- [[ FASE 4: SMART AUTO DROP SAPLING & RESTORE UI ]] --
+                if getgenv().AutoDropSapling then
+                    local sapSlot, sapAmount = GetInventorySaplingInfo()
+                    if sapSlot and sapAmount >= getgenv().SaplingThreshold then
+                        local dropX, dropY = FindEmptyGridNearPlayer(BaseX, BaseY)
+                        
+                        local char = LP.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        local HitboxFolder = workspace:FindFirstChild("Hitbox")
+                        local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+                        local ExactHrpCF = hrp and hrp.CFrame
+                        local ExactHitboxCF = MyHitbox and MyHitbox.CFrame
+                        local ExactPMPos = nil
+                        if PlayerMovement then pcall(function() ExactPMPos = PlayerMovement.Position end) end
+
+                        if hrp then getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true end
+                        
+                        WalkGridSync(dropX, dropY)
+                        task.wait(0.2)
+                        
+                        pcall(function() RemoteDrop:FireServer(sapSlot, sapAmount) end)
+                        
+                        pcall(function() 
+                            local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent")
+                            ManagerRemote:FireServer(unpack({{ ButtonAction = "drp", Inputs = { amt = tostring(sapAmount) } }}))
+                        end)
+                        
+                        -- [[ MEMBERSIHKAN UI PROMPT YANG NYANGKUT (RESTORE UI) ]] --
+                        pcall(function()
+                            local UIManager
+                            pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
+                            if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
+                            
+                            for _, gui in pairs(LP.PlayerGui:GetDescendants()) do
+                                if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then 
+                                    gui.Visible = false 
+                                end
+                            end
+                        end)
+                        
+                        task.wait(0.5)
+                        WalkGridSync(BaseX, BaseY)
+                        
+                        if hrp and ExactHrpCF then 
+                            hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
+                            if MyHitbox and ExactHitboxCF then MyHitbox.CFrame = ExactHitboxCF; MyHitbox.AssemblyLinearVelocity = Vector3.zero end
+                            hrp.CFrame = ExactHrpCF
+                            if PlayerMovement and ExactPMPos then pcall(function() PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos; PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end) end
+                            RunService.Heartbeat:Wait(); hrp.Anchored = false 
+                        end
+                        getgenv().IsGhosting = false 
+                    end
+                end
+
             end 
         else 
             task.wait(0.1) 
