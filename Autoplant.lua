@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V40 (TWEEN & ID BYPASS)"
+getgenv().ScriptVersion = "Auto Farm V42 (NO UI & STRICT 90-DEGREE)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -30,7 +30,6 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
--- Ambil Manager
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
 local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
@@ -52,10 +51,10 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V40 (TWEEN & ID BYPASS)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V42 (NO UI CHECK & STRICT WALK)", "EnableSmartHarvest")
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
+-- [[ TAHAP 1: RADAR INVERTED ]]
 -- ========================================== --
 local BlockSolidityCache = {}
 
@@ -80,7 +79,6 @@ local function IsTileSolid(gridX, gridY)
             BlockSolidityCache[nameStr] = false
             continue 
         end
-        
         BlockSolidityCache[nameStr] = true
         return true
     end
@@ -88,7 +86,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & TWEEN MOVEMENT ]]
+-- [[ TAHAP 2: A-STAR & STRICT MOVEMENT ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -172,11 +170,9 @@ local function SmoothWalkTo(targetPos)
     local duration = dist / getgenv().WalkSpeed
     
     if duration > 0 then 
-        -- BUNUH MOMENTUM FISIKA BIAR GAK NGEPOT DI TIKUNGAN
-        MyHitbox.Velocity = Vector3.new(0,0,0)
-        MyHitbox.RotVelocity = Vector3.new(0,0,0)
+        -- KUNCI MUTLAK BADAN KARAKTER
+        pcall(function() MyHitbox.Anchored = true end)
 
-        -- PAKE TWEEN LINEAR BIAR JALANNYA KAKU TAPI LURUS PRESISI
         local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
         local tween = TweenService:Create(MyHitbox, tweenInfo, {CFrame = CFrame.new(targetPos)})
         
@@ -191,13 +187,15 @@ local function SmoothWalkTo(targetPos)
         tween.Completed:Wait()
         
         if syncConn then syncConn:Disconnect() end
+        pcall(function() MyHitbox.Anchored = false end)
     end
     
-    -- SNAP TERAKHIR DAN REM LAGI
+    -- SNAP POSISI 100% AKURAT
     MyHitbox.CFrame = CFrame.new(targetPos)
     MyHitbox.Velocity = Vector3.new(0,0,0)
+    MyHitbox.RotVelocity = Vector3.new(0,0,0)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
-    task.wait(0.01) -- Jeda biar mesin gamenya nafas
+    
     return true
 end
 
@@ -217,6 +215,9 @@ local function MoveSmartlyTo(targetX, targetY)
         if not getgenv().EnableSmartHarvest then break end
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         if not SmoothWalkTo(pos) then return false end
+        
+        -- JEDA MUTLAK: Paksa berhenti sejenak di tengah grid biar tikungannya 100% patah 90 derajat!
+        task.wait(0.05) 
     end
     return true
 end
@@ -243,7 +244,6 @@ local function ScanWorld()
                         
                         if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
                             if tileInfo and tileInfo.at then
-                                -- SIMPAN RAW ID (ANGKA) UNTUK BYPASS DATABASE
                                 table.insert(SaplingsData, {x = x, y = y, name = tileString, rawId = rawId, at = tileInfo.at})
                             end
                         end
@@ -272,66 +272,24 @@ end
 
 local function GetExactGrowTime(saplingData)
     if getgenv().AIDictionary[saplingData.name] then return getgenv().AIDictionary[saplingData.name] end
-    
     pcall(function()
-        -- TEMBAK PAKAI ANGKA (RAW ID) DULU KARENA DATABASE BIASANYA PAKE ANGKA
         local itemData = ItemsManager.ItemsData[saplingData.rawId]
-        
-        -- KALAU GAGAL, BARU TEMBAK PAKAI NAMA (BASE STRING)
         if not itemData then
             local baseId = string.gsub(saplingData.name, "_sapling", "")
             itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingData.name]
         end
-        
         if itemData then
             local foundTime = DeepFindGrowTime(itemData)
-            if foundTime then
-                getgenv().AIDictionary[saplingData.name] = foundTime
-            end
+            if foundTime then getgenv().AIDictionary[saplingData.name] = foundTime end
         end
     end)
-    
     return getgenv().AIDictionary[saplingData.name] or nil
 end
 
 -- ========================================== --
--- [[ TAHAP 4: FARM LOGIC ]]
+-- [[ TAHAP 4: FARM LOGIC (NO UI CHECK) ]]
 -- ========================================== --
-local function BackupAIBelajarWaktu(sapling)
-    local sampai = MoveSmartlyTo(sapling.x, sapling.y)
-    if not sampai then return false end
-    
-    local timer = 0
-    while timer < 30 do
-        local hover = workspace:FindFirstChild("HoverPart")
-        if hover then
-            for _, v in pairs(hover:GetDescendants()) do
-                if v:IsA("TextLabel") and v.Text ~= "" then
-                    local text = string.lower(v.Text)
-                    if string.find(text, "grown") or string.find(text, "harvest") then
-                        local jam = tonumber(string.match(text, "(%d+)h")) or 0
-                        local menit = tonumber(string.match(text, "(%d+)m")) or 0
-                        local detik = tonumber(string.match(text, "(%d+)s")) or 0
-                        
-                        local isReady = string.find(text, "harvest") or string.find(text, "100%%")
-                        local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
-                        if isReady then sisaWaktuLayar = 0 end
-                        
-                        local umurSekarang = os.time() - sapling.at
-                        local totalDurasi = umurSekarang + sisaWaktuLayar
-                        totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
-                        
-                        getgenv().AIDictionary[sapling.name] = totalDurasi
-                        return true
-                    end
-                end
-            end
-        end
-        timer = timer + 1
-        task.wait(0.1)
-    end
-    return false
-end
+-- FITUR BACA UI (BackupAIBelajarWaktu) SUDAH DIHAPUS TOTAL!
 
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 
@@ -344,14 +302,10 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 
-                -- LANGSUNG TEMBAK DATABASE PAKAI ID ANGKA ASLI
+                -- Langsung tembak database!
                 local targetMatang = GetExactGrowTime(sapling)
                 
-                if not targetMatang then
-                    BackupAIBelajarWaktu(sapling)
-                    targetMatang = getgenv().AIDictionary[sapling.name]
-                end
-                
+                -- Kalau GAGAL nemu di database, CUEKIN AJA! Gak usah samperin buat baca UI.
                 if targetMatang then
                     local umurServer1 = os.time() - sapling.at
                     local umurServer2 = workspace:GetServerTimeNow() - sapling.at
