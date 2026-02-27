@@ -1,16 +1,15 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.95) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.96) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.95 (Real Inventory Scan & Fixed UI Scroll)" 
+getgenv().ScriptVersion = "Auto Farm v8.96 (Tab UI & Scroll Fix)" 
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
-local UIS = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser") 
 local RunService = game:GetService("RunService")
 
@@ -20,7 +19,6 @@ local RunService = game:GetService("RunService")
 if getgenv().KzoyzFarmLoop then task.cancel(getgenv().KzoyzFarmLoop); getgenv().KzoyzFarmLoop = nil end
 if getgenv().KzoyzHeartbeat then getgenv().KzoyzHeartbeat:Disconnect(); getgenv().KzoyzHeartbeat = nil end
 if getgenv().KzoyzAntiAFK then getgenv().KzoyzAntiAFK:Disconnect(); getgenv().KzoyzAntiAFK = nil end
--- [[ ========================================================= ]] --
 
 -- ========================================== --
 getgenv().ActionDelay = 0.15 
@@ -49,7 +47,7 @@ getgenv().HoldCFrame = nil
 local PlayerMovement
 task.spawn(function() pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
 
--- MODULE INVENTORY ASLI (Dari Bos)
+-- MODULE INVENTORY ASLI
 local InventoryMod
 pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
 
@@ -94,7 +92,6 @@ local function ScanAvailableItems()
     return items
 end
 
--- Fallback buat cari slot Hotbar (kalau pilih "Auto (Equipped)")
 local function FindHotbarModule()
     local Candidates = {}
     for _, v in pairs(RS:GetDescendants()) do if v:IsA("ModuleScript") and (v.Name:match("Inventory") or v.Name:match("Hotbar") or v.Name:match("Client")) then table.insert(Candidates, v) end end
@@ -111,6 +108,75 @@ local Theme = {
     TileOff = Color3.fromRGB(45, 55, 80), TileOn = Color3.fromRGB(240, 160, 60), TileYou = Color3.fromRGB(100, 200, 100),  
 }
 
+-- [[ ========================================================= ]] --
+-- [[ SISTEM TAB UI BARU ]]
+-- [[ ========================================================= ]] --
+-- Hapus isi lama dari TargetPage kalau ada
+for _, v in pairs(TargetPage:GetChildren()) do if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then v:Destroy() end end
+
+local TabNav = Instance.new("Frame", TargetPage)
+TabNav.Size = UDim2.new(1, 0, 0, 35)
+TabNav.BackgroundTransparency = 1
+TabNav.ZIndex = 2
+
+local TabFarmBtn = Instance.new("TextButton", TabNav)
+TabFarmBtn.Size = UDim2.new(0.49, 0, 1, 0)
+TabFarmBtn.BackgroundColor3 = Theme.Purple
+TabFarmBtn.Text = "Farm Settings"
+TabFarmBtn.TextColor3 = Color3.new(1,1,1)
+TabFarmBtn.Font = Enum.Font.GothamBold
+TabFarmBtn.TextSize = 12
+Instance.new("UICorner", TabFarmBtn).CornerRadius = UDim.new(0, 6)
+
+local TabSeedBtn = Instance.new("TextButton", TabNav)
+TabSeedBtn.Size = UDim2.new(0.49, 0, 1, 0)
+TabSeedBtn.Position = UDim2.new(0.51, 0, 0, 0)
+TabSeedBtn.BackgroundColor3 = Theme.Item
+TabSeedBtn.Text = "Seed Settings"
+TabSeedBtn.TextColor3 = Color3.new(1,1,1)
+TabSeedBtn.Font = Enum.Font.GothamBold
+TabSeedBtn.TextSize = 12
+Instance.new("UICorner", TabSeedBtn).CornerRadius = UDim.new(0, 6)
+
+local PageContainer = Instance.new("Frame", TargetPage)
+PageContainer.Size = UDim2.new(1, 0, 1, -45)
+PageContainer.Position = UDim2.new(0, 0, 0, 45)
+PageContainer.BackgroundTransparency = 1
+
+local PageFarm = Instance.new("ScrollingFrame", PageContainer)
+PageFarm.Size = UDim2.new(1, 0, 1, 0)
+PageFarm.BackgroundTransparency = 1
+PageFarm.ScrollBarThickness = 3
+PageFarm.BorderSizePixel = 0
+local UIListFarm = Instance.new("UIListLayout", PageFarm)
+UIListFarm.SortOrder = Enum.SortOrder.LayoutOrder
+UIListFarm.Padding = UDim.new(0, 5)
+UIListFarm:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PageFarm.CanvasSize = UDim2.new(0, 0, 0, UIListFarm.AbsoluteContentSize.Y + 20) end)
+
+local PageSeed = Instance.new("ScrollingFrame", PageContainer)
+PageSeed.Size = UDim2.new(1, 0, 1, 0)
+PageSeed.BackgroundTransparency = 1
+PageSeed.ScrollBarThickness = 3
+PageSeed.BorderSizePixel = 0
+PageSeed.Visible = false
+local UIListSeed = Instance.new("UIListLayout", PageSeed)
+UIListSeed.SortOrder = Enum.SortOrder.LayoutOrder
+UIListSeed.Padding = UDim.new(0, 5)
+UIListSeed:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PageSeed.CanvasSize = UDim2.new(0, 0, 0, UIListSeed.AbsoluteContentSize.Y + 20) end)
+
+TabFarmBtn.MouseButton1Click:Connect(function()
+    PageFarm.Visible = true; PageSeed.Visible = false
+    TabFarmBtn.BackgroundColor3 = Theme.Purple; TabSeedBtn.BackgroundColor3 = Theme.Item
+end)
+
+TabSeedBtn.MouseButton1Click:Connect(function()
+    PageFarm.Visible = false; PageSeed.Visible = true
+    TabFarmBtn.BackgroundColor3 = Theme.Item; TabSeedBtn.BackgroundColor3 = Theme.Purple
+end)
+
+-- [[ ========================================================= ]] --
+-- [[ FUNGSI BUILDER UI ]]
+-- [[ ========================================================= ]] --
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton"); Btn.Parent = Parent; Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
     local T = Instance.new("TextLabel"); T.Parent = Btn; T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left; 
@@ -135,15 +201,14 @@ function CreateInput(Parent, Text, Default, Var)
 end
 
 function CreateDynamicDropdown(Parent, Text, DefaultText, GetOptionsFunc, Callback)
-    local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
-    local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; 
+    local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ZIndex = 10; Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.ZIndex = 11
     
-    local Btn = Instance.new("TextButton"); Btn.Parent = Frame; Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Btn.Size = UDim2.new(0.4, 0, 0, 25); Btn.Position = UDim2.new(1, -10, 0.5, 0); Btn.AnchorPoint = Vector2.new(1, 0.5); Btn.Font = Enum.Font.GothamSemibold; Btn.TextSize = 12; Btn.TextColor3 = Color3.new(1,1,1); Btn.Text = DefaultText; Btn.TextTruncate = Enum.TextTruncate.AtEnd; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+    local Btn = Instance.new("TextButton"); Btn.Parent = Frame; Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Btn.Size = UDim2.new(0.4, 0, 0, 25); Btn.Position = UDim2.new(1, -10, 0.5, 0); Btn.AnchorPoint = Vector2.new(1, 0.5); Btn.Font = Enum.Font.GothamSemibold; Btn.TextSize = 12; Btn.TextColor3 = Color3.new(1,1,1); Btn.Text = DefaultText; Btn.TextTruncate = Enum.TextTruncate.AtEnd; Btn.ZIndex = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
     
-    local DropdownList = Instance.new("ScrollingFrame"); DropdownList.Parent = Frame; DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); DropdownList.Size = UDim2.new(0.4, 0, 0, 150); DropdownList.Position = UDim2.new(1, -10, 1, 0); DropdownList.AnchorPoint = Vector2.new(1, 0); DropdownList.ScrollBarThickness = 3; DropdownList.Visible = false; DropdownList.ZIndex = 50; Instance.new("UICorner", DropdownList).CornerRadius = UDim.new(0, 4)
+    local DropdownList = Instance.new("ScrollingFrame"); DropdownList.Parent = Frame; DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); DropdownList.Size = UDim2.new(0.4, 0, 0, 120); DropdownList.Position = UDim2.new(1, -10, 1, 0); DropdownList.AnchorPoint = Vector2.new(1, 0); DropdownList.ScrollBarThickness = 2; DropdownList.Visible = false; DropdownList.ZIndex = 100; Instance.new("UICorner", DropdownList).CornerRadius = UDim.new(0, 4)
     
     local UIListLayout = Instance.new("UIListLayout"); UIListLayout.Parent = DropdownList; UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    -- [[ FIX UI SCROLL: Otomatis nyesuain ukuran daleman biar ga mentok! ]]
     UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         DropdownList.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
     end)
@@ -153,7 +218,7 @@ function CreateDynamicDropdown(Parent, Text, DefaultText, GetOptionsFunc, Callba
             for _, v in pairs(DropdownList:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
             local Options = GetOptionsFunc()
             for _, opt in ipairs(Options) do
-                local OptBtn = Instance.new("TextButton"); OptBtn.Parent = DropdownList; OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundTransparency = 1; OptBtn.Text = opt; OptBtn.TextColor3 = Color3.new(1,1,1); OptBtn.Font = Enum.Font.GothamSemibold; OptBtn.TextSize = 11; OptBtn.TextTruncate = Enum.TextTruncate.AtEnd; OptBtn.ZIndex = 51
+                local OptBtn = Instance.new("TextButton"); OptBtn.Parent = DropdownList; OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundTransparency = 1; OptBtn.Text = opt; OptBtn.TextColor3 = Color3.new(1,1,1); OptBtn.Font = Enum.Font.GothamSemibold; OptBtn.TextSize = 11; OptBtn.TextTruncate = Enum.TextTruncate.AtEnd; OptBtn.ZIndex = 101
                 OptBtn.MouseButton1Click:Connect(function()
                     Btn.Text = opt; DropdownList.Visible = false
                     if Callback then Callback(opt) end
@@ -195,33 +260,35 @@ function CreateTileSelectorButton(Parent)
     end)
 end
 
--- Inject UI
-local TitleFarm = Instance.new("TextLabel", TargetPage); TitleFarm.Text = "--- FARM SETTINGS ---"; TitleFarm.TextColor3 = Theme.Purple; TitleFarm.BackgroundTransparency = 1; TitleFarm.Size = UDim2.new(1, 0, 0, 20); TitleFarm.Font = Enum.Font.GothamBold; TitleFarm.TextSize = 14
-CreateToggle(TargetPage, "Auto Farm", "MasterAutoFarm") 
-
-CreateDynamicDropdown(TargetPage, "Target Farm Block", "Auto (Equipped)", function()
+-- [[ INJECT KE PAGE FARM ]] --
+CreateToggle(PageFarm, "Auto Farm", "MasterAutoFarm") 
+CreateDynamicDropdown(PageFarm, "Target Farm Block", "Auto (Equipped)", function()
     local opts = {"Auto (Equipped)"}
     for _, item in ipairs(ScanAvailableItems()) do table.insert(opts, item) end
     return opts
 end, function(selected) getgenv().TargetFarmBlock = selected end)
 
-CreateToggle(TargetPage, "Auto Collect", "AutoCollect") 
-CreateToggle(TargetPage, "Only Collect Sapling", "AutoSaplingMode") 
-CreateToggle(TargetPage, "Anti-AFK", "AntiAFK")
-CreateInput(TargetPage, "Delay Collect (ms)", 250, "WaitDropMs") 
-CreateInput(TargetPage, "Collect Speed (ms)", 100, "WalkSpeedMs") 
-CreateInput(TargetPage, "Break Delay (ms)", 150, "BreakDelayMs") 
-CreateInput(TargetPage, "Hit Count", 3, "HitCount") 
-CreateTileSelectorButton(TargetPage) 
+CreateToggle(PageFarm, "Auto Collect", "AutoCollect") 
+CreateToggle(PageFarm, "Only Collect Sapling", "AutoSaplingMode") 
+CreateToggle(PageFarm, "Anti-AFK", "AntiAFK")
+CreateInput(PageFarm, "Delay Collect (ms)", 250, "WaitDropMs") 
+CreateInput(PageFarm, "Collect Speed (ms)", 100, "WalkSpeedMs") 
+CreateInput(PageFarm, "Break Delay (ms)", 150, "BreakDelayMs") 
+CreateInput(PageFarm, "Hit Count", 3, "HitCount") 
+CreateTileSelectorButton(PageFarm) 
 
-local TitleDrop = Instance.new("TextLabel", TargetPage); TitleDrop.Text = "--- AUTO DROP SAPLING ---"; TitleDrop.TextColor3 = Theme.Purple; TitleDrop.BackgroundTransparency = 1; TitleDrop.Size = UDim2.new(1, 0, 0, 20); TitleDrop.Font = Enum.Font.GothamBold; TitleDrop.TextSize = 14
-CreateToggle(TargetPage, "Enable Auto Drop Sapling", "AutoDropSapling")
-CreateInput(TargetPage, "Drop Threshold (Amount)", 50, "SaplingThreshold")
+-- [[ INJECT KE PAGE SEED ]] --
+CreateToggle(PageSeed, "Enable Auto Drop Sapling", "AutoDropSapling")
+CreateInput(PageSeed, "Drop Threshold (Amount)", 50, "SaplingThreshold")
 
-CreateDynamicDropdown(TargetPage, "Target Drop Seed", "Select Sapling...", function()
+CreateDynamicDropdown(PageSeed, "Target Drop Seed", "Select Sapling...", function()
     return ScanAvailableItems()
 end, function(selected) getgenv().TargetSaplingName = selected end)
 
+
+-- [[ ========================================================= ]] --
+-- [[ SYSTEM LOGIC (REMOTES & FARM LOOP) ]]
+-- [[ ========================================================= ]] --
 local Remotes = RS:WaitForChild("Remotes")
 local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem")
 local RemoteBreak = Remotes:WaitForChild("PlayerFist")
