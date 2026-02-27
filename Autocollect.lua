@@ -66,9 +66,9 @@ function CreateButton(Parent, Text, Callback)
     Btn.MouseButton1Click:Connect(Callback)
 end
 
-CreateToggle(TargetPage, "💎 START AUTO COLLECT", "EnableAutoCollect")
-CreateToggle(TargetPage, "🎯 TRACER ESP", "EnableDropESP")
-CreateInput(TargetPage, "⚡ Lari Auto Collect", "WalkSpeed", 16)
+CreateToggle(TargetPage, "START AUTO COLLECT", "EnableAutoCollect")
+CreateToggle(TargetPage, "ESP ITEMS", "EnableDropESP")
+CreateInput(TargetPage, "WALK SPEED", "WalkSpeed", 16)
 
 -- ========================================== --
 -- [[ HELPER: NAMA & STACK SIZE (JUMLAH ISI) ]]
@@ -223,14 +223,14 @@ local function OpenGrowscanModal()
     local gui = Instance.new("ScreenGui", CoreGui); gui.Name = "KzoyzGrowscan"
     local mainFrame = Instance.new("Frame", gui); mainFrame.Size = UDim2.new(0, 420, 0, 500); mainFrame.Position = UDim2.new(0.5, -210, 0.5, -250); mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
     
-    local title = Instance.new("TextLabel", mainFrame); title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(20, 20, 20); title.Text = "📊 GROWSCAN PRO (V12)"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 15
+    local title = Instance.new("TextLabel", mainFrame); title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(20, 20, 20); title.Text = "📊 GROWSCAN"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 15
 
     local closeBtn = Instance.new("TextButton", title); closeBtn.Size = UDim2.new(0, 40, 1, 0); closeBtn.Position = UDim2.new(1, -40, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80); closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 16
     
     -- TAB BUTTONS
     local tabFrame = Instance.new("Frame", mainFrame); tabFrame.Size = UDim2.new(1, 0, 0, 35); tabFrame.Position = UDim2.new(0, 0, 0, 40); tabFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    local btnTanaman = Instance.new("TextButton", tabFrame); btnTanaman.Size = UDim2.new(0.5, 0, 1, 0); btnTanaman.Position = UDim2.new(0, 0, 0, 0); btnTanaman.BackgroundColor3 = Color3.fromRGB(45, 45, 45); btnTanaman.Text = "🌱 TANAMAN"; btnTanaman.TextColor3 = Color3.fromRGB(255, 255, 255); btnTanaman.Font = Enum.Font.GothamBold; btnTanaman.TextSize = 13
-    local btnDrops = Instance.new("TextButton", tabFrame); btnDrops.Size = UDim2.new(0.5, 0, 1, 0); btnDrops.Position = UDim2.new(0.5, 0, 0, 0); btnDrops.BackgroundColor3 = Color3.fromRGB(25, 25, 25); btnDrops.Text = "📦 DROPS & GEMS"; btnDrops.TextColor3 = Color3.fromRGB(150, 150, 150); btnDrops.Font = Enum.Font.GothamBold; btnDrops.TextSize = 13
+    local btnTanaman = Instance.new("TextButton", tabFrame); btnTanaman.Size = UDim2.new(0.5, 0, 1, 0); btnTanaman.Position = UDim2.new(0, 0, 0, 0); btnTanaman.BackgroundColor3 = Color3.fromRGB(45, 45, 45); btnTanaman.Text = "🌱 TREE"; btnTanaman.TextColor3 = Color3.fromRGB(255, 255, 255); btnTanaman.Font = Enum.Font.GothamBold; btnTanaman.TextSize = 13
+    local btnDrops = Instance.new("TextButton", tabFrame); btnDrops.Size = UDim2.new(0.5, 0, 1, 0); btnDrops.Position = UDim2.new(0.5, 0, 0, 0); btnDrops.BackgroundColor3 = Color3.fromRGB(25, 25, 25); btnDrops.Text = "📦 ITEMS & GEMS"; btnDrops.TextColor3 = Color3.fromRGB(150, 150, 150); btnDrops.Font = Enum.Font.GothamBold; btnDrops.TextSize = 13
 
     -- SCROLL FRAMES
     local scrollTanaman = Instance.new("ScrollingFrame", mainFrame); scrollTanaman.Size = UDim2.new(1, -20, 1, -85); scrollTanaman.Position = UDim2.new(0, 10, 0, 80); scrollTanaman.BackgroundColor3 = Color3.fromRGB(40, 40, 40); scrollTanaman.ScrollBarThickness = 4
@@ -262,7 +262,7 @@ local function OpenGrowscanModal()
     end)
 end
 
-CreateButton(TargetPage, "Buka Modal Growscan", OpenGrowscanModal)
+CreateButton(TargetPage, "Growscan", OpenGrowscanModal)
 
 -- ========================================== --
 -- [[ PATHFINDING (A-STAR) SMART COLLECT ]]
