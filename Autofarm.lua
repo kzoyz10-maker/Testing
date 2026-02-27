@@ -1,11 +1,11 @@
 -- [[ ========================================================= ]] --
--- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.96) ]] --
+-- [[ KZOYZ HUB - MASTER AUTO FARM & TRUE GHOST COLLECT (v8.97) ]] --
 -- [[ ========================================================= ]] --
 
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Auto Farm v8.96 (Tab UI & Scroll Fix)" 
+getgenv().ScriptVersion = "Auto Farm v8.97 (Custom Drop Pos)" 
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -43,6 +43,10 @@ getgenv().TargetSaplingName = "Dirt Sapling"
 getgenv().SelectedTiles = {{x = 0, y = 1}}
 getgenv().IsGhosting = false
 getgenv().HoldCFrame = nil
+
+-- Custom Drop Position
+getgenv().DropTargetX = nil
+getgenv().DropTargetY = nil
 
 local PlayerMovement
 task.spawn(function() pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
@@ -109,70 +113,25 @@ local Theme = {
 }
 
 -- [[ ========================================================= ]] --
--- [[ SISTEM TAB UI BARU ]]
+-- [[ SISTEM TAB UI ]]
 -- [[ ========================================================= ]] --
--- Hapus isi lama dari TargetPage kalau ada
 for _, v in pairs(TargetPage:GetChildren()) do if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then v:Destroy() end end
 
-local TabNav = Instance.new("Frame", TargetPage)
-TabNav.Size = UDim2.new(1, 0, 0, 35)
-TabNav.BackgroundTransparency = 1
-TabNav.ZIndex = 2
+local TabNav = Instance.new("Frame", TargetPage); TabNav.Size = UDim2.new(1, 0, 0, 35); TabNav.BackgroundTransparency = 1; TabNav.ZIndex = 2
+local TabFarmBtn = Instance.new("TextButton", TabNav); TabFarmBtn.Size = UDim2.new(0.49, 0, 1, 0); TabFarmBtn.BackgroundColor3 = Theme.Purple; TabFarmBtn.Text = "Farm Settings"; TabFarmBtn.TextColor3 = Color3.new(1,1,1); TabFarmBtn.Font = Enum.Font.GothamBold; TabFarmBtn.TextSize = 12; Instance.new("UICorner", TabFarmBtn).CornerRadius = UDim.new(0, 6)
+local TabSeedBtn = Instance.new("TextButton", TabNav); TabSeedBtn.Size = UDim2.new(0.49, 0, 1, 0); TabSeedBtn.Position = UDim2.new(0.51, 0, 0, 0); TabSeedBtn.BackgroundColor3 = Theme.Item; TabSeedBtn.Text = "Seed Settings"; TabSeedBtn.TextColor3 = Color3.new(1,1,1); TabSeedBtn.Font = Enum.Font.GothamBold; TabSeedBtn.TextSize = 12; Instance.new("UICorner", TabSeedBtn).CornerRadius = UDim.new(0, 6)
 
-local TabFarmBtn = Instance.new("TextButton", TabNav)
-TabFarmBtn.Size = UDim2.new(0.49, 0, 1, 0)
-TabFarmBtn.BackgroundColor3 = Theme.Purple
-TabFarmBtn.Text = "Farm Settings"
-TabFarmBtn.TextColor3 = Color3.new(1,1,1)
-TabFarmBtn.Font = Enum.Font.GothamBold
-TabFarmBtn.TextSize = 12
-Instance.new("UICorner", TabFarmBtn).CornerRadius = UDim.new(0, 6)
-
-local TabSeedBtn = Instance.new("TextButton", TabNav)
-TabSeedBtn.Size = UDim2.new(0.49, 0, 1, 0)
-TabSeedBtn.Position = UDim2.new(0.51, 0, 0, 0)
-TabSeedBtn.BackgroundColor3 = Theme.Item
-TabSeedBtn.Text = "Seed Settings"
-TabSeedBtn.TextColor3 = Color3.new(1,1,1)
-TabSeedBtn.Font = Enum.Font.GothamBold
-TabSeedBtn.TextSize = 12
-Instance.new("UICorner", TabSeedBtn).CornerRadius = UDim.new(0, 6)
-
-local PageContainer = Instance.new("Frame", TargetPage)
-PageContainer.Size = UDim2.new(1, 0, 1, -45)
-PageContainer.Position = UDim2.new(0, 0, 0, 45)
-PageContainer.BackgroundTransparency = 1
-
-local PageFarm = Instance.new("ScrollingFrame", PageContainer)
-PageFarm.Size = UDim2.new(1, 0, 1, 0)
-PageFarm.BackgroundTransparency = 1
-PageFarm.ScrollBarThickness = 3
-PageFarm.BorderSizePixel = 0
-local UIListFarm = Instance.new("UIListLayout", PageFarm)
-UIListFarm.SortOrder = Enum.SortOrder.LayoutOrder
-UIListFarm.Padding = UDim.new(0, 5)
+local PageContainer = Instance.new("Frame", TargetPage); PageContainer.Size = UDim2.new(1, 0, 1, -45); PageContainer.Position = UDim2.new(0, 0, 0, 45); PageContainer.BackgroundTransparency = 1
+local PageFarm = Instance.new("ScrollingFrame", PageContainer); PageFarm.Size = UDim2.new(1, 0, 1, 0); PageFarm.BackgroundTransparency = 1; PageFarm.ScrollBarThickness = 3; PageFarm.BorderSizePixel = 0
+local UIListFarm = Instance.new("UIListLayout", PageFarm); UIListFarm.SortOrder = Enum.SortOrder.LayoutOrder; UIListFarm.Padding = UDim.new(0, 5)
 UIListFarm:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PageFarm.CanvasSize = UDim2.new(0, 0, 0, UIListFarm.AbsoluteContentSize.Y + 20) end)
 
-local PageSeed = Instance.new("ScrollingFrame", PageContainer)
-PageSeed.Size = UDim2.new(1, 0, 1, 0)
-PageSeed.BackgroundTransparency = 1
-PageSeed.ScrollBarThickness = 3
-PageSeed.BorderSizePixel = 0
-PageSeed.Visible = false
-local UIListSeed = Instance.new("UIListLayout", PageSeed)
-UIListSeed.SortOrder = Enum.SortOrder.LayoutOrder
-UIListSeed.Padding = UDim.new(0, 5)
+local PageSeed = Instance.new("ScrollingFrame", PageContainer); PageSeed.Size = UDim2.new(1, 0, 1, 0); PageSeed.BackgroundTransparency = 1; PageSeed.ScrollBarThickness = 3; PageSeed.BorderSizePixel = 0; PageSeed.Visible = false
+local UIListSeed = Instance.new("UIListLayout", PageSeed); UIListSeed.SortOrder = Enum.SortOrder.LayoutOrder; UIListSeed.Padding = UDim.new(0, 5)
 UIListSeed:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PageSeed.CanvasSize = UDim2.new(0, 0, 0, UIListSeed.AbsoluteContentSize.Y + 20) end)
 
-TabFarmBtn.MouseButton1Click:Connect(function()
-    PageFarm.Visible = true; PageSeed.Visible = false
-    TabFarmBtn.BackgroundColor3 = Theme.Purple; TabSeedBtn.BackgroundColor3 = Theme.Item
-end)
-
-TabSeedBtn.MouseButton1Click:Connect(function()
-    PageFarm.Visible = false; PageSeed.Visible = true
-    TabFarmBtn.BackgroundColor3 = Theme.Item; TabSeedBtn.BackgroundColor3 = Theme.Purple
-end)
+TabFarmBtn.MouseButton1Click:Connect(function() PageFarm.Visible = true; PageSeed.Visible = false; TabFarmBtn.BackgroundColor3 = Theme.Purple; TabSeedBtn.BackgroundColor3 = Theme.Item end)
+TabSeedBtn.MouseButton1Click:Connect(function() PageFarm.Visible = false; PageSeed.Visible = true; TabFarmBtn.BackgroundColor3 = Theme.Item; TabSeedBtn.BackgroundColor3 = Theme.Purple end)
 
 -- [[ ========================================================= ]] --
 -- [[ FUNGSI BUILDER UI ]]
@@ -184,11 +143,8 @@ function CreateToggle(Parent, Text, Var)
     local Dot = Instance.new("Frame"); Dot.Parent = IndBg; Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]; 
-        if getgenv()[Var] then 
-            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
-        else 
-            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
-        end 
+        if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
+        else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end 
     end) 
 end
 
@@ -203,29 +159,40 @@ end
 function CreateDynamicDropdown(Parent, Text, DefaultText, GetOptionsFunc, Callback)
     local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ZIndex = 10; Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
     local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.ZIndex = 11
-    
     local Btn = Instance.new("TextButton"); Btn.Parent = Frame; Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Btn.Size = UDim2.new(0.4, 0, 0, 25); Btn.Position = UDim2.new(1, -10, 0.5, 0); Btn.AnchorPoint = Vector2.new(1, 0.5); Btn.Font = Enum.Font.GothamSemibold; Btn.TextSize = 12; Btn.TextColor3 = Color3.new(1,1,1); Btn.Text = DefaultText; Btn.TextTruncate = Enum.TextTruncate.AtEnd; Btn.ZIndex = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
-    
     local DropdownList = Instance.new("ScrollingFrame"); DropdownList.Parent = Frame; DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30); DropdownList.Size = UDim2.new(0.4, 0, 0, 120); DropdownList.Position = UDim2.new(1, -10, 1, 0); DropdownList.AnchorPoint = Vector2.new(1, 0); DropdownList.ScrollBarThickness = 2; DropdownList.Visible = false; DropdownList.ZIndex = 100; Instance.new("UICorner", DropdownList).CornerRadius = UDim.new(0, 4)
-    
     local UIListLayout = Instance.new("UIListLayout"); UIListLayout.Parent = DropdownList; UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        DropdownList.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
-    end)
-    
+    UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() DropdownList.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y) end)
     Btn.MouseButton1Click:Connect(function()
         if not DropdownList.Visible then
             for _, v in pairs(DropdownList:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
             local Options = GetOptionsFunc()
             for _, opt in ipairs(Options) do
                 local OptBtn = Instance.new("TextButton"); OptBtn.Parent = DropdownList; OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundTransparency = 1; OptBtn.Text = opt; OptBtn.TextColor3 = Color3.new(1,1,1); OptBtn.Font = Enum.Font.GothamSemibold; OptBtn.TextSize = 11; OptBtn.TextTruncate = Enum.TextTruncate.AtEnd; OptBtn.ZIndex = 101
-                OptBtn.MouseButton1Click:Connect(function()
-                    Btn.Text = opt; DropdownList.Visible = false
-                    if Callback then Callback(opt) end
-                end)
+                OptBtn.MouseButton1Click:Connect(function() Btn.Text = opt; DropdownList.Visible = false; if Callback then Callback(opt) end end)
             end
         end
         DropdownList.Visible = not DropdownList.Visible
+    end)
+end
+
+function CreateSetDropPosButton(Parent)
+    local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = getgenv().DropTargetX and ("Drop Pos: " .. getgenv().DropTargetX .. ", " .. getgenv().DropTargetY) or "Drop Pos: Default (Near)"; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.6, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; 
+    local Btn = Instance.new("TextButton"); Btn.Parent = Frame; Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(0.3, 0, 0, 25); Btn.Position = UDim2.new(1, -10, 0.5, 0); Btn.AnchorPoint = Vector2.new(1, 0.5); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 11; Btn.TextColor3 = Color3.new(1,1,1); Btn.Text = "Set Pos"; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+    Btn.MouseButton1Click:Connect(function()
+        local HitboxFolder = workspace:FindFirstChild("Hitbox")
+        local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+        local ref = MyHitbox or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+        if ref then
+            local cx = math.floor(ref.Position.X / getgenv().GridSize + 0.5)
+            local cy = math.floor(ref.Position.Y / getgenv().GridSize + 0.5)
+            getgenv().DropTargetX = cx
+            getgenv().DropTargetY = cy
+            Label.Text = "Drop Pos: " .. cx .. ", " .. cy
+        else
+            Label.Text = "Drop Pos: Error"
+        end
     end)
 end
 
@@ -280,10 +247,10 @@ CreateTileSelectorButton(PageFarm)
 -- [[ INJECT KE PAGE SEED ]] --
 CreateToggle(PageSeed, "Enable Auto Drop Sapling", "AutoDropSapling")
 CreateInput(PageSeed, "Drop Threshold (Amount)", 50, "SaplingThreshold")
-
 CreateDynamicDropdown(PageSeed, "Target Drop Seed", "Select Sapling...", function()
     return ScanAvailableItems()
 end, function(selected) getgenv().TargetSaplingName = selected end)
+CreateSetDropPosButton(PageSeed) -- TOMBOL BARU BUAT SET POSISI!
 
 
 -- [[ ========================================================= ]] --
@@ -479,12 +446,19 @@ getgenv().KzoyzFarmLoop = task.spawn(function()
                     end
                 end
                 
+                -- [[ LOGIC AUTO DROP (UPDATE POSISI) ]]
                 if getgenv().AutoDropSapling and getgenv().TargetSaplingName ~= "Select Sapling..." then
                     local sapSlot = GetSlotByItemID(getgenv().TargetSaplingName)
                     local sapAmount = GetItemAmountByID(getgenv().TargetSaplingName)
                     
                     if sapSlot and sapAmount >= getgenv().SaplingThreshold then
-                        local dropX, dropY = FindEmptyGridNearPlayer(BaseX, BaseY)
+                        local dropX, dropY
+                        if getgenv().DropTargetX and getgenv().DropTargetY then
+                            dropX = getgenv().DropTargetX
+                            dropY = getgenv().DropTargetY
+                        else
+                            dropX, dropY = FindEmptyGridNearPlayer(BaseX, BaseY)
+                        end
                         
                         local char = LP.Character
                         local hrp = char and char:FindFirstChild("HumanoidRootPart")
