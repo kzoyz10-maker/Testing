@@ -11,13 +11,13 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V46 + PLANT & INVENTORY SCAN"
+getgenv().ScriptVersion = "Auto Farm V46 + PLANT + INVENTORY + WALKSPEED"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().StepDelay = 0.1    
+getgenv().WalkSpeed = 16     
 getgenv().BreakDelay = 0.15  
 getgenv().PlantDelay = 0.15
 
@@ -29,6 +29,7 @@ getgenv().AIDictionary = getgenv().AIDictionary or {}
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
 -- Ambil Manager
@@ -39,8 +40,14 @@ local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsMana
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
+local InventoryMod
+pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
+
+local UIManager
+pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
+
 -- ========================================== --
--- [[ BIKIN UI MENU ]]
+-- [[ BIKIN UI MENU (TOGGLE, INPUT, DROPDOWN) ]]
 -- ========================================== --
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
@@ -80,7 +87,6 @@ function CreateInput(Parent, Text, Var, DefaultValue)
     end)
 end
 
--- UI DROPDOWN BARU
 function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
     local Container = Instance.new("Frame", Parent)
     Container.Size = UDim2.new(1, -10, 0, 40)
@@ -91,7 +97,7 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
     MainBtn.Size = UDim2.new(1, 0, 0, 40)
     MainBtn.BackgroundTransparency = 1
     MainBtn.Text = "  " .. Text .. ": " .. tostring(getgenv()[Var])
-    MainBtn.TextColor3 = Color3.fromRGB(255, 215, 0) -- Warna Emas Biar Kelihatan
+    MainBtn.TextColor3 = Color3.fromRGB(255, 215, 0) 
     MainBtn.Font = Enum.Font.GothamBold; MainBtn.TextSize = 13; MainBtn.TextXAlignment = Enum.TextXAlignment.Left
 
     local Scroll = Instance.new("ScrollingFrame", Container)
@@ -124,49 +130,41 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
                 end)
             end
             Scroll.CanvasSize = UDim2.new(0, 0, 0, ySize)
-            Container.Size = UDim2.new(1, -10, 0, 140) -- Buka Dropdown
+            Container.Size = UDim2.new(1, -10, 0, 140) 
         else
-            Container.Size = UDim2.new(1, -10, 0, 40) -- Tutup Dropdown
+            Container.Size = UDim2.new(1, -10, 0, 40) 
         end
     end)
 end
 
--- FUNGSI SCAN INVENTORY
-local function GetInventoryTools()
-    local tools = {}
-    local checkList = {}
-    
-    -- Cek di tas (Backpack)
-    for _, v in ipairs(LP.Backpack:GetChildren()) do
-        if v:IsA("Tool") and not checkList[v.Name] then
-            table.insert(tools, v.Name)
-            checkList[v.Name] = true
-        end
-    end
-    -- Cek yang lagi dipegang di tangan
-    if LP.Character then
-        for _, v in ipairs(LP.Character:GetChildren()) do
-            if v:IsA("Tool") and not checkList[v.Name] then
-                table.insert(tools, v.Name)
-                checkList[v.Name] = true
+-- ========================================== --
+-- [[ SISTEM SCAN INVENTORY PABRIK ]]
+-- ========================================== --
+local function ScanAvailableItems()
+    local items = {}; local dict = {}
+    pcall(function()
+        if InventoryMod and InventoryMod.Stacks then
+            for _, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and data.Id then
+                    local itemID = tostring(data.Id)
+                    if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
+                end
             end
         end
-    end
-    
-    if #tools == 0 then return {"Tas Kosong!"} end
-    return tools
+    end)
+    if #items == 0 then items = {"Kosong"} end
+    return items
 end
 
 CreateToggle(TargetPage, "🌾 START AUTO HARVEST (V46)", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
-CreateDropdown(TargetPage, "🎒 Pilih Bibit", "SelectedSeed", GetInventoryTools)
-CreateInput(TargetPage, "⏱️ Step Delay", "StepDelay", 0.1)
+CreateDropdown(TargetPage, "🎒 Pilih Bibit (Tas)", "SelectedSeed", ScanAvailableItems)
+CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
 CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
 CreateInput(TargetPage, "🌿 Plant Delay", "PlantDelay", 0.15)
 
-
 -- ========================================== --
--- [[ TAHAP 1: RADAR & DETEKSI BLOK ]]
+-- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
 -- ========================================== --
 local BlockSolidityCache = {}
 
@@ -182,7 +180,10 @@ local function IsTileSolid(gridX, gridY)
         end
         local nameStr = tostring(tileString):lower()
         
-        if BlockSolidityCache[nameStr] ~= nil then return BlockSolidityCache[nameStr] end
+        if BlockSolidityCache[nameStr] ~= nil then 
+            if BlockSolidityCache[nameStr] == true then return true end
+            continue 
+        end
 
         if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
             BlockSolidityCache[nameStr] = false
@@ -212,7 +213,7 @@ local function IsTileEmptyForPlant(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & PERGERAKAN (V46) ]]
+-- [[ TAHAP 2: A-STAR & PERFECT SNAP (WALKSPEED) ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -266,76 +267,76 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     return nil 
 end
 
+local function SmoothWalkTo(targetPos)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if not MyHitbox then return false end
+    
+    local startPos = MyHitbox.Position
+    local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
+    local duration = dist / getgenv().WalkSpeed
+    
+    if duration > 0 then 
+        local t = 0
+        while t < duration do
+            if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then return false end
+            local dt = RunService.Heartbeat:Wait()
+            t = t + dt
+            local alpha = math.clamp(t / duration, 0, 1)
+            local currentPos = startPos:Lerp(targetPos, alpha)
+            
+            MyHitbox.CFrame = CFrame.new(currentPos)
+            if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+        end
+    end
+    
+    -- PERFECT SNAP: Paksa bot diem pas di tengah Grid
+    MyHitbox.CFrame = CFrame.new(targetPos)
+    if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
+    task.wait(0.02) 
+    return true
+end
+
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
-    local myGridX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
-    local myGridY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+    local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
+    local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
 
     if myGridX == targetX and myGridY == targetY then return true end
     
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     if not route then return false end
 
-    local oldAnchored = MyHitbox.Anchored
-    MyHitbox.Anchored = true 
-
     for _, stepPos in ipairs(route) do
-        if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then 
-            MyHitbox.Anchored = oldAnchored; return false 
-        end
-        local newWorldPos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
-        MyHitbox.CFrame = CFrame.new(newWorldPos)
-        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
-        task.wait(getgenv().StepDelay)
+        if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then break end
+        local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
+        if not SmoothWalkTo(pos) then return false end
     end
-    
-    MyHitbox.Anchored = oldAnchored
     return true
 end
 
 -- ========================================== --
--- [[ TAHAP 3: AUTO EQUIP LOGIC ]]
--- ========================================== --
-local function EquipTargetItem()
-    local itemName = getgenv().SelectedSeed
-    if not itemName or itemName == "None" or itemName == "Tas Kosong!" then return end
-    
-    local char = LP.Character
-    if not char then return end
-    
-    -- Cek kalau udah dipakai di tangan
-    local currentTool = char:FindFirstChildOfClass("Tool")
-    if currentTool and currentTool.Name == itemName then return end
-    
-    -- Cari di tas dan equip
-    local targetTool = LP.Backpack:FindFirstChild(itemName)
-    if targetTool and char:FindFirstChild("Humanoid") then
-        char.Humanoid:EquipTool(targetTool)
-        task.wait(0.1) -- Jeda bentar biar gamenya sadar alatnya ganti
-    end
-end
-
--- ========================================== --
--- [[ TAHAP 4: FARMING & PLANTING LOOPS ]]
+-- [[ TAHAP 3: RECURSIVE DEEP SCANNER DATABASE ]]
 -- ========================================== --
 local SaplingsData = {}
 
-local function ScanWorldForHarvest()
+local function ScanWorld()
     SaplingsData = {}
     for x, yCol in pairs(RawWorldTiles) do
         if type(yCol) == "table" then
             for y, layers in pairs(yCol) do
                 if type(layers) == "table" then
-                    for _, data in pairs(layers) do
+                    for layer, data in pairs(layers) do
                         local rawId = type(data) == "table" and data[1] or data
                         local tileInfo = type(data) == "table" and data[2] or nil
+                        
                         local tileString = rawId
                         if type(rawId) == "number" and WorldManager.NumberToStringMap then
                             tileString = WorldManager.NumberToStringMap[rawId] or rawId
                         end
+                        
                         if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
                             if tileInfo and tileInfo.at then
                                 table.insert(SaplingsData, {x = x, y = y, name = tileString, at = tileInfo.at})
@@ -348,19 +349,98 @@ local function ScanWorldForHarvest()
     end
 end
 
--- LOOP AUTO HARVEST
+local function DeepFindGrowTime(tbl)
+    if type(tbl) ~= "table" then return nil end
+    for k, v in pairs(tbl) do
+        if type(v) == "number" and type(k) == "string" then
+            local kl = k:lower()
+            if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
+                if v > 0 then return v end
+            end
+        elseif type(v) == "table" then
+            local res = DeepFindGrowTime(v)
+            if res then return res end
+        end
+    end
+    return nil
+end
+
+local function GetExactGrowTime(saplingName)
+    if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
+    pcall(function()
+        local baseId = string.gsub(saplingName, "_sapling", "")
+        local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
+        if itemData then
+            local foundTime = DeepFindGrowTime(itemData)
+            if foundTime then getgenv().AIDictionary[saplingName] = foundTime end
+        end
+    end)
+    return getgenv().AIDictionary[saplingName] or nil
+end
+
+local function BackupAIBelajarWaktu(sapling)
+    local sampai = MoveSmartlyTo(sapling.x, sapling.y)
+    if not sampai then return false end
+    
+    local timer = 0
+    while timer < 30 do
+        local hover = workspace:FindFirstChild("HoverPart")
+        if hover then
+            for _, v in pairs(hover:GetDescendants()) do
+                if v:IsA("TextLabel") and v.Text ~= "" then
+                    local text = string.lower(v.Text)
+                    if string.find(text, "grown") or string.find(text, "harvest") then
+                        local jam = tonumber(string.match(text, "(%d+)h")) or 0
+                        local menit = tonumber(string.match(text, "(%d+)m")) or 0
+                        local detik = tonumber(string.match(text, "(%d+)s")) or 0
+                        
+                        local isReady = string.find(text, "harvest") or string.find(text, "100%%")
+                        local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
+                        if isReady then sisaWaktuLayar = 0 end
+                        
+                        local umurSekarang = os.time() - sapling.at
+                        local totalDurasi = umurSekarang + sisaWaktuLayar
+                        totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
+                        
+                        getgenv().AIDictionary[sapling.name] = totalDurasi
+                        return true
+                    end
+                end
+            end
+        end
+        timer = timer + 1; task.wait(0.1)
+    end
+    return false
+end
+
+-- ========================================== --
+-- [[ TAHAP 4: FARM & PLANT LOGIC ]]
+-- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     while true do
         if getgenv().EnableSmartHarvest then
-            ScanWorldForHarvest()
+            ScanWorld()
             local targetPanen = {}
 
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
-                local umurServer = os.time() - sapling.at
-                if umurServer >= 300 then -- Fallback aman (5 menit), kamu bisa adjust sesuai ID di memori
-                    table.insert(targetPanen, sapling)
+                
+                local targetMatang = GetExactGrowTime(sapling.name)
+                
+                if not targetMatang then
+                    BackupAIBelajarWaktu(sapling)
+                    targetMatang = getgenv().AIDictionary[sapling.name]
+                end
+                
+                if targetMatang then
+                    local umurServer1 = os.time() - sapling.at
+                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
+                    local umurAsli = math.max(umurServer1, umurServer2)
+
+                    if umurAsli >= targetMatang then
+                        table.insert(targetPanen, sapling)
+                    end
                 end
             end
             
@@ -371,7 +451,8 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     task.wait(0.1)
                     pcall(function() 
                         local targetVec = Vector2.new(panen.x, panen.y)
-                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) else RemoteFist:InvokeServer(targetVec) end
+                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                        else RemoteFist:InvokeServer(targetVec) end
                     end)
                     task.wait(getgenv().BreakDelay)
                 end
@@ -381,14 +462,12 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     end
 end)
 
--- LOOP AUTO PLANT
 if getgenv().KzoyzAutoPlantLoop then task.cancel(getgenv().KzoyzAutoPlantLoop) end
 getgenv().KzoyzAutoPlantLoop = task.spawn(function()
     while true do
         if getgenv().EnableAutoPlant and not getgenv().EnableSmartHarvest then 
             local targetTanam = {}
             
-            -- Pindai blok kosong
             for x, yCol in pairs(RawWorldTiles) do
                 if type(yCol) == "table" then
                     for y, _ in pairs(yCol) do
@@ -405,11 +484,11 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 
                 local bisaJalan = MoveSmartlyTo(spot.x, spot.y)
                 if bisaJalan then
-                    EquipTargetItem() -- Otomatis pakai bibit yang dipilih di menu
                     task.wait(0.1)
                     pcall(function() 
                         local targetVec = Vector2.new(spot.x, spot.y)
-                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) else RemoteFist:InvokeServer(targetVec) end
+                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                        else RemoteFist:InvokeServer(targetVec) end
                     end)
                     task.wait(getgenv().PlantDelay)
                 end
