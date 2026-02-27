@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V49 (STEP PER GRID + MODFLY)"
+getgenv().ScriptVersion = "Auto Farm V50 (PERMANENT MODFLY + STEP GRID)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -92,9 +92,25 @@ function CreateInput(Parent, Text, Var, DefaultValue)
     end)
 end
 
-CreateToggle(TargetPage, "🚀 START V49 (MODFLY + STEP GRID)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V50 (PERMANENT MODFLY)", "EnableSmartHarvest")
 CreateInput(TargetPage, "⏱️ Step Delay (0.1 = Cepat)", "StepDelay", 0.1)
 CreateInput(TargetPage, "⏳ Break Delay", "BreakDelay", 0.15)
+
+-- ========================================== --
+-- [[ MANTRA MODFLY PERMANEN (TETAP NYALA TERUS) ]]
+-- ========================================== --
+if getgenv().ModFlyEnforcer then getgenv().ModFlyEnforcer:Disconnect() end
+getgenv().ModFlyEnforcer = RunService.Stepped:Connect(function()
+    if getgenv().EnableSmartHarvest then
+        local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+        if MyHitbox then
+            MyHitbox.Anchored = true
+            MyHitbox.CanCollide = false
+            MyHitbox.Velocity = Vector3.new(0, 0, 0)
+            MyHitbox.RotVelocity = Vector3.new(0, 0, 0)
+        end
+    end
+end)
 
 -- ========================================== --
 -- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
@@ -218,41 +234,18 @@ local function MoveSmartlyTo(targetX, targetY)
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     if not route then return false end
 
-    -- ========================================== --
-    -- 🚀 MENGAKTIFKAN MODFLY & NOCLIP
-    -- ========================================== --
-    local oldAnchored = MyHitbox.Anchored
-    local oldCanCollide = MyHitbox.CanCollide
-    
-    MyHitbox.Anchored = true      -- Bikin melayang, kebal gravitasi
-    MyHitbox.CanCollide = false   -- Bikin tembus, anti nyangkut belokan
-    MyHitbox.Velocity = Vector3.new(0, 0, 0)
-    MyHitbox.RotVelocity = Vector3.new(0, 0, 0)
-
     for _, stepPos in ipairs(route) do
-        -- Safety: Kalau toggle dimatikan di tengah jalan, normalkan gravitasi lalu batal
-        if not getgenv().EnableSmartHarvest then 
-            MyHitbox.Anchored = oldAnchored
-            MyHitbox.CanCollide = oldCanCollide
-            return false 
-        end
+        if not getgenv().EnableSmartHarvest then return false end
         
         local newWorldPos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         
-        -- TP instan ke titik grid (Napak kaku)
+        -- Cukup update CFrame, ModFly dihandle sama Stepped Enforcer
         MyHitbox.CFrame = CFrame.new(newWorldPos)
         
         if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
         
         task.wait(getgenv().StepDelay)
     end
-    
-    -- ========================================== --
-    -- 🛬 MEMATIKAN MODFLY (NORMAL KEMBALI)
-    -- ========================================== --
-    MyHitbox.Anchored = oldAnchored
-    MyHitbox.CanCollide = oldCanCollide
-    MyHitbox.Velocity = Vector3.new(0, 0, 0)
     
     return true
 end
@@ -364,8 +357,13 @@ end
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
+    local wasFarming = false
     while true do
+        local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+        
         if getgenv().EnableSmartHarvest then
+            wasFarming = true
+            
             ScanWorld()
             local targetPanen = {}
 
@@ -403,7 +401,16 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     task.wait(getgenv().BreakDelay)
                 end
             end
+        else
+            -- KEMBALIKAN KE NORMAL KALAU DIMATIKAN
+            if wasFarming then
+                if MyHitbox then
+                    MyHitbox.Anchored = false
+                    MyHitbox.CanCollide = true
+                end
+                wasFarming = false
+            end
         end
-        task.wait(1) 
+        task.wait(0.5) 
     end
 end)
