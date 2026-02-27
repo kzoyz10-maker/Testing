@@ -176,8 +176,8 @@ local function GetSlotByItemID(itemID)
 end
 
 CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
-CreateToggle(TargetPage, "🌱 START AUTO PLANT YATTA", "EnableAutoPlant")
-CreateDropdown(TargetPage, "🎒 Pilih Bibit (Tas)", "SelectedSeed", ScanAvailableItems)
+CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
+CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
 CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
 CreateInput(TargetPage, "🌿 Plant Delay", "PlantDelay", 0.15)
@@ -204,7 +204,7 @@ local function IsTileSolid(gridX, gridY)
             continue 
         end
 
-        if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
+        if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "door") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
             BlockSolidityCache[nameStr] = false
             continue 
         end
