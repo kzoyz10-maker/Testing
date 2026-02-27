@@ -1,5 +1,5 @@
 -- ========================================== --
--- [[ KZOYZ AUTO COLLECT + ESP + GROWSCAN ]]
+-- [[ KZOYZ AUTO COLLECT + TRACER ESP + GROWSCAN ]]
 -- ========================================== --
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
@@ -14,7 +14,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Collect V3 + ESP + Growscan"
+getgenv().ScriptVersion = "Collect V4 + TRACER ESP + Max Growscan"
 getgenv().EnableAutoCollect = false
 getgenv().EnableDropESP = false
 getgenv().GridSize = 4.5
@@ -26,6 +26,7 @@ local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
+local Camera = workspace.CurrentCamera
 
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
@@ -66,50 +67,34 @@ function CreateButton(Parent, Text, Callback)
 end
 
 CreateToggle(TargetPage, "💎 START AUTO COLLECT (Drops & Gems)", "EnableAutoCollect")
-CreateToggle(TargetPage, "👁️ ESP DROPS & GEMS (Wallhack)", "EnableDropESP")
+CreateToggle(TargetPage, "🎯 TRACER ESP (Garis ke Drop/Gem)", "EnableDropESP")
 CreateInput(TargetPage, "⚡ Lari Auto Collect (WalkSpeed)", "WalkSpeed", 16)
 
 -- ========================================== --
--- [[ GROWSCAN MODAL LOGIC ]]
+-- [[ GROWSCAN MODAL (DENGAN PEMBATAS DROPS) ]]
 -- ========================================== --
-local function DeepFindGrowTime(tbl)
-    if type(tbl) ~= "table" then return nil end
-    for k, v in pairs(tbl) do
-        if type(v) == "number" and type(k) == "string" then
-            local kl = k:lower()
-            if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
-                if v > 0 then return v end
-            end
-        elseif type(v) == "table" then
-            local res = DeepFindGrowTime(v)
-            if res then return res end
-        end
-    end
-    return nil
-end
-
 local function GetExactGrowTime(saplingName)
     if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
     pcall(function()
         local baseId = string.gsub(saplingName, "_sapling", "")
         local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
         if itemData then
-            local foundTime = DeepFindGrowTime(itemData)
+            local foundTime = nil
+            for k, v in pairs(itemData) do if type(v) == "number" and (k:lower():find("grow") or k:lower():find("time")) then foundTime = v; break end end
             if foundTime then getgenv().AIDictionary[saplingName] = foundTime end
         end
     end)
-    return getgenv().AIDictionary[saplingName] or 300 -- Default 5 menit kalau gagal ambil
+    return getgenv().AIDictionary[saplingName] or 300 
 end
 
 local function OpenGrowscanModal()
-    -- Hapus UI lama kalau ada
     if CoreGui:FindFirstChild("KzoyzGrowscan") then CoreGui.KzoyzGrowscan:Destroy() end
 
     local gui = Instance.new("ScreenGui", CoreGui)
     gui.Name = "KzoyzGrowscan"
     
     local mainFrame = Instance.new("Frame", gui)
-    mainFrame.Size = UDim2.new(0, 350, 0, 400); mainFrame.Position = UDim2.new(0.5, -175, 0.5, -200)
+    mainFrame.Size = UDim2.new(0, 350, 0, 450); mainFrame.Position = UDim2.new(0.5, -175, 0.5, -225)
     mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
     
     local title = Instance.new("TextLabel", mainFrame)
@@ -123,7 +108,7 @@ local function OpenGrowscanModal()
     scroll.Size = UDim2.new(1, -20, 1, -60); scroll.Position = UDim2.new(0, 10, 0, 50); scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45); scroll.ScrollBarThickness = 4
     local uiList = Instance.new("UIListLayout", scroll); uiList.Padding = UDim.new(0, 5)
 
-    -- Proses Scan
+    -- Scan Tanaman
     local plantStats = {}
     for x, yCol in pairs(RawWorldTiles) do
         if type(yCol) == "table" then
@@ -132,17 +117,15 @@ local function OpenGrowscanModal()
                     for layer, data in pairs(layers) do
                         local rawId = type(data) == "table" and data[1] or data
                         local tileInfo = type(data) == "table" and data[2] or nil
-                        local tileString = rawId
-                        if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
+                        local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap[rawId] or rawId) or rawId
                         
                         if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") and tileInfo and tileInfo.at then
                             local name = tostring(tileString)
                             if not plantStats[name] then plantStats[name] = { total = 0, ready = 0, growing = 0 } end
                             plantStats[name].total = plantStats[name].total + 1
                             
-                            local growTime = GetExactGrowTime(name)
                             local age = workspace:GetServerTimeNow() - tileInfo.at
-                            if age >= growTime then plantStats[name].ready = plantStats[name].ready + 1 else plantStats[name].growing = plantStats[name].growing + 1 end
+                            if age >= GetExactGrowTime(name) then plantStats[name].ready = plantStats[name].ready + 1 else plantStats[name].growing = plantStats[name].growing + 1 end
                         end
                     end
                 end
@@ -157,10 +140,25 @@ local function OpenGrowscanModal()
         local lblStat = Instance.new("TextLabel", frame); lblStat.Size = UDim2.new(1, -10, 0, 20); lblStat.Position = UDim2.new(0, 10, 0, 30); lblStat.BackgroundTransparency = 1; lblStat.Text = "Total: " .. stat.total .. " | ✅ Ready: " .. stat.ready .. " | ⏳ Growing: " .. stat.growing; lblStat.TextColor3 = Color3.fromRGB(200, 200, 200); lblStat.Font = Enum.Font.Gotham; lblStat.TextXAlignment = Enum.TextXAlignment.Left; lblStat.TextSize = 12
         totalY = totalY + 65
     end
-    
-    if totalY == 0 then
-        local emptyL = Instance.new("TextLabel", scroll); emptyL.Size = UDim2.new(1, 0, 1, 0); emptyL.BackgroundTransparency = 1; emptyL.Text = "Map Kosong! Tidak ada tanaman."; emptyL.TextColor3 = Color3.fromRGB(150, 150, 150); emptyL.Font = Enum.Font.GothamBold; emptyL.TextSize = 14
-    end
+
+    -- Hitung Drops & Gems
+    local dropsFolder = workspace:FindFirstChild("Drops")
+    local gemsFolder = workspace:FindFirstChild("Gems")
+    local totalDrops = dropsFolder and #dropsFolder:GetChildren() or 0
+    local totalGems = gemsFolder and #gemsFolder:GetChildren() or 0
+
+    -- Garis Pembatas
+    local sep = Instance.new("TextLabel", scroll)
+    sep.Size = UDim2.new(1, 0, 0, 20); sep.BackgroundTransparency = 1
+    sep.Text = "--------------------------------------------------"; sep.TextColor3 = Color3.fromRGB(150, 150, 150); sep.Font = Enum.Font.GothamBold; sep.TextSize = 14
+    totalY = totalY + 25
+
+    -- Info Drops & Gems
+    local dropFrame = Instance.new("Frame", scroll); dropFrame.Size = UDim2.new(1, 0, 0, 60); dropFrame.BackgroundColor3 = Color3.fromRGB(30, 40, 50)
+    local dropTitle = Instance.new("TextLabel", dropFrame); dropTitle.Size = UDim2.new(1, -10, 0, 20); dropTitle.Position = UDim2.new(0, 10, 0, 5); dropTitle.BackgroundTransparency = 1; dropTitle.Text = "📦 BARANG TERGELETAK"; dropTitle.TextColor3 = Color3.fromRGB(100, 200, 255); dropTitle.Font = Enum.Font.GothamBold; dropTitle.TextXAlignment = Enum.TextXAlignment.Left; dropTitle.TextSize = 14
+    local dropStat = Instance.new("TextLabel", dropFrame); dropStat.Size = UDim2.new(1, -10, 0, 20); dropStat.Position = UDim2.new(0, 10, 0, 30); dropStat.BackgroundTransparency = 1; dropStat.Text = "🔹 Drops: " .. totalDrops .. " item(s)  |  💎 Gems: " .. totalGems .. " item(s)"; dropStat.TextColor3 = Color3.fromRGB(255, 255, 255); dropStat.Font = Enum.Font.Gotham; dropStat.TextXAlignment = Enum.TextXAlignment.Left; dropStat.TextSize = 13
+    totalY = totalY + 65
+
     scroll.CanvasSize = UDim2.new(0, 0, 0, totalY)
 end
 
@@ -169,8 +167,6 @@ CreateButton(TargetPage, "Buka Modal Growscan", OpenGrowscanModal)
 -- ========================================== --
 -- [[ PATHFINDING & AUTO COLLECT LOGIC ]]
 -- ========================================== --
--- (Disembunyikan kodenya sebentar biar rapi, sama persis kayak versi sebelumnya)
-local function FindPathAStar(startX, startY, targetX, targetY) return nil end -- Stand-in, tapi bot tetap lurus nyamperin
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
@@ -194,88 +190,121 @@ local function SmoothWalkTo(targetPos)
     return true
 end
 
-local function GetNearestDrops()
-    local drops = {}
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    if not MyHitbox then return drops end
-
-    local dropContainers = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
-    for _, container in ipairs(dropContainers) do
-        if container then
-            for _, item in ipairs(container:GetChildren()) do
-                local pos = nil
-                if item:IsA("Model") and item.PrimaryPart then pos = item.PrimaryPart.Position
-                elseif item:IsA("BasePart") then pos = item.Position end
-                
-                if pos then
-                    local distance = (Vector2.new(pos.X, pos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude
-                    table.insert(drops, {instance = item, position = pos, dist = distance})
-                end
-            end
-        end
-    end
-    table.sort(drops, function(a, b) return a.dist < b.dist end)
-    return drops
-end
-
 if getgenv().KzoyzAutoCollectLoop then task.cancel(getgenv().KzoyzAutoCollectLoop) end
 getgenv().KzoyzAutoCollectLoop = task.spawn(function()
     while true do
         if getgenv().EnableAutoCollect then
-            local availableDrops = GetNearestDrops()
-            if #availableDrops > 0 then
-                for _, drop in ipairs(availableDrops) do
-                    if not getgenv().EnableAutoCollect then break end
-                    if drop.instance and drop.instance.Parent then
-                        SmoothWalkTo(drop.position)
-                        task.wait(0.1) 
+            local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+            if MyHitbox then
+                local drops = {}
+                local dropContainers = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
+                for _, container in ipairs(dropContainers) do
+                    if container then
+                        for _, item in ipairs(container:GetChildren()) do
+                            local pos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
+                            if pos then table.insert(drops, {instance = item, position = pos, dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude}) end
+                        end
                     end
+                end
+                table.sort(drops, function(a, b) return a.dist < b.dist end)
+                
+                if #drops > 0 and drops[1].instance.Parent then
+                    SmoothWalkTo(drops[1].position)
+                    task.wait(0.1)
                 end
             end
         end
-        task.wait(0.5) 
+        task.wait(0.2) 
     end
 end)
 
 -- ========================================== --
--- [[ ESP DROPS & GEMS LOGIC ]]
+-- [[ TRACER ESP (GARIS) & TEXT LOGIC ]]
 -- ========================================== --
-if getgenv().KzoyzESPLoop then task.cancel(getgenv().KzoyzESPLoop) end
-getgenv().KzoyzESPLoop = task.spawn(function()
-    while true do
-        local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-        
-        local dropContainers = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
-        for _, container in ipairs(dropContainers) do
-            if container then
-                for _, item in ipairs(container:GetChildren()) do
-                    local espUI = item:FindFirstChild("KzoyzESP")
-                    
-                    if getgenv().EnableDropESP then
-                        local pos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
-                        if pos and MyHitbox then
-                            local dist = math.floor((Vector2.new(pos.X, pos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude)
-                            local itemName = item.Name
-                            if item.Parent.Name == "Gems" then itemName = "💎 Gem" end
-                            
-                            if not espUI then
-                                espUI = Instance.new("BillboardGui", item)
-                                espUI.Name = "KzoyzESP"
-                                espUI.AlwaysOnTop = true; espUI.Size = UDim2.new(0, 100, 0, 30); espUI.StudsOffset = Vector3.new(0, 2, 0)
-                                
-                                local txt = Instance.new("TextLabel", espUI)
-                                txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.TextStrokeTransparency = 0.2
-                                txt.TextColor3 = item.Parent.Name == "Gems" and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 255, 100)
-                                txt.Font = Enum.Font.GothamBold; txt.TextSize = 10
-                            end
-                            espUI.TextLabel.Text = itemName .. "\n[" .. dist .. "m]"
-                        end
+local ESPGui = CoreGui:FindFirstChild("KzoyzESPGui")
+if not ESPGui then
+    ESPGui = Instance.new("ScreenGui", CoreGui)
+    ESPGui.Name = "KzoyzESPGui"
+    ESPGui.IgnoreGuiInset = true
+end
+ESPGui:ClearAllChildren()
+
+local TracerLines = {}
+
+local function GetLineFrame(item)
+    if not TracerLines[item] then
+        local line = Instance.new("Frame", ESPGui)
+        line.AnchorPoint = Vector2.new(0.5, 0.5)
+        line.BorderSizePixel = 0
+        line.BackgroundColor3 = item.Parent.Name == "Gems" and Color3.fromRGB(0, 255, 255) or Color3.fromRGB(255, 255, 0)
+        TracerLines[item] = line
+    end
+    return TracerLines[item]
+end
+
+if getgenv().KzoyzESPLoop then getgenv().KzoyzESPLoop:Disconnect() end
+getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
+    if not getgenv().EnableDropESP then
+        ESPGui:ClearAllChildren()
+        TracerLines = {}
+        return
+    end
+
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if not MyHitbox then return end
+
+    local activeItems = {}
+    local dropContainers = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
+    
+    for _, container in ipairs(dropContainers) do
+        if container then
+            for _, item in ipairs(container:GetChildren()) do
+                activeItems[item] = true
+                local targetPos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
+                
+                if targetPos then
+                    -- Bikin UI Text (Billboard)
+                    local espUI = item:FindFirstChild("KzoyzTextESP")
+                    local dist = math.floor((Vector2.new(targetPos.X, targetPos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude)
+                    if not espUI then
+                        espUI = Instance.new("BillboardGui", item)
+                        espUI.Name = "KzoyzTextESP"
+                        espUI.AlwaysOnTop = true; espUI.Size = UDim2.new(0, 100, 0, 30); espUI.StudsOffset = Vector3.new(0, 2, 0)
+                        local txt = Instance.new("TextLabel", espUI)
+                        txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.TextStrokeTransparency = 0.2
+                        txt.TextColor3 = item.Parent.Name == "Gems" and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 255, 100)
+                        txt.Font = Enum.Font.GothamBold; txt.TextSize = 10
+                    end
+                    espUI.TextLabel.Text = (item.Parent.Name == "Gems" and "💎 Gem" or item.Name) .. "\n[" .. dist .. "m]"
+
+                    -- Bikin Tracer (Garis Panah 2D dari badan ke barang)
+                    local line = GetLineFrame(item)
+                    local startScreen, startVis = Camera:WorldToViewportPoint(MyHitbox.Position)
+                    local endScreen, endVis = Camera:WorldToViewportPoint(targetPos)
+
+                    if startVis and endVis then
+                        line.Visible = true
+                        local p1 = Vector2.new(startScreen.X, startScreen.Y)
+                        local p2 = Vector2.new(endScreen.X, endScreen.Y)
+                        local lineLength = (p1 - p2).Magnitude
+                        
+                        line.Size = UDim2.new(0, lineLength, 0, 1) -- Ketebalan garis 1 pixel
+                        line.Position = UDim2.new(0, (p1.X + p2.X) / 2, 0, (p1.Y + p2.Y) / 2)
+                        line.Rotation = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
                     else
-                        if espUI then espUI:Destroy() end
+                        line.Visible = false
                     end
                 end
             end
         end
-        task.wait(0.5)
+    end
+
+    -- Hapus garis kalau itemnya udah diambil/hilang
+    for item, line in pairs(TracerLines) do
+        if not activeItems[item] then
+            line:Destroy()
+            TracerLines[item] = nil
+            if item and item:FindFirstChild("KzoyzTextESP") then item.KzoyzTextESP:Destroy() end
+        end
     end
 end)
