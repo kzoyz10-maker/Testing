@@ -1,5 +1,5 @@
 -- ========================================== --
--- [[ KZOYZ AUTO COLLECT + TRACER ESP + GROWSCAN ]]
+-- [[ KZOYZ AUTO COLLECT + PRO ESP + GROWSCAN ]]
 -- ========================================== --
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
@@ -14,7 +14,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Collect V4 + TRACER ESP + Max Growscan"
+getgenv().ScriptVersion = "Collect V5 + Smart Path + Pro ESP"
 getgenv().EnableAutoCollect = false
 getgenv().EnableDropESP = false
 getgenv().GridSize = 4.5
@@ -67,11 +67,11 @@ function CreateButton(Parent, Text, Callback)
 end
 
 CreateToggle(TargetPage, "💎 START AUTO COLLECT (Drops & Gems)", "EnableAutoCollect")
-CreateToggle(TargetPage, "🎯 TRACER ESP (Garis ke Drop/Gem)", "EnableDropESP")
+CreateToggle(TargetPage, "🎯 TRACER ESP (Garis FPS Style)", "EnableDropESP")
 CreateInput(TargetPage, "⚡ Lari Auto Collect (WalkSpeed)", "WalkSpeed", 16)
 
 -- ========================================== --
--- [[ GROWSCAN MODAL (DENGAN PEMBATAS DROPS) ]]
+-- [[ GROWSCAN MODAL (DENGAN NAMA DROPS) ]]
 -- ========================================== --
 local function GetExactGrowTime(saplingName)
     if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
@@ -141,23 +141,35 @@ local function OpenGrowscanModal()
         totalY = totalY + 65
     end
 
-    -- Hitung Drops & Gems
-    local dropsFolder = workspace:FindFirstChild("Drops")
-    local gemsFolder = workspace:FindFirstChild("Gems")
-    local totalDrops = dropsFolder and #dropsFolder:GetChildren() or 0
-    local totalGems = gemsFolder and #gemsFolder:GetChildren() or 0
-
     -- Garis Pembatas
     local sep = Instance.new("TextLabel", scroll)
     sep.Size = UDim2.new(1, 0, 0, 20); sep.BackgroundTransparency = 1
     sep.Text = "--------------------------------------------------"; sep.TextColor3 = Color3.fromRGB(150, 150, 150); sep.Font = Enum.Font.GothamBold; sep.TextSize = 14
     totalY = totalY + 25
 
-    -- Info Drops & Gems
-    local dropFrame = Instance.new("Frame", scroll); dropFrame.Size = UDim2.new(1, 0, 0, 60); dropFrame.BackgroundColor3 = Color3.fromRGB(30, 40, 50)
-    local dropTitle = Instance.new("TextLabel", dropFrame); dropTitle.Size = UDim2.new(1, -10, 0, 20); dropTitle.Position = UDim2.new(0, 10, 0, 5); dropTitle.BackgroundTransparency = 1; dropTitle.Text = "📦 BARANG TERGELETAK"; dropTitle.TextColor3 = Color3.fromRGB(100, 200, 255); dropTitle.Font = Enum.Font.GothamBold; dropTitle.TextXAlignment = Enum.TextXAlignment.Left; dropTitle.TextSize = 14
-    local dropStat = Instance.new("TextLabel", dropFrame); dropStat.Size = UDim2.new(1, -10, 0, 20); dropStat.Position = UDim2.new(0, 10, 0, 30); dropStat.BackgroundTransparency = 1; dropStat.Text = "🔹 Drops: " .. totalDrops .. " item(s)  |  💎 Gems: " .. totalGems .. " item(s)"; dropStat.TextColor3 = Color3.fromRGB(255, 255, 255); dropStat.Font = Enum.Font.Gotham; dropStat.TextXAlignment = Enum.TextXAlignment.Left; dropStat.TextSize = 13
-    totalY = totalY + 65
+    -- Hitung Detail Drops & Gems
+    local dropsFolder = workspace:FindFirstChild("Drops")
+    local gemsFolder = workspace:FindFirstChild("Gems")
+    local totalGems = gemsFolder and #gemsFolder:GetChildren() or 0
+    
+    local dropStats = {}
+    local totalDrops = 0
+    if dropsFolder then
+        for _, item in ipairs(dropsFolder:GetChildren()) do
+            local name = item.Name
+            dropStats[name] = (dropStats[name] or 0) + 1
+            totalDrops = totalDrops + 1
+        end
+    end
+
+    local dropTitle = Instance.new("TextLabel", scroll); dropTitle.Size = UDim2.new(1, -10, 0, 20); dropTitle.Position = UDim2.new(0, 10, 0, 0); dropTitle.BackgroundTransparency = 1; dropTitle.Text = "📦 BARANG TERGELETAK (Drops: " .. totalDrops .. " | 💎 Gems: " .. totalGems .. ")"; dropTitle.TextColor3 = Color3.fromRGB(100, 200, 255); dropTitle.Font = Enum.Font.GothamBold; dropTitle.TextXAlignment = Enum.TextXAlignment.Left; dropTitle.TextSize = 13
+    totalY = totalY + 25
+
+    for dName, dCount in pairs(dropStats) do
+        local dFrame = Instance.new("Frame", scroll); dFrame.Size = UDim2.new(1, 0, 0, 30); dFrame.BackgroundColor3 = Color3.fromRGB(30, 40, 50)
+        local dLbl = Instance.new("TextLabel", dFrame); dLbl.Size = UDim2.new(1, -10, 1, 0); dLbl.Position = UDim2.new(0, 10, 0, 0); dLbl.BackgroundTransparency = 1; dLbl.Text = "   🔹 " .. dName .. " : " .. dCount .. "x"; dLbl.TextColor3 = Color3.fromRGB(255, 255, 255); dLbl.Font = Enum.Font.Gotham; dLbl.TextXAlignment = Enum.TextXAlignment.Left; dLbl.TextSize = 13
+        totalY = totalY + 35
+    end
 
     scroll.CanvasSize = UDim2.new(0, 0, 0, totalY)
 end
@@ -165,8 +177,80 @@ end
 CreateButton(TargetPage, "Buka Modal Growscan", OpenGrowscanModal)
 
 -- ========================================== --
--- [[ PATHFINDING & AUTO COLLECT LOGIC ]]
+-- [[ PATHFINDING (A-STAR) PINTAR KEMBALI ]]
 -- ========================================== --
+local BlockSolidityCache = {}
+local function IsTileSolid(gridX, gridY)
+    if gridX < 0 or gridX > 100 then return true end
+    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
+    
+    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
+        local rawId = type(data) == "table" and data[1] or data
+        local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap[rawId] or rawId) or rawId
+        local nameStr = tostring(tileString):lower()
+        
+        if BlockSolidityCache[nameStr] ~= nil then return BlockSolidityCache[nameStr] end
+
+        if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
+            BlockSolidityCache[nameStr] = false; continue 
+        end
+        
+        BlockSolidityCache[nameStr] = true
+        return true
+    end
+    return false
+end
+
+local function FindPathAStar(startX, startY, targetX, targetY)
+    if startX == targetX and startY == targetY then return {} end
+    local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
+    local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
+
+    local startKey = startX .. "," .. startY
+    table.insert(openSet, {x = startX, y = startY, key = startKey})
+    gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
+
+    local maxIterations, iterations = 2000, 0
+    local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+
+    while #openSet > 0 do
+        iterations = iterations + 1; if iterations > maxIterations then break end
+        local current, currentIndex = openSet[1], 1
+        for i = 2, #openSet do
+            if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end
+        end
+
+        if current.x == targetX and current.y == targetY then
+            local path, currKey = {}, current.key
+            while cameFrom[currKey] do
+                local node = cameFrom[currKey]
+                table.insert(path, 1, {x = current.x, y = current.y})
+                current = node; currKey = node.x .. "," .. node.y
+            end
+            return path
+        end
+
+        table.remove(openSet, currentIndex); closedSet[current.key] = true
+
+        for _, dir in ipairs(directions) do
+            local nextX, nextY = current.x + dir[1], current.y + dir[2]
+            local nextKey = nextX .. "," .. nextY
+            if nextX < 0 or nextX > 100 or closedSet[nextKey] then continue end
+
+            if not (nextX == targetX and nextY == targetY) and IsTileSolid(nextX, nextY) then closedSet[nextKey] = true; continue end
+
+            local tentative_gScore = gScore[current.key] + 1
+            if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
+                cameFrom[nextKey] = current; gScore[nextKey] = tentative_gScore; fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
+                local inOpenSet = false
+                for _, node in ipairs(openSet) do if node.key == nextKey then inOpenSet = true; break end end
+                if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
+            end
+        end
+    end
+    return nil 
+end
+
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
@@ -190,6 +274,28 @@ local function SmoothWalkTo(targetPos)
     return true
 end
 
+local function MoveSmartlyToDrop(targetPos)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if not MyHitbox then return false end
+    
+    local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
+    local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
+    local targetGridX = math.round(targetPos.X / getgenv().GridSize)
+    local targetGridY = math.round(targetPos.Y / getgenv().GridSize)
+
+    if myGridX == targetGridX and myGridY == targetGridY then return SmoothWalkTo(targetPos) end
+    
+    local route = FindPathAStar(myGridX, myGridY, targetGridX, targetGridY)
+    if not route then return SmoothWalkTo(targetPos) end
+
+    for _, stepPos in ipairs(route) do
+        if not getgenv().EnableAutoCollect then break end
+        local stepVector = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, MyHitbox.Position.Z)
+        if not SmoothWalkTo(stepVector) then return false end
+    end
+    return SmoothWalkTo(targetPos)
+end
+
 if getgenv().KzoyzAutoCollectLoop then task.cancel(getgenv().KzoyzAutoCollectLoop) end
 getgenv().KzoyzAutoCollectLoop = task.spawn(function()
     while true do
@@ -209,7 +315,7 @@ getgenv().KzoyzAutoCollectLoop = task.spawn(function()
                 table.sort(drops, function(a, b) return a.dist < b.dist end)
                 
                 if #drops > 0 and drops[1].instance.Parent then
-                    SmoothWalkTo(drops[1].position)
+                    MoveSmartlyToDrop(drops[1].position) -- Sekarang dipanggil fungsi jalan pintar A-Star
                     task.wait(0.1)
                 end
             end
@@ -219,14 +325,10 @@ getgenv().KzoyzAutoCollectLoop = task.spawn(function()
 end)
 
 -- ========================================== --
--- [[ TRACER ESP (GARIS) & TEXT LOGIC ]]
+-- [[ TRACER ESP (GARIS JAUH) LOGIC ]]
 -- ========================================== --
 local ESPGui = CoreGui:FindFirstChild("KzoyzESPGui")
-if not ESPGui then
-    ESPGui = Instance.new("ScreenGui", CoreGui)
-    ESPGui.Name = "KzoyzESPGui"
-    ESPGui.IgnoreGuiInset = true
-end
+if not ESPGui then ESPGui = Instance.new("ScreenGui", CoreGui); ESPGui.Name = "KzoyzESPGui"; ESPGui.IgnoreGuiInset = true end
 ESPGui:ClearAllChildren()
 
 local TracerLines = {}
@@ -245,8 +347,7 @@ end
 if getgenv().KzoyzESPLoop then getgenv().KzoyzESPLoop:Disconnect() end
 getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
     if not getgenv().EnableDropESP then
-        ESPGui:ClearAllChildren()
-        TracerLines = {}
+        ESPGui:ClearAllChildren(); TracerLines = {}
         return
     end
 
@@ -263,7 +364,7 @@ getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
                 local targetPos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
                 
                 if targetPos then
-                    -- Bikin UI Text (Billboard)
+                    -- Teks ESP (tetep nempel ke item)
                     local espUI = item:FindFirstChild("KzoyzTextESP")
                     local dist = math.floor((Vector2.new(targetPos.X, targetPos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude)
                     if not espUI then
@@ -277,18 +378,19 @@ getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
                     end
                     espUI.TextLabel.Text = (item.Parent.Name == "Gems" and "💎 Gem" or item.Name) .. "\n[" .. dist .. "m]"
 
-                    -- Bikin Tracer (Garis Panah 2D dari badan ke barang)
+                    -- Tracer Garis (diubah biar anti-hilang kalau jarak jauh)
                     local line = GetLineFrame(item)
-                    local startScreen, startVis = Camera:WorldToViewportPoint(MyHitbox.Position)
-                    local endScreen, endVis = Camera:WorldToViewportPoint(targetPos)
+                    local startScreen, _ = Camera:WorldToViewportPoint(MyHitbox.Position)
+                    local endScreen, endZ = Camera:WorldToViewportPoint(targetPos)
 
-                    if startVis and endVis then
+                    -- Kalau target ada di depan kamera (Z > 0), garisnya ditarik!
+                    if endZ > 0 then
                         line.Visible = true
                         local p1 = Vector2.new(startScreen.X, startScreen.Y)
                         local p2 = Vector2.new(endScreen.X, endScreen.Y)
-                        local lineLength = (p1 - p2).Magnitude
                         
-                        line.Size = UDim2.new(0, lineLength, 0, 1) -- Ketebalan garis 1 pixel
+                        local lineLength = (p1 - p2).Magnitude
+                        line.Size = UDim2.new(0, lineLength, 0, 1.5) -- Sedikit ditebelin biar jelas
                         line.Position = UDim2.new(0, (p1.X + p2.X) / 2, 0, (p1.Y + p2.Y) / 2)
                         line.Rotation = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
                     else
@@ -299,11 +401,9 @@ getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Hapus garis kalau itemnya udah diambil/hilang
     for item, line in pairs(TracerLines) do
         if not activeItems[item] then
-            line:Destroy()
-            TracerLines[item] = nil
+            line:Destroy(); TracerLines[item] = nil
             if item and item:FindFirstChild("KzoyzTextESP") then item.KzoyzTextESP:Destroy() end
         end
     end
