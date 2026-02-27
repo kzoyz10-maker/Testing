@@ -11,13 +11,13 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V50 (PERMANENT MODFLY + STEP GRID)"
+getgenv().ScriptVersion = "Auto Farm V46 (PERFECT GRID & CUSTOM INPUT)"
 
 -- ========================================== --
--- [[ KONFIGURASI AWAL ]]
+-- [[ KONFIGURASI ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().StepDelay = 0.1    -- Jeda TP per kotak (0.1 = standar cepat)
+getgenv().WalkSpeed = 16     
 getgenv().BreakDelay = 0.15  
 getgenv().EnableSmartHarvest = false
 
@@ -92,25 +92,9 @@ function CreateInput(Parent, Text, Var, DefaultValue)
     end)
 end
 
-CreateToggle(TargetPage, "🚀 START V50 (PERMANENT MODFLY)", "EnableSmartHarvest")
-CreateInput(TargetPage, "⏱️ Step Delay (0.1 = Cepat)", "StepDelay", 0.1)
+CreateToggle(TargetPage, "🚀 START V46 (PERFECT GRID & INPUT)", "EnableSmartHarvest")
+CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
 CreateInput(TargetPage, "⏳ Break Delay", "BreakDelay", 0.15)
-
--- ========================================== --
--- [[ MANTRA MODFLY PERMANEN (TETAP NYALA TERUS) ]]
--- ========================================== --
-if getgenv().ModFlyEnforcer then getgenv().ModFlyEnforcer:Disconnect() end
-getgenv().ModFlyEnforcer = RunService.Stepped:Connect(function()
-    if getgenv().EnableSmartHarvest then
-        local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-        if MyHitbox then
-            MyHitbox.Anchored = true
-            MyHitbox.CanCollide = false
-            MyHitbox.Velocity = Vector3.new(0, 0, 0)
-            MyHitbox.RotVelocity = Vector3.new(0, 0, 0)
-        end
-    end
-end)
 
 -- ========================================== --
 -- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
@@ -146,7 +130,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & MODFLY GRID STEPPER ]]
+-- [[ TAHAP 2: A-STAR & PERFECT SNAP ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -221,32 +205,53 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     return nil 
 end
 
+local function SmoothWalkTo(targetPos)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if not MyHitbox then return false end
+    
+    local startPos = MyHitbox.Position
+    local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
+    local duration = dist / getgenv().WalkSpeed
+    
+    if duration > 0 then 
+        local t = 0
+        while t < duration do
+            if not getgenv().EnableSmartHarvest then return false end
+            local dt = RunService.Heartbeat:Wait()
+            t = t + dt
+            local alpha = math.clamp(t / duration, 0, 1)
+            local currentPos = startPos:Lerp(targetPos, alpha)
+            
+            MyHitbox.CFrame = CFrame.new(currentPos)
+            if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+        end
+    end
+    
+    -- PERFECT SNAP: Paksa bot diem pas di tengah Grid biar gak motong tikungan!
+    MyHitbox.CFrame = CFrame.new(targetPos)
+    if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
+    task.wait(0.02) -- Jeda mikroskopis biar Physics Engine gamenya sinkron!
+    return true
+end
+
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
-    local myGridX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
-    local myGridY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+    -- Gunakan math.round untuk kalkulasi akurat
+    local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
+    local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
 
     if myGridX == targetX and myGridY == targetY then return true end
-    
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     if not route then return false end
 
     for _, stepPos in ipairs(route) do
-        if not getgenv().EnableSmartHarvest then return false end
-        
-        local newWorldPos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
-        
-        -- Cukup update CFrame, ModFly dihandle sama Stepped Enforcer
-        MyHitbox.CFrame = CFrame.new(newWorldPos)
-        
-        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
-        
-        task.wait(getgenv().StepDelay)
+        if not getgenv().EnableSmartHarvest then break end
+        local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
+        if not SmoothWalkTo(pos) then return false end
     end
-    
     return true
 end
 
@@ -282,15 +287,18 @@ local function ScanWorld()
     end
 end
 
+-- Fungsi mengerikan yang bakal ngebongkar isi Database secara brutal
 local function DeepFindGrowTime(tbl)
     if type(tbl) ~= "table" then return nil end
     for k, v in pairs(tbl) do
         if type(v) == "number" and type(k) == "string" then
             local kl = k:lower()
+            -- Cari semua kata kunci waktu yang mungkin dipake Developer!
             if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
                 if v > 0 then return v end
             end
         elseif type(v) == "table" then
+            -- Kalau ketemu folder/table lagi, masuk dan obrak-abrik lagi!
             local res = DeepFindGrowTime(v)
             if res then return res end
         end
@@ -305,6 +313,7 @@ local function GetExactGrowTime(saplingName)
         local baseId = string.gsub(saplingName, "_sapling", "")
         local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
         if itemData then
+            -- Panggil si Deep Scanner!
             local foundTime = DeepFindGrowTime(itemData)
             if foundTime then
                 getgenv().AIDictionary[saplingName] = foundTime
@@ -357,19 +366,15 @@ end
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
-    local wasFarming = false
     while true do
-        local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-        
         if getgenv().EnableSmartHarvest then
-            wasFarming = true
-            
             ScanWorld()
             local targetPanen = {}
 
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 
+                -- LANGSUNG OBRAK ABRIK DATABASE BUAT CARI UMUR
                 local targetMatang = GetExactGrowTime(sapling.name)
                 
                 if not targetMatang then
@@ -401,16 +406,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     task.wait(getgenv().BreakDelay)
                 end
             end
-        else
-            -- KEMBALIKAN KE NORMAL KALAU DIMATIKAN
-            if wasFarming then
-                if MyHitbox then
-                    MyHitbox.Anchored = false
-                    MyHitbox.CanCollide = true
-                end
-                wasFarming = false
-            end
         end
-        task.wait(0.5) 
+        task.wait(1) 
     end
 end)
