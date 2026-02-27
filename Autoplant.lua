@@ -11,13 +11,13 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V47 (STRICT GRID WALK & INPUT)"
+getgenv().ScriptVersion = "Auto Farm V48 (STEP PER GRID & DEEP SCAN)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().WalkSpeed = 16     
+getgenv().StepDelay = 0.1    -- Menggantikan WalkSpeed
 getgenv().BreakDelay = 0.15  
 getgenv().EnableSmartHarvest = false
 
@@ -27,7 +27,6 @@ local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
 -- Ambil Manager
@@ -93,8 +92,8 @@ function CreateInput(Parent, Text, Var, DefaultValue)
     end)
 end
 
-CreateToggle(TargetPage, "🚀 START V47 (STRICT WALK & INPUT)", "EnableSmartHarvest")
-CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
+CreateToggle(TargetPage, "🚀 START V48 (STEP PER GRID)", "EnableSmartHarvest")
+CreateInput(TargetPage, "⏱️ Step Delay (0.1 = Cepat)", "StepDelay", 0.1)
 CreateInput(TargetPage, "⏳ Break Delay", "BreakDelay", 0.15)
 
 -- ========================================== --
@@ -131,7 +130,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & WALK PER GRID ]]
+-- [[ TAHAP 2: A-STAR & STEP PER GRID LOGIC ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -206,55 +205,14 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     return nil 
 end
 
--- MURNI JALAN KOTAK DEMI KOTAK
-local function WalkPerGrid(targetPos)
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    if not MyHitbox then return false end
-    
-    local startPos = MyHitbox.Position
-    local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
-    
-    -- Hitung waktu tempuh per 1 kotak grid berdasarkan WalkSpeed dari UI
-    local duration = dist / getgenv().WalkSpeed
-    
-    if duration > 0 then 
-        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-        local tween = TweenService:Create(MyHitbox, tweenInfo, {CFrame = CFrame.new(targetPos)})
-        
-        -- Kunci velocity biar nggak geser kena pantulan physics gamenya
-        MyHitbox.Velocity = Vector3.new(0,0,0)
-        MyHitbox.RotVelocity = Vector3.new(0,0,0)
-        
-        local syncConn
-        if PlayerMovement then
-            syncConn = RunService.Heartbeat:Connect(function()
-                pcall(function() PlayerMovement.Position = MyHitbox.Position end)
-            end)
-        end
-        
-        tween:Play()
-        tween.Completed:Wait() -- Wajib nunggu sampai beneran di tengah kotak
-        
-        if syncConn then syncConn:Disconnect() end
-    end
-    
-    -- PERFECT SNAP: Kunci posisi murni di tengah grid
-    MyHitbox.CFrame = CFrame.new(targetPos)
-    MyHitbox.Velocity = Vector3.new(0,0,0)
-    MyHitbox.RotVelocity = Vector3.new(0,0,0)
-    if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
-    
-    return true
-end
-
+-- Gabungan A-Star dengan Step/TP Per Grid ala script Pabrik
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
-    -- Gunakan math.round untuk kalkulasi akurat posisi di grid
-    local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
-    local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
+    local myGridX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+    local myGridY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
 
     if myGridX == targetX and myGridY == targetY then return true end
     
@@ -262,12 +220,20 @@ local function MoveSmartlyTo(targetX, targetY)
     if not route then return false end
 
     for _, stepPos in ipairs(route) do
-        if not getgenv().EnableSmartHarvest then break end
+        if not getgenv().EnableSmartHarvest then return false end
         
-        local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
+        local newWorldPos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         
-        -- JALAN PER KOTAK
-        if not WalkPerGrid(pos) then return false end
+        -- LOGIKA TP PER GRID DARI SCRIPT PABRIK
+        MyHitbox.CFrame = CFrame.new(newWorldPos)
+        
+        -- Matikan rotasi/pantulan dari Physics Engine
+        MyHitbox.Velocity = Vector3.new(0,0,0)
+        MyHitbox.RotVelocity = Vector3.new(0,0,0)
+        
+        if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
+        
+        task.wait(getgenv().StepDelay)
     end
     
     return true
