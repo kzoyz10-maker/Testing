@@ -14,7 +14,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Collect V7 + Smart XY Growscan"
+getgenv().ScriptVersion = "Collect V9 + All-Attribute Scanner"
 getgenv().EnableAutoCollect = false
 getgenv().EnableDropESP = false
 getgenv().GridSize = 4.5
@@ -71,26 +71,55 @@ CreateToggle(TargetPage, "🎯 TRACER ESP (Garis FPS Style)", "EnableDropESP")
 CreateInput(TargetPage, "⚡ Lari Auto Collect (WalkSpeed)", "WalkSpeed", 16)
 
 -- ========================================== --
--- [[ HELPER: CARI NAMA BARANG ASLI ]]
+-- [[ HELPER: CARI NAMA BARANG ASLI (ALL-ATTRIBUTE SCAN) ]]
 -- ========================================== --
 local function GetItemRealName(item)
     local name = item.Name
-    -- Kalau namanya cuma 'Drop' atau 'Model', kita gali isinya
-    if name == "Drop" or name == "Drops" or name == "Model" or name == "Part" then
-        if item:GetAttribute("id") then return item:GetAttribute("id") end
-        if item:GetAttribute("ItemName") then return item:GetAttribute("ItemName") end
-        for _, child in ipairs(item:GetChildren()) do
-            if child:IsA("StringValue") and (child.Name == "id" or child.Name == "ItemName" or child.Name == "Name") then
-                return child.Value
+    if name ~= "Drop" and name ~= "Drops" and name ~= "Model" and name ~= "Part" then return name end
+    
+    -- 1. Scan SEMUA Attributes (Paling Ampuh buat "Part" kosong)
+    local attributes = item:GetAttributes()
+    for attrName, attrValue in pairs(attributes) do
+        local lowerAttr = string.lower(attrName)
+        -- Cek kalau nama attribute-nya ada unsur 'id', 'name', 'item', 'type'
+        if string.find(lowerAttr, "id") or string.find(lowerAttr, "name") or string.find(lowerAttr, "item") or string.find(lowerAttr, "type") then
+            if type(attrValue) == "number" and WorldManager.NumberToStringMap[attrValue] then
+                return WorldManager.NumberToStringMap[attrValue]
+            elseif type(attrValue) == "string" then
+                return attrValue
             end
         end
-        return "Unknown_Item"
     end
-    return name
+
+    -- 2. Cek ProximityPrompt (Cadangan)
+    local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt and prompt.ObjectText and prompt.ObjectText ~= "" then return prompt.ObjectText end
+    
+    -- 3. Cek BillboardGui / UI di atas item (Cadangan)
+    local gui = item:FindFirstChildWhichIsA("BillboardGui", true) or item:FindFirstChildWhichIsA("SurfaceGui", true)
+    if gui and gui.Name ~= "KzoyzTextESP" then
+        local txt = gui:FindFirstChildWhichIsA("TextLabel", true)
+        if txt and txt.Text ~= "" then 
+            return string.gsub(txt.Text, " x%d+", "") 
+        end
+    end
+
+    -- 4. Deep Scan ke Value Obj di dalemnya (Cadangan terakhir)
+    for _, child in ipairs(item:GetDescendants()) do
+        if child:IsA("StringValue") and (child.Name:lower() == "id" or child.Name:lower() == "itemname" or child.Name:lower() == "name") then
+            return child.Value
+        elseif (child:IsA("IntValue") or child:IsA("NumberValue")) and child.Name:lower() == "id" then
+            if WorldManager.NumberToStringMap[child.Value] then return WorldManager.NumberToStringMap[child.Value] end
+            return tostring(child.Value)
+        end
+    end
+
+    -- Kalau semua gagal, tampilin "Part (Unknown)" biar ketahuan dia mentok
+    return "Part_Unknown"
 end
 
 -- ========================================== --
--- [[ GROWSCAN MODAL (DENGAN X, Y) ]]
+-- [[ GROWSCAN MODAL (REAL-TIME & XY) ]]
 -- ========================================== --
 local function GetExactGrowTime(saplingName)
     if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
@@ -116,28 +145,11 @@ local function FormatCoords(coordsTable)
     return table.concat(coordsTable, ", ")
 end
 
-local function OpenGrowscanModal()
-    if CoreGui:FindFirstChild("KzoyzGrowscan") then CoreGui.KzoyzGrowscan:Destroy() end
+local function RenderGrowscanContent(scrollFrame)
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if not child:IsA("UIListLayout") then child:Destroy() end
+    end
 
-    local gui = Instance.new("ScreenGui", CoreGui)
-    gui.Name = "KzoyzGrowscan"
-    
-    local mainFrame = Instance.new("Frame", gui)
-    mainFrame.Size = UDim2.new(0, 380, 0, 480); mainFrame.Position = UDim2.new(0.5, -190, 0.5, -240)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
-    
-    local title = Instance.new("TextLabel", mainFrame)
-    title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(25, 25, 25); title.Text = "📊 WORLD GROWSCAN (With XY)"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 16
-    
-    local closeBtn = Instance.new("TextButton", title)
-    closeBtn.Size = UDim2.new(0, 40, 1, 0); closeBtn.Position = UDim2.new(1, -40, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80); closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 16
-    closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
-    
-    local scroll = Instance.new("ScrollingFrame", mainFrame)
-    scroll.Size = UDim2.new(1, -20, 1, -60); scroll.Position = UDim2.new(0, 10, 0, 50); scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45); scroll.ScrollBarThickness = 4
-    local uiList = Instance.new("UIListLayout", scroll); uiList.Padding = UDim.new(0, 5)
-
-    -- Scan Tanaman (Simpan XY)
     local plantStats = {}
     for x, yCol in pairs(RawWorldTiles) do
         if type(yCol) == "table" then
@@ -170,7 +182,7 @@ local function OpenGrowscanModal()
 
     local totalY = 0
     for plantName, stat in pairs(plantStats) do
-        local frame = Instance.new("Frame", scroll); frame.Size = UDim2.new(1, 0, 0, 85); frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        local frame = Instance.new("Frame", scrollFrame); frame.Size = UDim2.new(1, 0, 0, 85); frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         
         local lblName = Instance.new("TextLabel", frame); lblName.Size = UDim2.new(1, -10, 0, 20); lblName.Position = UDim2.new(0, 10, 0, 5); lblName.BackgroundTransparency = 1; lblName.Text = "🌱 " .. string.upper(string.gsub(plantName, "_sapling", "")); lblName.TextColor3 = Color3.fromRGB(255, 255, 255); lblName.Font = Enum.Font.GothamBold; lblName.TextXAlignment = Enum.TextXAlignment.Left; lblName.TextSize = 14
         local lblStat = Instance.new("TextLabel", frame); lblStat.Size = UDim2.new(1, -10, 0, 20); lblStat.Position = UDim2.new(0, 10, 0, 25); lblStat.BackgroundTransparency = 1; lblStat.Text = "Total: " .. stat.total .. " | ✅ Ready: " .. stat.ready .. " | ⏳ Growing: " .. stat.growing; lblStat.TextColor3 = Color3.fromRGB(200, 200, 200); lblStat.Font = Enum.Font.Gotham; lblStat.TextXAlignment = Enum.TextXAlignment.Left; lblStat.TextSize = 12
@@ -179,13 +191,11 @@ local function OpenGrowscanModal()
         totalY = totalY + 90
     end
 
-    -- Garis Pembatas
-    local sep = Instance.new("TextLabel", scroll)
+    local sep = Instance.new("TextLabel", scrollFrame)
     sep.Size = UDim2.new(1, 0, 0, 20); sep.BackgroundTransparency = 1
     sep.Text = "--------------------------------------------------"; sep.TextColor3 = Color3.fromRGB(150, 150, 150); sep.Font = Enum.Font.GothamBold; sep.TextSize = 14
     totalY = totalY + 25
 
-    -- Scan Drops (Simpan XY)
     local dropsFolder = workspace:FindFirstChild("Drops")
     local gemsFolder = workspace:FindFirstChild("Gems")
     local totalGems = gemsFolder and #gemsFolder:GetChildren() or 0
@@ -198,7 +208,6 @@ local function OpenGrowscanModal()
             local realName = GetItemRealName(item)
             if not dropStats[realName] then dropStats[realName] = { count = 0, coords = {} } end
             
-            -- Ambil posisi grid barang jatuhnya
             local pos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
             if pos then
                 local gX = math.floor(pos.X / getgenv().GridSize)
@@ -211,18 +220,52 @@ local function OpenGrowscanModal()
         end
     end
 
-    local dropTitle = Instance.new("TextLabel", scroll); dropTitle.Size = UDim2.new(1, -10, 0, 20); dropTitle.Position = UDim2.new(0, 10, 0, 0); dropTitle.BackgroundTransparency = 1; dropTitle.Text = "📦 BARANG TERGELETAK (Drops: " .. totalDrops .. " | 💎 Gems: " .. totalGems .. ")"; dropTitle.TextColor3 = Color3.fromRGB(100, 200, 255); dropTitle.Font = Enum.Font.GothamBold; dropTitle.TextXAlignment = Enum.TextXAlignment.Left; dropTitle.TextSize = 13
+    local dropTitle = Instance.new("TextLabel", scrollFrame); dropTitle.Size = UDim2.new(1, -10, 0, 20); dropTitle.Position = UDim2.new(0, 10, 0, 0); dropTitle.BackgroundTransparency = 1; dropTitle.Text = "📦 BARANG (Drops: " .. totalDrops .. " | 💎 Gems: " .. totalGems .. ")"; dropTitle.TextColor3 = Color3.fromRGB(100, 200, 255); dropTitle.Font = Enum.Font.GothamBold; dropTitle.TextXAlignment = Enum.TextXAlignment.Left; dropTitle.TextSize = 13
     totalY = totalY + 25
 
     for dName, dData in pairs(dropStats) do
-        local dFrame = Instance.new("Frame", scroll); dFrame.Size = UDim2.new(1, 0, 0, 50); dFrame.BackgroundColor3 = Color3.fromRGB(30, 40, 50)
+        local dFrame = Instance.new("Frame", scrollFrame); dFrame.Size = UDim2.new(1, 0, 0, 50); dFrame.BackgroundColor3 = Color3.fromRGB(30, 40, 50)
         local dLbl = Instance.new("TextLabel", dFrame); dLbl.Size = UDim2.new(1, -10, 0, 20); dLbl.Position = UDim2.new(0, 10, 0, 5); dLbl.BackgroundTransparency = 1; dLbl.Text = "🔹 " .. string.upper(dName) .. " : " .. dData.count .. "x"; dLbl.TextColor3 = Color3.fromRGB(255, 255, 255); dLbl.Font = Enum.Font.GothamBold; dLbl.TextXAlignment = Enum.TextXAlignment.Left; dLbl.TextSize = 13
         local dCoords = Instance.new("TextLabel", dFrame); dCoords.Size = UDim2.new(1, -10, 0, 20); dCoords.Position = UDim2.new(0, 10, 0, 25); dCoords.BackgroundTransparency = 1; dCoords.Text = "📍 XY: " .. FormatCoords(dData.coords); dCoords.TextColor3 = Color3.fromRGB(180, 220, 255); dCoords.Font = Enum.Font.Gotham; dCoords.TextXAlignment = Enum.TextXAlignment.Left; dCoords.TextSize = 11; dCoords.TextWrapped = true
         
         totalY = totalY + 55
     end
 
-    scroll.CanvasSize = UDim2.new(0, 0, 0, totalY)
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalY)
+end
+
+local function OpenGrowscanModal()
+    if CoreGui:FindFirstChild("KzoyzGrowscan") then CoreGui.KzoyzGrowscan:Destroy() end
+
+    local gui = Instance.new("ScreenGui", CoreGui)
+    gui.Name = "KzoyzGrowscan"
+    
+    local mainFrame = Instance.new("Frame", gui)
+    mainFrame.Size = UDim2.new(0, 380, 0, 480); mainFrame.Position = UDim2.new(0.5, -190, 0.5, -240)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
+    
+    local title = Instance.new("TextLabel", mainFrame)
+    title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(25, 25, 25); title.Text = "📊 GROWSCAN (LIVE UPDATE)"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 16
+    
+    local scroll = Instance.new("ScrollingFrame", mainFrame)
+    scroll.Size = UDim2.new(1, -20, 1, -60); scroll.Position = UDim2.new(0, 10, 0, 50); scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45); scroll.ScrollBarThickness = 4
+    local uiList = Instance.new("UIListLayout", scroll); uiList.Padding = UDim.new(0, 5)
+
+    local isModalOpen = true
+
+    local closeBtn = Instance.new("TextButton", title)
+    closeBtn.Size = UDim2.new(0, 40, 1, 0); closeBtn.Position = UDim2.new(1, -40, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80); closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 16
+    closeBtn.MouseButton1Click:Connect(function() 
+        isModalOpen = false
+        gui:Destroy() 
+    end)
+    
+    task.spawn(function()
+        while isModalOpen and gui.Parent do
+            pcall(function() RenderGrowscanContent(scroll) end)
+            task.wait(1.5)
+        end
+    end)
 end
 
 CreateButton(TargetPage, "Buka Modal Growscan", OpenGrowscanModal)
@@ -424,7 +467,7 @@ getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
                             txt.TextColor3 = item.Parent.Name == "Gems" and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 255, 100)
                             txt.Font = Enum.Font.GothamBold; txt.TextSize = 10
                         end
-                        -- Terapin deteksi nama asli juga di ESP-nya
+                        
                         local realName = item.Parent.Name == "Gems" and "💎 Gem" or GetItemRealName(item)
                         espUI.TextLabel.Text = string.upper(realName) .. "\n[" .. dist .. "m]"
 
