@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.84-ScrollFix" 
+getgenv().ScriptVersion = "Pabrik v0.85-NoNestedScroll" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -190,7 +190,7 @@ end
 
 
 -- [[ ========================================================= ]] --
--- [[ PERBAIKAN TOTAL SCROLL (MANUAL CANVAS + SPACER) ]]
+-- [[ PERBAIKAN TOTAL: MURNI PAKAI FRAME (HAPUS SCROLLING FRAME) ]]
 -- [[ ========================================================= ]] --
 for _, v in pairs(TargetPage:GetChildren()) do if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then v:Destroy() end end
 
@@ -202,28 +202,17 @@ local TabAdvBtn = Instance.new("TextButton", TabNav); TabAdvBtn.Size = UDim2.new
 
 local PageContainer = Instance.new("Frame", TargetPage); PageContainer.Size = UDim2.new(1, 0, 1, -45); PageContainer.Position = UDim2.new(0, 0, 0, 45); PageContainer.BackgroundTransparency = 1
 
--- [[ SCROLL PABRIK ]]
-local PagePabrik = Instance.new("ScrollingFrame", PageContainer)
-PagePabrik.Size = UDim2.new(1, 0, 1, 0); PagePabrik.BackgroundTransparency = 1; PagePabrik.ScrollBarThickness = 3; PagePabrik.BorderSizePixel = 0
-PagePabrik.AutomaticCanvasSize = Enum.AutomaticSize.None -- MATIKAN AUTO SIZE (BIANG KEROK)
+-- [[ UBAH JADI FRAME BIASA BIAR GAK NABRAK SCROLLBAR EXECUTOR ]]
+local PagePabrik = Instance.new("Frame", PageContainer)
+PagePabrik.Size = UDim2.new(1, 0, 0, 0); PagePabrik.BackgroundTransparency = 1; PagePabrik.AutomaticSize = Enum.AutomaticSize.Y
 local UIListPabrik = Instance.new("UIListLayout", PagePabrik); UIListPabrik.SortOrder = Enum.SortOrder.LayoutOrder; UIListPabrik.Padding = UDim.new(0, 5)
 
--- [[ SCROLL ADVANCED ]]
-local PageAdv = Instance.new("ScrollingFrame", PageContainer)
-PageAdv.Size = UDim2.new(1, 0, 1, 0); PageAdv.BackgroundTransparency = 1; PageAdv.ScrollBarThickness = 3; PageAdv.BorderSizePixel = 0; PageAdv.Visible = false
-PageAdv.AutomaticCanvasSize = Enum.AutomaticSize.None -- MATIKAN AUTO SIZE 
+local PageAdv = Instance.new("Frame", PageContainer)
+PageAdv.Size = UDim2.new(1, 0, 0, 0); PageAdv.BackgroundTransparency = 1; PageAdv.Visible = false; PageAdv.AutomaticSize = Enum.AutomaticSize.Y
 local UIListAdv = Instance.new("UIListLayout", PageAdv); UIListAdv.SortOrder = Enum.SortOrder.LayoutOrder; UIListAdv.Padding = UDim.new(0, 5)
 
 TabPabrikBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = true; PageAdv.Visible = false; TabPabrikBtn.BackgroundColor3 = Theme.Purple; TabAdvBtn.BackgroundColor3 = Theme.Item end)
 TabAdvBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = false; PageAdv.Visible = true; TabPabrikBtn.BackgroundColor3 = Theme.Item; TabAdvBtn.BackgroundColor3 = Theme.Purple end)
-
--- Update Ukuran Dinamis + Extra 100px Biar Pasti Lega
-UIListPabrik:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    PagePabrik.CanvasSize = UDim2.new(0, 0, 0, UIListPabrik.AbsoluteContentSize.Y + 100)
-end)
-UIListAdv:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    PageAdv.CanvasSize = UDim2.new(0, 0, 0, UIListAdv.AbsoluteContentSize.Y + 100)
-end)
 
 -- Fungsi UI Component
 function CreateToggle(Parent, Text, Var) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6); local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left; local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); local IC = Instance.new("UICorner", IndBg); IC.CornerRadius = UDim.new(1,0); local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); local DC = Instance.new("UICorner", Dot); DC.CornerRadius = UDim.new(1,0); IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30); Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end end) end
@@ -236,7 +225,7 @@ CreateToggle(PagePabrik, "START BALANCED PABRIK", "EnablePabrik")
 
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
-CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
+CreateButton(PagePabrik, "🔄 Refresh hideng", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
 
 CreateTextBox(PagePabrik, "Start X", getgenv().PabrikStartX, "PabrikStartX")
 CreateTextBox(PagePabrik, "End X", getgenv().PabrikEndX, "PabrikEndX")
@@ -251,10 +240,9 @@ CreateTextBox(PagePabrik, "Block Threshold (Sisa Tas)", getgenv().BlockThreshold
 CreateTextBox(PagePabrik, "Keep Seed Amt (Sisa Tas)", getgenv().KeepSeedAmt, "KeepSeedAmt")
 CreateTextBox(PagePabrik, "Waktu Tumbuh (Detik)", getgenv().GrowthTime, "GrowthTime")
 
--- DUMMY SPACER PABRIK BIAR PASTI LEGA
+-- DUMMY SPACER PABRIK (Cuma jaga-jaga jarak bawah)
 local SpacerPabrik = Instance.new("Frame", PagePabrik)
-SpacerPabrik.Size = UDim2.new(1, 0, 0, 50)
-SpacerPabrik.BackgroundTransparency = 1
+SpacerPabrik.Size = UDim2.new(1, 0, 0, 30); SpacerPabrik.BackgroundTransparency = 1
 
 
 -- [[ BUILDER TAB 2: ADVANCED & DELAY ]] --
@@ -292,10 +280,9 @@ CreateButton(PageAdv, "📍 Set Drop Pos (Posisi Kamu)", function()
     end 
 end)
 
--- DUMMY SPACER ADVANCED BIAR PASTI LEGA
+-- DUMMY SPACER ADVANCED 
 local SpacerAdv = Instance.new("Frame", PageAdv)
-SpacerAdv.Size = UDim2.new(1, 0, 0, 50)
-SpacerAdv.BackgroundTransparency = 1
+SpacerAdv.Size = UDim2.new(1, 0, 0, 30); SpacerAdv.BackgroundTransparency = 1
 
 
 -- [[ LOGIC BALANCED PABRIK WITH MULTI-ROW ]] --
@@ -307,7 +294,7 @@ task.spawn(function()
         if getgenv().EnablePabrik then
             if getgenv().SelectedSeed == "" or getgenv().SelectedBlock == "" then task.wait(2); continue end
 
-            -- FASE 1: PLANTING (ALL ROWS)
+            -- FASE 1: PLANTING
             for row = 0, getgenv().PabrikRows - 1 do
                 if not getgenv().EnablePabrik then break end
                 local currentY = getgenv().PabrikYPos + (row * getgenv().PabrikYOffset)
@@ -328,7 +315,7 @@ task.spawn(function()
                 for w = 1, getgenv().GrowthTime do if not getgenv().EnablePabrik then break end; task.wait(1) end 
             end
 
-            -- FASE 3: HARVESTING (ALL ROWS)
+            -- FASE 3: HARVESTING
             if getgenv().EnablePabrik then
                 for row = 0, getgenv().PabrikRows - 1 do
                     if not getgenv().EnablePabrik then break end
@@ -384,7 +371,7 @@ task.spawn(function()
                         task.wait(getgenv().BreakDelay)
                     end
                     
-                    -- 3. SMART COLLECT (PERMANEN ONLY SAPLING!)
+                    -- 3. SMART COLLECT
                     if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
                         local char = LP.Character
                         local hrp = char and char:FindFirstChild("HumanoidRootPart")
