@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.81-FixedScroll" 
+getgenv().ScriptVersion = "Pabrik v0.82-RealFixedScroll" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -104,7 +104,6 @@ local function ScanAvailableItems()
     return items
 end
 
--- SISTEM DETEKSI DROP SAPLING --
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
     for _, folder in ipairs(TargetFolders) do
@@ -145,7 +144,6 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
--- SISTEM DROP 
 local function DropItemLogic(targetID, dropAmount)
     local slot = GetSlotByItemID(targetID)
     if not slot then return false end
@@ -192,7 +190,7 @@ end
 
 
 -- [[ ========================================================= ]] --
--- [[ SISTEM TAB UI BARU & FIX SCROLL ]]
+-- [[ PERBAIKAN TOTAL SISTEM SCROLL UI ]]
 -- [[ ========================================================= ]] --
 for _, v in pairs(TargetPage:GetChildren()) do if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then v:Destroy() end end
 
@@ -204,15 +202,23 @@ local TabAdvBtn = Instance.new("TextButton", TabNav); TabAdvBtn.Size = UDim2.new
 
 local PageContainer = Instance.new("Frame", TargetPage); PageContainer.Size = UDim2.new(1, 0, 1, -45); PageContainer.Position = UDim2.new(0, 0, 0, 45); PageContainer.BackgroundTransparency = 1
 
--- [[ FIX SCROLL PABRIK ]]
-local PagePabrik = Instance.new("ScrollingFrame", PageContainer); PagePabrik.Size = UDim2.new(1, 0, 1, 0); PagePabrik.BackgroundTransparency = 1; PagePabrik.ScrollBarThickness = 3; PagePabrik.BorderSizePixel = 0; PagePabrik.AutomaticCanvasSize = Enum.AutomaticSize.Y
-local UIListPabrik = Instance.new("UIListLayout", PagePabrik); UIListPabrik.SortOrder = Enum.SortOrder.LayoutOrder; UIListPabrik.Padding = UDim.new(0, 5)
-UIListPabrik:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PagePabrik.CanvasSize = UDim2.new(0, 0, 0, UIListPabrik.AbsoluteContentSize.Y + 80) end)
+-- [[ SCROLL PABRIK FIX 100% ]]
+local PagePabrik = Instance.new("ScrollingFrame", PageContainer)
+PagePabrik.Size = UDim2.new(1, 0, 1, 0); PagePabrik.BackgroundTransparency = 1; PagePabrik.ScrollBarThickness = 3; PagePabrik.BorderSizePixel = 0
+PagePabrik.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PagePabrik.CanvasSize = UDim2.new(0, 0, 0, 0) -- Reset ke 0 biar Roblox yg ngatur otomatis
 
--- [[ FIX SCROLL ADVANCED ]]
-local PageAdv = Instance.new("ScrollingFrame", PageContainer); PageAdv.Size = UDim2.new(1, 0, 1, 0); PageAdv.BackgroundTransparency = 1; PageAdv.ScrollBarThickness = 3; PageAdv.BorderSizePixel = 0; PageAdv.Visible = false; PageAdv.AutomaticCanvasSize = Enum.AutomaticSize.Y
+local UIListPabrik = Instance.new("UIListLayout", PagePabrik); UIListPabrik.SortOrder = Enum.SortOrder.LayoutOrder; UIListPabrik.Padding = UDim.new(0, 5)
+local PadPabrik = Instance.new("UIPadding", PagePabrik); PadPabrik.PaddingBottom = UDim.new(0, 100) -- Extra Lega Bawah
+
+-- [[ SCROLL ADVANCED FIX 100% ]]
+local PageAdv = Instance.new("ScrollingFrame", PageContainer)
+PageAdv.Size = UDim2.new(1, 0, 1, 0); PageAdv.BackgroundTransparency = 1; PageAdv.ScrollBarThickness = 3; PageAdv.BorderSizePixel = 0; PageAdv.Visible = false
+PageAdv.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PageAdv.CanvasSize = UDim2.new(0, 0, 0, 0)
+
 local UIListAdv = Instance.new("UIListLayout", PageAdv); UIListAdv.SortOrder = Enum.SortOrder.LayoutOrder; UIListAdv.Padding = UDim.new(0, 5)
-UIListAdv:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() PageAdv.CanvasSize = UDim2.new(0, 0, 0, UIListAdv.AbsoluteContentSize.Y + 80) end)
+local PadAdv = Instance.new("UIPadding", PageAdv); PadAdv.PaddingBottom = UDim.new(0, 100) -- Extra Lega Bawah
 
 TabPabrikBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = true; PageAdv.Visible = false; TabPabrikBtn.BackgroundColor3 = Theme.Purple; TabAdvBtn.BackgroundColor3 = Theme.Item end)
 TabAdvBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = false; PageAdv.Visible = true; TabPabrikBtn.BackgroundColor3 = Theme.Item; TabAdvBtn.BackgroundColor3 = Theme.Purple end)
@@ -228,7 +234,7 @@ CreateToggle(PagePabrik, "START BALANCED PABRIK", "EnablePabrik")
 
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
-CreateButton(PagePabrik, "🔄 RefreshItem", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
+CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
 
 CreateTextBox(PagePabrik, "Start X", getgenv().PabrikStartX, "PabrikStartX")
 CreateTextBox(PagePabrik, "End X", getgenv().PabrikEndX, "PabrikEndX")
@@ -236,16 +242,12 @@ CreateTextBox(PagePabrik, "Start Y Pos", getgenv().PabrikYPos, "PabrikYPos")
 
 local divider1 = Instance.new("Frame", PagePabrik); divider1.Size=UDim2.new(1,0,0,2); divider1.BackgroundColor3=Theme.Purple; divider1.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Pabrik Rows (Brp Baris)", getgenv().PabrikRows, "PabrikRows")
-CreateTextBox(PagePabrik, "Y Offset (2 down, -2 up)", getgenv().PabrikYOffset, "PabrikYOffset")
+CreateTextBox(PagePabrik, "Y Offset (2 bwh, -2 atas)", getgenv().PabrikYOffset, "PabrikYOffset")
 
 local divider2 = Instance.new("Frame", PagePabrik); divider2.Size=UDim2.new(1,0,0,2); divider2.BackgroundColor3=Theme.Purple; divider2.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Block Threshold (Sisa Tas)", getgenv().BlockThreshold, "BlockThreshold")
 CreateTextBox(PagePabrik, "Keep Seed Amt (Sisa Tas)", getgenv().KeepSeedAmt, "KeepSeedAmt")
-CreateTextBox(PagePabrik, "Waktu Tumbuh (Sec)", getgenv().GrowthTime, "GrowthTime")
-
--- Tambahan ruang di bawah biar beneran mentok aman
-local spacerPabrik = Instance.new("Frame", PagePabrik); spacerPabrik.Size=UDim2.new(1,0,0,10); spacerPabrik.BackgroundTransparency=1
-PagePabrik.CanvasSize = UDim2.new(0, 0, 0, UIListPabrik.AbsoluteContentSize.Y + 80)
+CreateTextBox(PagePabrik, "Waktu Tumbuh (Detik)", getgenv().GrowthTime, "GrowthTime")
 
 
 -- [[ BUILDER TAB 2: ADVANCED & DELAY ]] --
@@ -282,9 +284,6 @@ CreateButton(PageAdv, "📍 Set Drop Pos (Posisi Kamu)", function()
         DropXBox.Text = tostring(dx); DropYBox.Text = tostring(dy)
     end 
 end)
-
-local spacerAdv = Instance.new("Frame", PageAdv); spacerAdv.Size=UDim2.new(1,0,0,10); spacerAdv.BackgroundTransparency=1
-PageAdv.CanvasSize = UDim2.new(0, 0, 0, UIListAdv.AbsoluteContentSize.Y + 80)
 
 
 -- [[ LOGIC BALANCED PABRIK WITH MULTI-ROW ]] --
