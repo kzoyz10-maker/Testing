@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V46 + PLANT + INVENTORY + WALKSPEED"
+getgenv().ScriptVersion = "Auto Farm V46 + PLANT (FIXED) + WALKSPEED"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -197,7 +197,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 local function IsTileEmptyForPlant(gridX, gridY)
-    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
+    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return true end
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = rawId
@@ -472,8 +472,10 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 if type(yCol) == "table" then
                     for y, _ in pairs(yCol) do
                         if not getgenv().EnableAutoPlant then break end
-                        if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y - 1) then
-                            table.insert(targetTanam, {x = x, y = y - 1})
+                        
+                        -- FIX 1: Ubah ke y + 1 biar nargetin spot KOSONG di ATAS tanah
+                        if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) then
+                            table.insert(targetTanam, {x = x, y = y + 1})
                         end
                     end
                 end
@@ -487,8 +489,15 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                     task.wait(0.1)
                     pcall(function() 
                         local targetVec = Vector2.new(spot.x, spot.y)
-                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
-                        else RemoteFist:InvokeServer(targetVec) end
+                        local bibit = getgenv().SelectedSeed
+                        if bibit == "Kosong" or bibit == "None" then bibit = nil end
+                        
+                        -- FIX 2: Kirim ID bibit ke server bareng Vector2-nya
+                        if RemoteFist:IsA("RemoteEvent") then 
+                            RemoteFist:FireServer(targetVec, bibit) 
+                        else 
+                            RemoteFist:InvokeServer(targetVec, bibit) 
+                        end
                     end)
                     task.wait(getgenv().PlantDelay)
                 end
