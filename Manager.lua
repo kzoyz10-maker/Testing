@@ -14,7 +14,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Manager v1.3-TrashUpdate" 
+getgenv().ScriptVersion = "Manager v1.4-TrashUpdate+Delay" 
 
 -- ========================================== --
 getgenv().DropDelay = 2     
@@ -133,29 +133,31 @@ end)
 CreateToggle(TargetPage, "📦 Auto Drop", "AutoDrop", function(state) 
     if not state then ForceRestoreUI() end 
 end)
-CreateTextBox(TargetPage, "📦 Drop Amount", 50, "DropAmount") -- Dulu pakai CreateSlider
+CreateTextBox(TargetPage, "📦 Drop Amount", 50, "DropAmount")
+CreateTextBox(TargetPage, "⏱️ Drop Delay (Detik)", 2, "DropDelay") -- <-- INI DIA BOS
 
 -- AUTO TRASH UI
 CreateToggle(TargetPage, "🚮 Auto Trash", "AutoTrash", function(state) 
     if not state then ForceRestoreUI() end 
 end)
 CreateTextBox(TargetPage, "🗑️ Trash Amount", 50, "TrashAmount")
+CreateTextBox(TargetPage, "⏱️ Trash Delay (Detik)", 2, "TrashDelay") -- <-- SAMA INI JUGA
 
 -- ========================================== --
 -- [[ REMOTES & EVENTS ]]
 -- ========================================== --
 local Remotes = RS:WaitForChild("Remotes")
 local RemoteDropSafe = Remotes:WaitForChild("PlayerDrop") 
-local RemoteTrashSafe = Remotes:WaitForChild("PlayerItemTrash") -- Remote buat trashing
+local RemoteTrashSafe = Remotes:WaitForChild("PlayerItemTrash") 
 local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent") 
 
 RunService.RenderStepped:Connect(function() 
     if getgenv().AutoDrop or getgenv().AutoTrash then 
-        ManageUIState("Dropping") -- Pakai mode yang sama buat hide UI
+        ManageUIState("Dropping") 
     end 
 end)
 
--- [[ LOGIKA AUTO DROP (Dengan State Tracker) ]]
+-- [[ LOGIKA AUTO DROP ]]
 task.spawn(function() 
     local WasAutoDropOn = false
     while true do 
@@ -182,7 +184,7 @@ task.spawn(function()
                 end
             end)
             
-            task.wait(getgenv().DropDelay) 
+            task.wait(getgenv().DropDelay) -- Delay baca dari TextBox
         else
             if WasAutoDropOn then WasAutoDropOn = false; ForceRestoreUI() end
             task.wait(0.5)
@@ -190,7 +192,7 @@ task.spawn(function()
     end 
 end)
 
--- [[ LOGIKA AUTO TRASH (Dengan State Tracker) ]]
+-- [[ LOGIKA AUTO TRASH ]]
 task.spawn(function() 
     local WasAutoTrashOn = false
     while true do 
@@ -205,12 +207,10 @@ task.spawn(function()
                     elseif getgenv().GameInventoryModule.GetSelectedItem then 
                         _, slot = getgenv().GameInventoryModule.GetSelectedItem() 
                     end; 
-                    -- Remote Trash CUMA BUHUT SLOT AJA (Sesuai script kamu: args = { 19 })
                     if slot then RemoteTrashSafe:FireServer(slot) end 
                 end 
             end); 
             task.wait(0.2)
-            -- Konfirmasi Trash dengan Amount ke UIManager (Sesuai script kamu: ButtonAction = "trsh")
             pcall(function() ManagerRemote:FireServer(unpack({{ ButtonAction = "trsh", Inputs = { amt = tostring(Amt) } }})) end)
             
             pcall(function()
@@ -219,7 +219,7 @@ task.spawn(function()
                 end
             end)
             
-            task.wait(getgenv().TrashDelay) 
+            task.wait(getgenv().TrashDelay) -- Delay baca dari TextBox
         else
             if WasAutoTrashOn then WasAutoTrashOn = false; ForceRestoreUI() end
             task.wait(0.5)
