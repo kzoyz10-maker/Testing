@@ -11,10 +11,10 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V39 (PERFECT GRID & DEEP SCAN)"
+getgenv().ScriptVersion = "Auto Farm V47 (STRICT GRID WALK & INPUT)"
 
 -- ========================================== --
--- [[ KONFIGURASI ]]
+-- [[ KONFIGURASI AWAL ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
 getgenv().WalkSpeed = 16     
@@ -27,6 +27,7 @@ local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 
 -- Ambil Manager
@@ -37,6 +38,9 @@ local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsMana
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
+-- ========================================== --
+-- [[ BIKIN UI MENU (TOGGLE & INPUT) ]]
+-- ========================================== --
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
     local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 40, 0, 20); IndBg.Position = UDim2.new(1, -50, 0.5, -10); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
@@ -51,7 +55,47 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V39 (PERFECT GRID & DEEP SCAN)", "EnableSmartHarvest")
+
+function CreateInput(Parent, Text, Var, DefaultValue)
+    local Frame = Instance.new("Frame", Parent)
+    Frame.Size = UDim2.new(1, -10, 0, 40)
+    Frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    
+    local Label = Instance.new("TextLabel", Frame)
+    Label.Size = UDim2.new(0.6, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Text
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.Font = Enum.Font.GothamBold
+    Label.TextSize = 13
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local TextBox = Instance.new("TextBox", Frame)
+    TextBox.Size = UDim2.new(0.3, 0, 0.7, 0)
+    TextBox.Position = UDim2.new(0.65, 0, 0.15, 0)
+    TextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.Font = Enum.Font.Gotham
+    TextBox.TextSize = 13
+    TextBox.Text = tostring(DefaultValue)
+    TextBox.ClearTextOnFocus = false
+
+    getgenv()[Var] = DefaultValue
+
+    TextBox.FocusLost:Connect(function()
+        local num = tonumber(TextBox.Text)
+        if num then
+            getgenv()[Var] = num
+        else
+            TextBox.Text = tostring(getgenv()[Var]) 
+        end
+    end)
+end
+
+CreateToggle(TargetPage, "🚀 START V47 (STRICT WALK & INPUT)", "EnableSmartHarvest")
+CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
+CreateInput(TargetPage, "⏳ Break Delay", "BreakDelay", 0.15)
 
 -- ========================================== --
 -- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
@@ -87,7 +131,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & PERFECT SNAP ]]
+-- [[ TAHAP 2: A-STAR & WALK PER GRID ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -162,32 +206,44 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     return nil 
 end
 
-local function SmoothWalkTo(targetPos)
+-- MURNI JALAN KOTAK DEMI KOTAK
+local function WalkPerGrid(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
     
     local startPos = MyHitbox.Position
     local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
+    
+    -- Hitung waktu tempuh per 1 kotak grid berdasarkan WalkSpeed dari UI
     local duration = dist / getgenv().WalkSpeed
     
     if duration > 0 then 
-        local t = 0
-        while t < duration do
-            if not getgenv().EnableSmartHarvest then return false end
-            local dt = RunService.Heartbeat:Wait()
-            t = t + dt
-            local alpha = math.clamp(t / duration, 0, 1)
-            local currentPos = startPos:Lerp(targetPos, alpha)
-            
-            MyHitbox.CFrame = CFrame.new(currentPos)
-            if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+        local tween = TweenService:Create(MyHitbox, tweenInfo, {CFrame = CFrame.new(targetPos)})
+        
+        -- Kunci velocity biar nggak geser kena pantulan physics gamenya
+        MyHitbox.Velocity = Vector3.new(0,0,0)
+        MyHitbox.RotVelocity = Vector3.new(0,0,0)
+        
+        local syncConn
+        if PlayerMovement then
+            syncConn = RunService.Heartbeat:Connect(function()
+                pcall(function() PlayerMovement.Position = MyHitbox.Position end)
+            end)
         end
+        
+        tween:Play()
+        tween.Completed:Wait() -- Wajib nunggu sampai beneran di tengah kotak
+        
+        if syncConn then syncConn:Disconnect() end
     end
     
-    -- PERFECT SNAP: Paksa bot diem pas di tengah Grid biar gak motong tikungan!
+    -- PERFECT SNAP: Kunci posisi murni di tengah grid
     MyHitbox.CFrame = CFrame.new(targetPos)
+    MyHitbox.Velocity = Vector3.new(0,0,0)
+    MyHitbox.RotVelocity = Vector3.new(0,0,0)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
-    task.wait(0.02) -- Jeda mikroskopis biar Physics Engine gamenya sinkron!
+    
     return true
 end
 
@@ -196,19 +252,24 @@ local function MoveSmartlyTo(targetX, targetY)
     if not MyHitbox then return false end
     
     local myZ = MyHitbox.Position.Z
-    -- Gunakan math.round untuk kalkulasi akurat
+    -- Gunakan math.round untuk kalkulasi akurat posisi di grid
     local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
     local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
 
     if myGridX == targetX and myGridY == targetY then return true end
+    
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     if not route then return false end
 
     for _, stepPos in ipairs(route) do
         if not getgenv().EnableSmartHarvest then break end
+        
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
-        if not SmoothWalkTo(pos) then return false end
+        
+        -- JALAN PER KOTAK
+        if not WalkPerGrid(pos) then return false end
     end
+    
     return true
 end
 
@@ -244,18 +305,15 @@ local function ScanWorld()
     end
 end
 
--- Fungsi mengerikan yang bakal ngebongkar isi Database secara brutal
 local function DeepFindGrowTime(tbl)
     if type(tbl) ~= "table" then return nil end
     for k, v in pairs(tbl) do
         if type(v) == "number" and type(k) == "string" then
             local kl = k:lower()
-            -- Cari semua kata kunci waktu yang mungkin dipake Developer!
             if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
                 if v > 0 then return v end
             end
         elseif type(v) == "table" then
-            -- Kalau ketemu folder/table lagi, masuk dan obrak-abrik lagi!
             local res = DeepFindGrowTime(v)
             if res then return res end
         end
@@ -270,7 +328,6 @@ local function GetExactGrowTime(saplingName)
         local baseId = string.gsub(saplingName, "_sapling", "")
         local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
         if itemData then
-            -- Panggil si Deep Scanner!
             local foundTime = DeepFindGrowTime(itemData)
             if foundTime then
                 getgenv().AIDictionary[saplingName] = foundTime
@@ -331,7 +388,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 
-                -- LANGSUNG OBRAK ABRIK DATABASE BUAT CARI UMUR
                 local targetMatang = GetExactGrowTime(sapling.name)
                 
                 if not targetMatang then
