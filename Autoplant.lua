@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V46 + PLANT (PLACE ITEM) + WALKSPEED"
+getgenv().ScriptVersion = "Auto Farm V46 + PLANT (SLOT TAS FIX) + WALKSPEED"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -31,11 +31,11 @@ local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
--- TAMBAHAN: Remote buat Harvest & Remote buat Nanam
+-- REMOTES
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem") 
 
--- Ambil Manager
+-- MANAGERS
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
 local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
@@ -50,7 +50,7 @@ local UIManager
 pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
 -- ========================================== --
--- [[ BIKIN UI MENU (TOGGLE, INPUT, DROPDOWN) ]]
+-- [[ BIKIN UI MENU ]]
 -- ========================================== --
 function CreateToggle(Parent, Text, Var) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
@@ -141,7 +141,7 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
 end
 
 -- ========================================== --
--- [[ SISTEM SCAN INVENTORY PABRIK ]]
+-- [[ SISTEM INVENTORY & SLOT ]]
 -- ========================================== --
 local function ScanAvailableItems()
     local items = {}; local dict = {}
@@ -159,15 +159,31 @@ local function ScanAvailableItems()
     return items
 end
 
-CreateToggle(TargetPage, "🌾 START AUTO HARVEST (V46)", "EnableSmartHarvest")
-CreateToggle(TargetPage, "🌱 START AUTO PLANT BISA", "EnableAutoPlant")
+-- FUNGSI BARU: Ambil Slot ID berdasarkan Item
+local function GetSlotByItemID(itemID)
+    local foundSlot = nil
+    pcall(function()
+        if InventoryMod and InventoryMod.Stacks then
+            for slot, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and tostring(data.Id) == tostring(itemID) then
+                    foundSlot = slot
+                    break
+                end
+            end
+        end
+    end)
+    return foundSlot
+end
+
+CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 Pilih Bibit (Tas)", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
 CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
 CreateInput(TargetPage, "🌿 Plant Delay", "PlantDelay", 0.15)
 
 -- ========================================== --
--- [[ TAHAP 1: RADAR INVERTED (ANTI MENTOK) ]]
+-- [[ RADAR INVERTED (ANTI MENTOK) ]]
 -- ========================================== --
 local BlockSolidityCache = {}
 
@@ -216,7 +232,7 @@ local function IsTileEmptyForPlant(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & PERFECT SNAP (WALKSPEED) ]]
+-- [[ A-STAR & MOVEMENT ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -320,7 +336,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ TAHAP 3: RECURSIVE DEEP SCANNER DATABASE ]]
+-- [[ SCANNER DATABASE WAKTU TUMBUH ]]
 -- ========================================== --
 local SaplingsData = {}
 
@@ -416,7 +432,7 @@ local function BackupAIBelajarWaktu(sapling)
 end
 
 -- ========================================== --
--- [[ TAHAP 4: FARM & PLANT LOGIC ]]
+-- [[ AUTO FARM / HARVEST LOGIC ]]
 -- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
@@ -453,7 +469,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     task.wait(0.1)
                     pcall(function() 
                         local targetVec = Vector2.new(panen.x, panen.y)
-                        -- HARVEST pakai RemoteFist
                         if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
                         else RemoteFist:InvokeServer(targetVec) end
                     end)
@@ -465,17 +480,19 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     end
 end)
 
+-- ========================================== --
+-- [[ AUTO PLANT LOGIC (SLOT TAS FIX) ]]
+-- ========================================== --
 if getgenv().KzoyzAutoPlantLoop then task.cancel(getgenv().KzoyzAutoPlantLoop) end
 getgenv().KzoyzAutoPlantLoop = task.spawn(function()
     while true do
         if getgenv().EnableAutoPlant and not getgenv().EnableSmartHarvest then 
             local targetTanam = {}
             
-            -- FIX: Scan X berurutan dari 0 sampai 100 biar jalannya rapi dari kiri ke kanan
+            -- Scan X berurutan dari 0 sampai 100 biar bot jalannya rapi dari kiri ke kanan
             for x = 0, 100 do
                 local yCol = RawWorldTiles[x]
                 if type(yCol) == "table" then
-                    -- Kita ambil Y-nya dan diurutkan
                     local yKeys = {}
                     for y, _ in pairs(yCol) do
                         table.insert(yKeys, y)
@@ -497,22 +514,34 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 if not getgenv().EnableAutoPlant or getgenv().EnableSmartHarvest then break end
                 
                 local bibit = getgenv().SelectedSeed
-                if bibit == "Kosong" or bibit == "None" then bibit = nil end
-                
-                if bibit then -- Cek dulu ada bibit nggak, kalau nggak jangan jalan
+                if bibit ~= "Kosong" and bibit ~= "None" then 
+                    
+                    -- Cari NOMOR SLOT dari bibit yang dipilih
+                    local seedSlot = GetSlotByItemID(bibit)
+                    
+                    if not seedSlot then
+                        warn("⚠️ Bibit " .. tostring(bibit) .. " nggak ketemu di tas / Habis!")
+                        getgenv().EnableAutoPlant = false
+                        break
+                    end
+                    
                     local bisaJalan = MoveSmartlyTo(spot.x, spot.y)
                     if bisaJalan then
                         task.wait(0.1)
+                        
                         pcall(function() 
                             local targetVec = Vector2.new(spot.x, spot.y)
+                            local targetStr = tostring(spot.x) .. ", " .. tostring(spot.y)
                             
-                            -- FIX: Pakai RemotePlace, bukan RemoteFist
+                            -- Nanam pakai RemotePlace (PlayerPlaceItem) dengan argument NOMOR SLOT tas
                             if RemotePlace:IsA("RemoteEvent") then 
-                                RemotePlace:FireServer(targetVec, bibit) 
+                                RemotePlace:FireServer(targetVec, seedSlot) 
+                                RemotePlace:FireServer(targetStr, seedSlot) 
                             else 
-                                RemotePlace:InvokeServer(targetVec, bibit) 
+                                RemotePlace:InvokeServer(targetVec, seedSlot) 
                             end
                         end)
+                        
                         task.wait(getgenv().PlantDelay)
                     end
                 end
