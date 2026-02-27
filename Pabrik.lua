@@ -228,7 +228,7 @@ CreateToggle(PagePabrik, "START BALANCED PABRIK", "EnablePabrik")
 
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
-CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
+CreateButton(PagePabrik, "🔄 RefreshItem", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
 
 CreateTextBox(PagePabrik, "Start X", getgenv().PabrikStartX, "PabrikStartX")
 CreateTextBox(PagePabrik, "End X", getgenv().PabrikEndX, "PabrikEndX")
@@ -236,12 +236,12 @@ CreateTextBox(PagePabrik, "Start Y Pos", getgenv().PabrikYPos, "PabrikYPos")
 
 local divider1 = Instance.new("Frame", PagePabrik); divider1.Size=UDim2.new(1,0,0,2); divider1.BackgroundColor3=Theme.Purple; divider1.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Pabrik Rows (Brp Baris)", getgenv().PabrikRows, "PabrikRows")
-CreateTextBox(PagePabrik, "Y Offset (2 bwh, -2 atas)", getgenv().PabrikYOffset, "PabrikYOffset")
+CreateTextBox(PagePabrik, "Y Offset (2 down, -2 up)", getgenv().PabrikYOffset, "PabrikYOffset")
 
 local divider2 = Instance.new("Frame", PagePabrik); divider2.Size=UDim2.new(1,0,0,2); divider2.BackgroundColor3=Theme.Purple; divider2.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Block Threshold (Sisa Tas)", getgenv().BlockThreshold, "BlockThreshold")
 CreateTextBox(PagePabrik, "Keep Seed Amt (Sisa Tas)", getgenv().KeepSeedAmt, "KeepSeedAmt")
-CreateTextBox(PagePabrik, "Waktu Tumbuh (Detik)", getgenv().GrowthTime, "GrowthTime")
+CreateTextBox(PagePabrik, "Waktu Tumbuh (Sec)", getgenv().GrowthTime, "GrowthTime")
 
 -- Tambahan ruang di bawah biar beneran mentok aman
 local spacerPabrik = Instance.new("Frame", PagePabrik); spacerPabrik.Size=UDim2.new(1,0,0,10); spacerPabrik.BackgroundTransparency=1
