@@ -66,7 +66,7 @@ function CreateButton(Parent, Text, Callback)
     Btn.MouseButton1Click:Connect(Callback)
 end
 
-CreateToggle(TargetPage, "💎 START AUTO COLLECT (Drops & Gems)", "EnableAutoCollect")
+CreateToggle(TargetPage, "💎 START AUTO COLLECT lol", "EnableAutoCollect")
 CreateToggle(TargetPage, "🎯 TRACER ESP (Garis FPS Style)", "EnableDropESP")
 CreateInput(TargetPage, "⚡ Lari Auto Collect (WalkSpeed)", "WalkSpeed", 16)
 
