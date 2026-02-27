@@ -14,7 +14,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Collect V10 + X-Ray Attribute Scanner"
+getgenv().ScriptVersion = "Collect V11 + Smart Pathfinding Restored"
 getgenv().EnableAutoCollect = false
 getgenv().EnableDropESP = false
 getgenv().GridSize = 4.5
@@ -66,64 +66,41 @@ function CreateButton(Parent, Text, Callback)
     Btn.MouseButton1Click:Connect(Callback)
 end
 
-CreateToggle(TargetPage, "💎 START AUTO COLLECT", "EnableAutoCollect")
-CreateToggle(TargetPage, "🎯 TRACER ESyyyP", "EnableDropESP")
+CreateToggle(TargetPage, "💎 START AUTO COLLECT (SMART)", "EnableAutoCollect")
+CreateToggle(TargetPage, "🎯 TRACER ESP", "EnableDropESP")
 CreateInput(TargetPage, "⚡ Lari Auto Collect", "WalkSpeed", 16)
 
 -- ========================================== --
--- [[ HELPER: X-RAY ATTRIBUTE SCANNER (V10) ]]
+-- [[ HELPER: DEEP INSPECTOR DROP NAMA ]]
 -- ========================================== --
 local function GetItemRealName(item)
-    local name = item.Name
-    if name ~= "Drop" and name ~= "Drops" and name ~= "Model" and name ~= "Part" then return name end
-    
-    local attributes = item:GetAttributes()
-    local rawAttributesFound = {}
-
-    -- 1. BRUTE-FORCE SCAN: Cek SEMUA attribute tanpa filter nama
-    for attrName, attrValue in pairs(attributes) do
-        if type(attrValue) == "number" then
-            -- Cek kalau angka ini ada di kamus WorldManager
-            if WorldManager.NumberToStringMap[attrValue] then
-                return WorldManager.NumberToStringMap[attrValue]
-            end
-            -- Cek alternatif di ItemsManager
-            if ItemsManager.ItemsData and ItemsManager.ItemsData[attrValue] and ItemsManager.ItemsData[attrValue].Name then
-                return ItemsManager.ItemsData[attrValue].Name
-            end
-        end
-        -- Kumpulkan data mentah kalau gagal dicocokkin
-        table.insert(rawAttributesFound, tostring(attrName) .. ":" .. tostring(attrValue))
+    -- 1. Cek Attributes dulu (siapa tau ada)
+    for attrName, attrValue in pairs(item:GetAttributes()) do
+        if type(attrValue) == "number" and WorldManager.NumberToStringMap[attrValue] then return WorldManager.NumberToStringMap[attrValue] end
+        if type(attrValue) == "string" and string.len(attrValue) > 2 then return attrValue end
     end
 
-    -- 2. X-RAY MODE: Tampilkan isi attribute ke layar kalau database gagal ngenalin!
-    if #rawAttributesFound > 0 then
-        return "[A] " .. table.concat(rawAttributesFound, " | ")
-    end
-
-    -- 3. Cek ProximityPrompt & UI (Fallback)
-    local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if prompt and prompt.ObjectText and prompt.ObjectText ~= "" then return prompt.ObjectText end
-    
-    local gui = item:FindFirstChildWhichIsA("BillboardGui", true) or item:FindFirstChildWhichIsA("SurfaceGui", true)
-    if gui and gui.Name ~= "KzoyzTextESP" then
-        local txt = gui:FindFirstChildWhichIsA("TextLabel", true)
-        if txt and txt.Text ~= "" then return string.gsub(txt.Text, " x%d+", "") end
-    end
-
-    -- 4. Cek StringValue / IntValue di dalam Part
-    for _, child in ipairs(item:GetDescendants()) do
-        if child:IsA("StringValue") and child.Value ~= "" then return child.Value end
-        if (child:IsA("IntValue") or child:IsA("NumberValue")) and WorldManager.NumberToStringMap[child.Value] then
-            return WorldManager.NumberToStringMap[child.Value]
+    -- 2. Cek object di DALAM Part tersebut (Ini yang sering dipakai kalau bukan attribute)
+    for _, child in ipairs(item:GetChildren()) do
+        if child:IsA("StringValue") and child.Value ~= "" then 
+            return child.Value 
+        elseif child:IsA("IntValue") or child:IsA("NumberValue") then
+            if WorldManager.NumberToStringMap[child.Value] then return WorldManager.NumberToStringMap[child.Value] end
+        elseif child:IsA("ProximityPrompt") then
+            if child.ObjectText and child.ObjectText ~= "" then return child.ObjectText end
+        elseif child:IsA("BillboardGui") and child.Name ~= "KzoyzTextESP" then
+            local txt = child:FindFirstChildWhichIsA("TextLabel", true)
+            if txt and txt.Text ~= "" then return string.gsub(txt.Text, " x%d+", "") end
         end
     end
 
-    return "Part_Blank"
+    -- 3. Kalau beneran kosong, tampilkan identitas aslinya biar kita bisa bedah!
+    local childCount = #item:GetChildren()
+    return "[" .. item.Name .. " | Isi:" .. childCount .. "]"
 end
 
 -- ========================================== --
--- [[ GROWSCAN MODAL (REAL-TIME & XY) ]]
+-- [[ GROWSCAN MODAL (REAL-TIME) ]]
 -- ========================================== --
 local function GetExactGrowTime(saplingName)
     if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
@@ -187,11 +164,9 @@ local function RenderGrowscanContent(scrollFrame)
     local totalY = 0
     for plantName, stat in pairs(plantStats) do
         local frame = Instance.new("Frame", scrollFrame); frame.Size = UDim2.new(1, 0, 0, 85); frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        
         local lblName = Instance.new("TextLabel", frame); lblName.Size = UDim2.new(1, -10, 0, 20); lblName.Position = UDim2.new(0, 10, 0, 5); lblName.BackgroundTransparency = 1; lblName.Text = "🌱 " .. string.upper(string.gsub(plantName, "_sapling", "")); lblName.TextColor3 = Color3.fromRGB(255, 255, 255); lblName.Font = Enum.Font.GothamBold; lblName.TextXAlignment = Enum.TextXAlignment.Left; lblName.TextSize = 14
         local lblStat = Instance.new("TextLabel", frame); lblStat.Size = UDim2.new(1, -10, 0, 20); lblStat.Position = UDim2.new(0, 10, 0, 25); lblStat.BackgroundTransparency = 1; lblStat.Text = "Total: " .. stat.total .. " | ✅ Ready: " .. stat.ready .. " | ⏳ Growing: " .. stat.growing; lblStat.TextColor3 = Color3.fromRGB(200, 200, 200); lblStat.Font = Enum.Font.Gotham; lblStat.TextXAlignment = Enum.TextXAlignment.Left; lblStat.TextSize = 12
         local lblCoords = Instance.new("TextLabel", frame); lblCoords.Size = UDim2.new(1, -20, 0, 35); lblCoords.Position = UDim2.new(0, 10, 0, 45); lblCoords.BackgroundTransparency = 1; lblCoords.Text = "📍 XY Ready: " .. FormatCoords(stat.readyCoords); lblCoords.TextColor3 = Color3.fromRGB(150, 255, 150); lblCoords.Font = Enum.Font.Gotham; lblCoords.TextXAlignment = Enum.TextXAlignment.Left; lblCoords.TextYAlignment = Enum.TextYAlignment.Top; lblCoords.TextSize = 11; lblCoords.TextWrapped = true
-        
         totalY = totalY + 90
     end
 
@@ -210,7 +185,6 @@ local function RenderGrowscanContent(scrollFrame)
                 local gY = math.floor(pos.Y / getgenv().GridSize)
                 table.insert(dropStats[realName].coords, "("..gX..","..gY..")")
             end
-            
             dropStats[realName].count = dropStats[realName].count + 1
             totalDrops = totalDrops + 1
         end
@@ -218,7 +192,6 @@ local function RenderGrowscanContent(scrollFrame)
 
     local sep = Instance.new("TextLabel", scrollFrame); sep.Size = UDim2.new(1, 0, 0, 20); sep.BackgroundTransparency = 1; sep.Text = "--------------------------------------------------"; sep.TextColor3 = Color3.fromRGB(150, 150, 150); sep.Font = Enum.Font.GothamBold; sep.TextSize = 14
     totalY = totalY + 25
-
     local dropTitle = Instance.new("TextLabel", scrollFrame); dropTitle.Size = UDim2.new(1, -10, 0, 20); dropTitle.Position = UDim2.new(0, 10, 0, 0); dropTitle.BackgroundTransparency = 1; dropTitle.Text = "📦 BARANG (Drops: " .. totalDrops .. ")"; dropTitle.TextColor3 = Color3.fromRGB(100, 200, 255); dropTitle.Font = Enum.Font.GothamBold; dropTitle.TextXAlignment = Enum.TextXAlignment.Left; dropTitle.TextSize = 13
     totalY = totalY + 25
 
@@ -234,25 +207,13 @@ end
 
 local function OpenGrowscanModal()
     if CoreGui:FindFirstChild("KzoyzGrowscan") then CoreGui.KzoyzGrowscan:Destroy() end
-
-    local gui = Instance.new("ScreenGui", CoreGui)
-    gui.Name = "KzoyzGrowscan"
-    
-    local mainFrame = Instance.new("Frame", gui)
-    mainFrame.Size = UDim2.new(0, 400, 0, 480); mainFrame.Position = UDim2.new(0.5, -200, 0.5, -240)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
-    
-    local title = Instance.new("TextLabel", mainFrame)
-    title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(25, 25, 25); title.Text = "📊 GROWSCAN (LIVE + X-RAY)"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 16
-    
-    local scroll = Instance.new("ScrollingFrame", mainFrame)
-    scroll.Size = UDim2.new(1, -20, 1, -60); scroll.Position = UDim2.new(0, 10, 0, 50); scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45); scroll.ScrollBarThickness = 4
+    local gui = Instance.new("ScreenGui", CoreGui); gui.Name = "KzoyzGrowscan"
+    local mainFrame = Instance.new("Frame", gui); mainFrame.Size = UDim2.new(0, 400, 0, 480); mainFrame.Position = UDim2.new(0.5, -200, 0.5, -240); mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
+    local title = Instance.new("TextLabel", mainFrame); title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(25, 25, 25); title.Text = "📊 GROWSCAN (LIVE UPDATE)"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 16
+    local scroll = Instance.new("ScrollingFrame", mainFrame); scroll.Size = UDim2.new(1, -20, 1, -60); scroll.Position = UDim2.new(0, 10, 0, 50); scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45); scroll.ScrollBarThickness = 4
     local uiList = Instance.new("UIListLayout", scroll); uiList.Padding = UDim.new(0, 5)
-
     local isModalOpen = true
-
-    local closeBtn = Instance.new("TextButton", title)
-    closeBtn.Size = UDim2.new(0, 40, 1, 0); closeBtn.Position = UDim2.new(1, -40, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80); closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 16
+    local closeBtn = Instance.new("TextButton", title); closeBtn.Size = UDim2.new(0, 40, 1, 0); closeBtn.Position = UDim2.new(1, -40, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80); closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 16
     closeBtn.MouseButton1Click:Connect(function() isModalOpen = false; gui:Destroy() end)
     
     task.spawn(function()
@@ -266,16 +227,120 @@ end
 CreateButton(TargetPage, "Buka Modal Growscan", OpenGrowscanModal)
 
 -- ========================================== --
--- [[ PATHFINDING & AUTO COLLECT LOOP ]]
+-- [[ PATHFINDING (A-STAR) PINTAR KEMBALI! ]]
 -- ========================================== --
--- (Sama seperti V9, disingkat agar fokus di ESP)
+local BlockSolidityCache = {}
+local function IsTileSolid(gridX, gridY)
+    if gridX < 0 or gridX > 100 then return true end
+    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
+    
+    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
+        local rawId = type(data) == "table" and data[1] or data
+        local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap[rawId] or rawId) or rawId
+        local nameStr = tostring(tileString):lower()
+        
+        if BlockSolidityCache[nameStr] ~= nil then return BlockSolidityCache[nameStr] end
+        if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
+            BlockSolidityCache[nameStr] = false; continue 
+        end
+        BlockSolidityCache[nameStr] = true; return true
+    end
+    return false
+end
+
+local function FindPathAStar(startX, startY, targetX, targetY)
+    if startX == targetX and startY == targetY then return {} end
+    local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
+    local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
+
+    local startKey = startX .. "," .. startY
+    table.insert(openSet, {x = startX, y = startY, key = startKey})
+    gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
+
+    local maxIterations, iterations = 2000, 0
+    local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+
+    while #openSet > 0 do
+        iterations = iterations + 1; if iterations > maxIterations then break end
+        local current, currentIndex = openSet[1], 1
+        for i = 2, #openSet do
+            if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end
+        end
+
+        if current.x == targetX and current.y == targetY then
+            local path, currKey = {}, current.key
+            while cameFrom[currKey] do
+                local node = cameFrom[currKey]
+                table.insert(path, 1, {x = current.x, y = current.y})
+                current = node; currKey = node.x .. "," .. node.y
+            end
+            return path
+        end
+
+        table.remove(openSet, currentIndex); closedSet[current.key] = true
+
+        for _, dir in ipairs(directions) do
+            local nextX, nextY = current.x + dir[1], current.y + dir[2]
+            local nextKey = nextX .. "," .. nextY
+            if nextX < 0 or nextX > 100 or closedSet[nextKey] then continue end
+
+            if not (nextX == targetX and nextY == targetY) and IsTileSolid(nextX, nextY) then closedSet[nextKey] = true; continue end
+
+            local tentative_gScore = gScore[current.key] + 1
+            if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
+                cameFrom[nextKey] = current; gScore[nextKey] = tentative_gScore; fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
+                local inOpenSet = false
+                for _, node in ipairs(openSet) do if node.key == nextKey then inOpenSet = true; break end end
+                if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
+            end
+        end
+    end
+    return nil 
+end
+
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
+    local startPos = MyHitbox.Position
+    local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
+    local duration = dist / getgenv().WalkSpeed
+    if duration > 0 then 
+        local t = 0
+        while t < duration do
+            if not getgenv().EnableAutoCollect then return false end
+            local dt = RunService.Heartbeat:Wait()
+            t = t + dt
+            local alpha = math.clamp(t / duration, 0, 1)
+            MyHitbox.CFrame = CFrame.new(startPos:Lerp(targetPos, alpha))
+            if PlayerMovement then pcall(function() PlayerMovement.Position = startPos:Lerp(targetPos, alpha) end) end
+        end
+    end
     MyHitbox.CFrame = CFrame.new(targetPos)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
     task.wait(0.02) 
     return true
+end
+
+local function MoveSmartlyToDrop(targetPos)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if not MyHitbox then return false end
+    
+    local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
+    local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
+    local targetGridX = math.round(targetPos.X / getgenv().GridSize)
+    local targetGridY = math.round(targetPos.Y / getgenv().GridSize)
+
+    if myGridX == targetGridX and myGridY == targetGridY then return SmoothWalkTo(targetPos) end
+    
+    local route = FindPathAStar(myGridX, myGridY, targetGridX, targetGridY)
+    if not route then return SmoothWalkTo(targetPos) end
+
+    for _, stepPos in ipairs(route) do
+        if not getgenv().EnableAutoCollect then break end
+        local stepVector = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, MyHitbox.Position.Z)
+        if not SmoothWalkTo(stepVector) then return false end
+    end
+    return SmoothWalkTo(targetPos)
 end
 
 if getgenv().KzoyzAutoCollectLoop then task.cancel(getgenv().KzoyzAutoCollectLoop) end
@@ -295,7 +360,11 @@ getgenv().KzoyzAutoCollectLoop = task.spawn(function()
                     end
                 end
                 table.sort(drops, function(a, b) return a.dist < b.dist end)
-                if #drops > 0 and drops[1].instance.Parent then SmoothWalkTo(drops[1].position) end
+                
+                if #drops > 0 and drops[1].instance.Parent then
+                    MoveSmartlyToDrop(drops[1].position)
+                    task.wait(0.1)
+                end
             end
         end
         task.wait(0.2) 
@@ -349,7 +418,6 @@ getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
                             txt.Font = Enum.Font.GothamBold; txt.TextSize = 10; txt.TextWrapped = true
                         end
                         
-                        -- Tampilkan nama real atau tulisan [A] Attribute mentahnya
                         local realName = item.Parent.Name == "Gems" and "💎 Gem" or GetItemRealName(item)
                         espUI.TextLabel.Text = tostring(realName) .. "\n[" .. dist .. "m]"
 
