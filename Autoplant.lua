@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V42 (NO UI & STRICT 90-DEGREE)"
+getgenv().ScriptVersion = "Auto Farm V44 (UI CHECKER & STRICT WALK)"
 
 -- ========================================== --
 -- [[ KONFIGURASI ]]
@@ -51,7 +51,7 @@ function CreateToggle(Parent, Text, Var)
         end 
     end) 
 end
-CreateToggle(TargetPage, "🚀 START V42 (NO UI CHECK & STRICT WALK)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V44 (UI CHECKER & STRICT WALK)", "EnableSmartHarvest")
 
 -- ========================================== --
 -- [[ TAHAP 1: RADAR INVERTED ]]
@@ -86,7 +86,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & STRICT MOVEMENT ]]
+-- [[ TAHAP 2: STRICT MOVEMENT (ANTI NEMBUS) ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -170,7 +170,7 @@ local function SmoothWalkTo(targetPos)
     local duration = dist / getgenv().WalkSpeed
     
     if duration > 0 then 
-        -- KUNCI MUTLAK BADAN KARAKTER
+        -- MATIKAN FISIKA BIAR GAK NEMBUS TIKUNGAN
         pcall(function() MyHitbox.Anchored = true end)
 
         local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
@@ -187,10 +187,11 @@ local function SmoothWalkTo(targetPos)
         tween.Completed:Wait()
         
         if syncConn then syncConn:Disconnect() end
+        
+        -- NYALAKAN FISIKA LAGI
         pcall(function() MyHitbox.Anchored = false end)
     end
     
-    -- SNAP POSISI 100% AKURAT
     MyHitbox.CFrame = CFrame.new(targetPos)
     MyHitbox.Velocity = Vector3.new(0,0,0)
     MyHitbox.RotVelocity = Vector3.new(0,0,0)
@@ -216,14 +217,14 @@ local function MoveSmartlyTo(targetX, targetY)
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         if not SmoothWalkTo(pos) then return false end
         
-        -- JEDA MUTLAK: Paksa berhenti sejenak di tengah grid biar tikungannya 100% patah 90 derajat!
+        -- JEDA PENTING BIAR TIKUNGANNYA PATAH 90 DERAJAT
         task.wait(0.05) 
     end
     return true
 end
 
 -- ========================================== --
--- [[ TAHAP 3: DEEP SCANNER WITH RAW ID ]]
+-- [[ TAHAP 3: BACA DATABASE & BACA UI ]]
 -- ========================================== --
 local SaplingsData = {}
 
@@ -286,11 +287,58 @@ local function GetExactGrowTime(saplingData)
     return getgenv().AIDictionary[saplingData.name] or nil
 end
 
--- ========================================== --
--- [[ TAHAP 4: FARM LOGIC (NO UI CHECK) ]]
--- ========================================== --
--- FITUR BACA UI (BackupAIBelajarWaktu) SUDAH DIHAPUS TOTAL!
+-- FUNGSI CEK UI DIKEMBALIKAN (TAPI LEBIH PINTAR)
+local function BackupAIBelajarWaktu(sapling)
+    local sampai = MoveSmartlyTo(sapling.x, sapling.y)
+    if not sampai then return false end
+    
+    local timer = 0
+    while timer < 30 do
+        local hover = workspace:FindFirstChild("HoverPart")
+        if hover then
+            for _, v in pairs(hover:GetDescendants()) do
+                if v:IsA("TextLabel") and v.Text ~= "" then
+                    local text = string.lower(v.Text)
+                    
+                    -- Kalau udah mateng
+                    local isReady = string.find(text, "harvest") or string.find(text, "100%%") or string.find(text, "ready") or string.find(text, "grown")
+                    if isReady then
+                        local umurSekarang = os.time() - sapling.at
+                        getgenv().AIDictionary[sapling.name] = umurSekarang -- Simpan ke otak biar yg lain gak usah dicek
+                        return true
+                    end
 
+                    -- Kalau belum mateng, baca sisa waktunya
+                    local jam = tonumber(string.match(text, "(%d+)h")) or 0
+                    local menit = tonumber(string.match(text, "(%d+)m")) or 0
+                    local detik = tonumber(string.match(text, "(%d+)s")) or 0
+                    
+                    if string.match(text, "%d+:%d+") then
+                        local parts = string.split(text, ":")
+                        if #parts == 3 then jam, menit, detik = tonumber(parts[1]), tonumber(parts[2]), tonumber(parts[3])
+                        elseif #parts == 2 then menit, detik = tonumber(parts[1]), tonumber(parts[2]) end
+                    end
+
+                    local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
+                    if sisaWaktuLayar > 0 then
+                        local umurSekarang = os.time() - sapling.at
+                        local totalDurasi = umurSekarang + sisaWaktuLayar
+                        totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
+                        getgenv().AIDictionary[sapling.name] = totalDurasi -- Simpan ke otak
+                        return true
+                    end
+                end
+            end
+        end
+        timer = timer + 1
+        task.wait(0.1)
+    end
+    return false
+end
+
+-- ========================================== --
+-- [[ TAHAP 4: FARM LOGIC ]]
+-- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
@@ -302,10 +350,16 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 
-                -- Langsung tembak database!
                 local targetMatang = GetExactGrowTime(sapling)
                 
-                -- Kalau GAGAL nemu di database, CUEKIN AJA! Gak usah samperin buat baca UI.
+                -- KALAU GAK KETEMU DI DATABASE, DIA BAKAL NYAMPERIN BUAT CEK UI (1x SAJA)
+                if not targetMatang then
+                    local berhasilBaca = BackupAIBelajarWaktu(sapling)
+                    if berhasilBaca then
+                        targetMatang = getgenv().AIDictionary[sapling.name]
+                    end
+                end
+                
                 if targetMatang then
                     local umurServer1 = os.time() - sapling.at
                     local umurServer2 = workspace:GetServerTimeNow() - sapling.at
