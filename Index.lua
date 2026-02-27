@@ -89,4 +89,5 @@ CreateAutoLoadTab("Pabrik", "Pabrik (Factory)", "https://raw.githubusercontent.c
 CreateAutoLoadTab("Auto Farm", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autofarm.lua")
 CreateAutoLoadTab("Manager", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Manager.lua")
 CreateAutoLoadTab("Auto PTHT", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoplant.lua")
+CreateAutoLoadTab("Auto Collect", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autocollect.lua")
 CreateAutoLoadTab("Information", "How to use? ", "https://raw.githubusercontent.com/Koziz/CAW-SCRIPT/refs/heads/main/Hrs.lua")
