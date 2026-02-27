@@ -14,7 +14,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Collect V5 + Smart Path + Pro ESP"
+getgenv().ScriptVersion = "Collect V6 + Bug Fixes"
 getgenv().EnableAutoCollect = false
 getgenv().EnableDropESP = false
 getgenv().GridSize = 4.5
@@ -71,7 +71,7 @@ CreateToggle(TargetPage, "🎯 TRACER ESP (Garis FPS Style)", "EnableDropESP")
 CreateInput(TargetPage, "⚡ Lari Auto Collect (WalkSpeed)", "WalkSpeed", 16)
 
 -- ========================================== --
--- [[ GROWSCAN MODAL (DENGAN NAMA DROPS) ]]
+-- [[ GROWSCAN MODAL ]]
 -- ========================================== --
 local function GetExactGrowTime(saplingName)
     if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
@@ -108,7 +108,6 @@ local function OpenGrowscanModal()
     scroll.Size = UDim2.new(1, -20, 1, -60); scroll.Position = UDim2.new(0, 10, 0, 50); scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45); scroll.ScrollBarThickness = 4
     local uiList = Instance.new("UIListLayout", scroll); uiList.Padding = UDim.new(0, 5)
 
-    -- Scan Tanaman
     local plantStats = {}
     for x, yCol in pairs(RawWorldTiles) do
         if type(yCol) == "table" then
@@ -141,13 +140,11 @@ local function OpenGrowscanModal()
         totalY = totalY + 65
     end
 
-    -- Garis Pembatas
     local sep = Instance.new("TextLabel", scroll)
     sep.Size = UDim2.new(1, 0, 0, 20); sep.BackgroundTransparency = 1
     sep.Text = "--------------------------------------------------"; sep.TextColor3 = Color3.fromRGB(150, 150, 150); sep.Font = Enum.Font.GothamBold; sep.TextSize = 14
     totalY = totalY + 25
 
-    -- Hitung Detail Drops & Gems
     local dropsFolder = workspace:FindFirstChild("Drops")
     local gemsFolder = workspace:FindFirstChild("Gems")
     local totalGems = gemsFolder and #gemsFolder:GetChildren() or 0
@@ -157,8 +154,10 @@ local function OpenGrowscanModal()
     if dropsFolder then
         for _, item in ipairs(dropsFolder:GetChildren()) do
             local name = item.Name
-            dropStats[name] = (dropStats[name] or 0) + 1
-            totalDrops = totalDrops + 1
+            if name then
+                dropStats[name] = (dropStats[name] or 0) + 1
+                totalDrops = totalDrops + 1
+            end
         end
     end
 
@@ -315,7 +314,7 @@ getgenv().KzoyzAutoCollectLoop = task.spawn(function()
                 table.sort(drops, function(a, b) return a.dist < b.dist end)
                 
                 if #drops > 0 and drops[1].instance.Parent then
-                    MoveSmartlyToDrop(drops[1].position) -- Sekarang dipanggil fungsi jalan pintar A-Star
+                    MoveSmartlyToDrop(drops[1].position)
                     task.wait(0.1)
                 end
             end
@@ -346,65 +345,66 @@ end
 
 if getgenv().KzoyzESPLoop then getgenv().KzoyzESPLoop:Disconnect() end
 getgenv().KzoyzESPLoop = RunService.RenderStepped:Connect(function()
-    if not getgenv().EnableDropESP then
-        ESPGui:ClearAllChildren(); TracerLines = {}
-        return
-    end
+    pcall(function() -- Tambah pcall biar ga crash seluruh game kalau error
+        if not getgenv().EnableDropESP then
+            ESPGui:ClearAllChildren(); TracerLines = {}
+            return
+        end
 
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    if not MyHitbox then return end
+        local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+        if not MyHitbox then return end
 
-    local activeItems = {}
-    local dropContainers = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
-    
-    for _, container in ipairs(dropContainers) do
-        if container then
-            for _, item in ipairs(container:GetChildren()) do
-                activeItems[item] = true
-                local targetPos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
-                
-                if targetPos then
-                    -- Teks ESP (tetep nempel ke item)
-                    local espUI = item:FindFirstChild("KzoyzTextESP")
-                    local dist = math.floor((Vector2.new(targetPos.X, targetPos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude)
-                    if not espUI then
-                        espUI = Instance.new("BillboardGui", item)
-                        espUI.Name = "KzoyzTextESP"
-                        espUI.AlwaysOnTop = true; espUI.Size = UDim2.new(0, 100, 0, 30); espUI.StudsOffset = Vector3.new(0, 2, 0)
-                        local txt = Instance.new("TextLabel", espUI)
-                        txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.TextStrokeTransparency = 0.2
-                        txt.TextColor3 = item.Parent.Name == "Gems" and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 255, 100)
-                        txt.Font = Enum.Font.GothamBold; txt.TextSize = 10
-                    end
-                    espUI.TextLabel.Text = (item.Parent.Name == "Gems" and "💎 Gem" or item.Name) .. "\n[" .. dist .. "m]"
+        local activeItems = {}
+        local dropContainers = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
+        
+        for _, container in ipairs(dropContainers) do
+            if container then
+                for _, item in ipairs(container:GetChildren()) do
+                    activeItems[item] = true
+                    local targetPos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
+                    
+                    if targetPos then
+                        local espUI = item:FindFirstChild("KzoyzTextESP")
+                        local dist = math.floor((Vector2.new(targetPos.X, targetPos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude)
+                        if not espUI then
+                            espUI = Instance.new("BillboardGui", item)
+                            espUI.Name = "KzoyzTextESP"
+                            espUI.AlwaysOnTop = true; espUI.Size = UDim2.new(0, 100, 0, 30); espUI.StudsOffset = Vector3.new(0, 2, 0)
+                            local txt = Instance.new("TextLabel", espUI)
+                            txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.TextStrokeTransparency = 0.2
+                            txt.TextColor3 = item.Parent.Name == "Gems" and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(255, 255, 100)
+                            txt.Font = Enum.Font.GothamBold; txt.TextSize = 10
+                        end
+                        espUI.TextLabel.Text = (item.Parent.Name == "Gems" and "💎 Gem" or item.Name) .. "\n[" .. dist .. "m]"
 
-                    -- Tracer Garis (diubah biar anti-hilang kalau jarak jauh)
-                    local line = GetLineFrame(item)
-                    local startScreen, _ = Camera:WorldToViewportPoint(MyHitbox.Position)
-                    local endScreen, endZ = Camera:WorldToViewportPoint(targetPos)
+                        local line = GetLineFrame(item)
+                        -- FIX: Ambil koordinat Screen + kedalaman (Z) secara terpisah
+                        local startScreen = Camera:WorldToViewportPoint(MyHitbox.Position)
+                        local endScreen = Camera:WorldToViewportPoint(targetPos)
 
-                    -- Kalau target ada di depan kamera (Z > 0), garisnya ditarik!
-                    if endZ > 0 then
-                        line.Visible = true
-                        local p1 = Vector2.new(startScreen.X, startScreen.Y)
-                        local p2 = Vector2.new(endScreen.X, endScreen.Y)
-                        
-                        local lineLength = (p1 - p2).Magnitude
-                        line.Size = UDim2.new(0, lineLength, 0, 1.5) -- Sedikit ditebelin biar jelas
-                        line.Position = UDim2.new(0, (p1.X + p2.X) / 2, 0, (p1.Y + p2.Y) / 2)
-                        line.Rotation = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
-                    else
-                        line.Visible = false
+                        -- Cek Z-Depth aja buat tau targetnya ada di depan mata/engga
+                        if endScreen.Z > 0 then
+                            line.Visible = true
+                            local p1 = Vector2.new(startScreen.X, startScreen.Y)
+                            local p2 = Vector2.new(endScreen.X, endScreen.Y)
+                            
+                            local lineLength = (p1 - p2).Magnitude
+                            line.Size = UDim2.new(0, lineLength, 0, 1.5)
+                            line.Position = UDim2.new(0, (p1.X + p2.X) / 2, 0, (p1.Y + p2.Y) / 2)
+                            line.Rotation = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
+                        else
+                            line.Visible = false
+                        end
                     end
                 end
             end
         end
-    end
 
-    for item, line in pairs(TracerLines) do
-        if not activeItems[item] then
-            line:Destroy(); TracerLines[item] = nil
-            if item and item:FindFirstChild("KzoyzTextESP") then item.KzoyzTextESP:Destroy() end
+        for item, line in pairs(TracerLines) do
+            if not activeItems[item] then
+                line:Destroy(); TracerLines[item] = nil
+                if item and item:FindFirstChild("KzoyzTextESP") then item.KzoyzTextESP:Destroy() end
+            end
         end
-    end
+    end)
 end)
