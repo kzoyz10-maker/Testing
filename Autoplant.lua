@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V46 + PLANT (FIXED) + WALKSPEED"
+getgenv().ScriptVersion = "Auto Farm V46 + PLANT (PLACE ITEM) + WALKSPEED"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -30,7 +30,10 @@ local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+
+-- TAMBAHAN: Remote buat Harvest & Remote buat Nanam
 local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
+local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem") 
 
 -- Ambil Manager
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
@@ -289,7 +292,6 @@ local function SmoothWalkTo(targetPos)
         end
     end
     
-    -- PERFECT SNAP: Paksa bot diem pas di tengah Grid
     MyHitbox.CFrame = CFrame.new(targetPos)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
     task.wait(0.02) 
@@ -451,6 +453,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     task.wait(0.1)
                     pcall(function() 
                         local targetVec = Vector2.new(panen.x, panen.y)
+                        -- HARVEST pakai RemoteFist
                         if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
                         else RemoteFist:InvokeServer(targetVec) end
                     end)
@@ -468,12 +471,21 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
         if getgenv().EnableAutoPlant and not getgenv().EnableSmartHarvest then 
             local targetTanam = {}
             
-            for x, yCol in pairs(RawWorldTiles) do
+            -- FIX: Scan X berurutan dari 0 sampai 100 biar jalannya rapi dari kiri ke kanan
+            for x = 0, 100 do
+                local yCol = RawWorldTiles[x]
                 if type(yCol) == "table" then
+                    -- Kita ambil Y-nya dan diurutkan
+                    local yKeys = {}
                     for y, _ in pairs(yCol) do
+                        table.insert(yKeys, y)
+                    end
+                    table.sort(yKeys)
+                    
+                    for _, y in ipairs(yKeys) do
                         if not getgenv().EnableAutoPlant then break end
                         
-                        -- FIX 1: Ubah ke y + 1 biar nargetin spot KOSONG di ATAS tanah
+                        -- Cari spot KOSONG tepat di ATAS tanah
                         if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) then
                             table.insert(targetTanam, {x = x, y = y + 1})
                         end
@@ -484,22 +496,25 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
             for _, spot in ipairs(targetTanam) do
                 if not getgenv().EnableAutoPlant or getgenv().EnableSmartHarvest then break end
                 
-                local bisaJalan = MoveSmartlyTo(spot.x, spot.y)
-                if bisaJalan then
-                    task.wait(0.1)
-                    pcall(function() 
-                        local targetVec = Vector2.new(spot.x, spot.y)
-                        local bibit = getgenv().SelectedSeed
-                        if bibit == "Kosong" or bibit == "None" then bibit = nil end
-                        
-                        -- FIX 2: Kirim ID bibit ke server bareng Vector2-nya
-                        if RemoteFist:IsA("RemoteEvent") then 
-                            RemoteFist:FireServer(targetVec, bibit) 
-                        else 
-                            RemoteFist:InvokeServer(targetVec, bibit) 
-                        end
-                    end)
-                    task.wait(getgenv().PlantDelay)
+                local bibit = getgenv().SelectedSeed
+                if bibit == "Kosong" or bibit == "None" then bibit = nil end
+                
+                if bibit then -- Cek dulu ada bibit nggak, kalau nggak jangan jalan
+                    local bisaJalan = MoveSmartlyTo(spot.x, spot.y)
+                    if bisaJalan then
+                        task.wait(0.1)
+                        pcall(function() 
+                            local targetVec = Vector2.new(spot.x, spot.y)
+                            
+                            -- FIX: Pakai RemotePlace, bukan RemoteFist
+                            if RemotePlace:IsA("RemoteEvent") then 
+                                RemotePlace:FireServer(targetVec, bibit) 
+                            else 
+                                RemotePlace:InvokeServer(targetVec, bibit) 
+                            end
+                        end)
+                        task.wait(getgenv().PlantDelay)
+                    end
                 end
             end
         end
