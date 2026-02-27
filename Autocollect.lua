@@ -205,12 +205,12 @@ local function RenderGrowscanContent(scrollTanaman, scrollDrops)
 
     -- Banner Gems
     local gemFrame = Instance.new("Frame", scrollDrops); gemFrame.Size = UDim2.new(1, 0, 0, 40); gemFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 60)
-    local gemLbl = Instance.new("TextLabel", gemFrame); gemLbl.Size = UDim2.new(1, -10, 1, 0); gemLbl.Position = UDim2.new(0, 10, 0, 0); gemLbl.BackgroundTransparency = 1; gemLbl.Text = "💎 TOTAL GEMS DI MAP: " .. totalGems; gemLbl.TextColor3 = Color3.fromRGB(100, 200, 255); gemLbl.Font = Enum.Font.GothamBold; gemLbl.TextXAlignment = Enum.TextXAlignment.Left; gemLbl.TextSize = 14
+    local gemLbl = Instance.new("TextLabel", gemFrame); gemLbl.Size = UDim2.new(1, -10, 1, 0); gemLbl.Position = UDim2.new(0, 10, 0, 0); gemLbl.BackgroundTransparency = 1; gemLbl.Text = "💎 TOTAL GEMS IN WORLD: " .. totalGems; gemLbl.TextColor3 = Color3.fromRGB(100, 200, 255); gemLbl.Font = Enum.Font.GothamBold; gemLbl.TextXAlignment = Enum.TextXAlignment.Left; gemLbl.TextSize = 14
     totalY_Drops = totalY_Drops + 45
 
     for dName, dData in pairs(dropStats) do
         local dFrame = Instance.new("Frame", scrollDrops); dFrame.Size = UDim2.new(1, 0, 0, 55); dFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        local dLbl = Instance.new("TextLabel", dFrame); dLbl.Size = UDim2.new(1, -10, 0, 20); dLbl.Position = UDim2.new(0, 10, 0, 5); dLbl.BackgroundTransparency = 1; dLbl.Text = "📦 " .. string.upper(tostring(dName)) .. " | Total Isi: " .. dData.totalItems .. " (" .. dData.stacks .. " Bungkusan)"; dLbl.TextColor3 = Color3.fromRGB(255, 215, 0); dLbl.Font = Enum.Font.GothamBold; dLbl.TextXAlignment = Enum.TextXAlignment.Left; dLbl.TextSize = 12
+        local dLbl = Instance.new("TextLabel", dFrame); dLbl.Size = UDim2.new(1, -10, 0, 20); dLbl.Position = UDim2.new(0, 10, 0, 5); dLbl.BackgroundTransparency = 1; dLbl.Text = "📦 " .. string.upper(tostring(dName)) .. " | Amount: " .. dData.totalItems .. " (" .. dData.stacks .. " Stack)"; dLbl.TextColor3 = Color3.fromRGB(255, 215, 0); dLbl.Font = Enum.Font.GothamBold; dLbl.TextXAlignment = Enum.TextXAlignment.Left; dLbl.TextSize = 12
         local dCoords = Instance.new("TextLabel", dFrame); dCoords.Size = UDim2.new(1, -10, 0, 20); dCoords.Position = UDim2.new(0, 10, 0, 25); dCoords.BackgroundTransparency = 1; dCoords.Text = "📍 XY: " .. FormatCoords(dData.coords); dCoords.TextColor3 = Color3.fromRGB(180, 220, 255); dCoords.Font = Enum.Font.Gotham; dCoords.TextXAlignment = Enum.TextXAlignment.Left; dCoords.TextSize = 11; dCoords.TextWrapped = true
         totalY_Drops = totalY_Drops + 60
     end
