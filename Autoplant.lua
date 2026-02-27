@@ -11,13 +11,13 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V48 (STEP PER GRID & DEEP SCAN)"
+getgenv().ScriptVersion = "Auto Farm V49 (STEP PER GRID + MODFLY)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().StepDelay = 0.1    -- Menggantikan WalkSpeed
+getgenv().StepDelay = 0.1    -- Jeda TP per kotak (0.1 = standar cepat)
 getgenv().BreakDelay = 0.15  
 getgenv().EnableSmartHarvest = false
 
@@ -92,7 +92,7 @@ function CreateInput(Parent, Text, Var, DefaultValue)
     end)
 end
 
-CreateToggle(TargetPage, "🚀 START V48 (STEP PER GRID)", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🚀 START V49 (MODFLY + STEP GRID)", "EnableSmartHarvest")
 CreateInput(TargetPage, "⏱️ Step Delay (0.1 = Cepat)", "StepDelay", 0.1)
 CreateInput(TargetPage, "⏳ Break Delay", "BreakDelay", 0.15)
 
@@ -130,7 +130,7 @@ local function IsTileSolid(gridX, gridY)
 end
 
 -- ========================================== --
--- [[ TAHAP 2: A-STAR & STEP PER GRID LOGIC ]]
+-- [[ TAHAP 2: A-STAR & MODFLY GRID STEPPER ]]
 -- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
@@ -205,7 +205,6 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     return nil 
 end
 
--- Gabungan A-Star dengan Step/TP Per Grid ala script Pabrik
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
@@ -219,22 +218,41 @@ local function MoveSmartlyTo(targetX, targetY)
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     if not route then return false end
 
+    -- ========================================== --
+    -- 🚀 MENGAKTIFKAN MODFLY & NOCLIP
+    -- ========================================== --
+    local oldAnchored = MyHitbox.Anchored
+    local oldCanCollide = MyHitbox.CanCollide
+    
+    MyHitbox.Anchored = true      -- Bikin melayang, kebal gravitasi
+    MyHitbox.CanCollide = false   -- Bikin tembus, anti nyangkut belokan
+    MyHitbox.Velocity = Vector3.new(0, 0, 0)
+    MyHitbox.RotVelocity = Vector3.new(0, 0, 0)
+
     for _, stepPos in ipairs(route) do
-        if not getgenv().EnableSmartHarvest then return false end
+        -- Safety: Kalau toggle dimatikan di tengah jalan, normalkan gravitasi lalu batal
+        if not getgenv().EnableSmartHarvest then 
+            MyHitbox.Anchored = oldAnchored
+            MyHitbox.CanCollide = oldCanCollide
+            return false 
+        end
         
         local newWorldPos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         
-        -- LOGIKA TP PER GRID DARI SCRIPT PABRIK
+        -- TP instan ke titik grid (Napak kaku)
         MyHitbox.CFrame = CFrame.new(newWorldPos)
-        
-        -- Matikan rotasi/pantulan dari Physics Engine
-        MyHitbox.Velocity = Vector3.new(0,0,0)
-        MyHitbox.RotVelocity = Vector3.new(0,0,0)
         
         if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
         
         task.wait(getgenv().StepDelay)
     end
+    
+    -- ========================================== --
+    -- 🛬 MEMATIKAN MODFLY (NORMAL KEMBALI)
+    -- ========================================== --
+    MyHitbox.Anchored = oldAnchored
+    MyHitbox.CanCollide = oldCanCollide
+    MyHitbox.Velocity = Vector3.new(0, 0, 0)
     
     return true
 end
