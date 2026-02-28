@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.99 - SWEEP PER-BARIS & ANTI BENGONG" 
+getgenv().ScriptVersion = "Pabrik v1.0 - SWEEP PER-BARIS & STRICT THRESHOLD" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -188,6 +188,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
         iterations = iterations + 1; if iterations > maxIterations then break end
         local current, currentIndex = openSet[1], 1
         for i = 2, #openSet do if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end end
+
         if current.x == targetX and current.y == targetY then
             local path, currKey = {}, current.key
             while cameFrom[currKey] do
@@ -480,11 +481,11 @@ local function CreateDropdown(Parent, Text, DefaultOptions, Var)
     RefreshOptions(DefaultOptions); return RefreshOptions 
 end
 
-CreateToggle(PagePabrik, "START SMART PABRIK", "EnablePabrik")
+CreateToggle(PagePabrik, "🚀 START SMART PABRIK", "EnablePabrik")
 CreateToggle(PagePabrik, "Auto Collect Sapling (Pas Break)", "OnlyCollectSapling")
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
-CreateButton(PagePabrik, "Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
+CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
 
 local d1 = Instance.new("Frame", PagePabrik); d1.Size=UDim2.new(1,0,0,2); d1.BackgroundColor3=Theme.Purple; d1.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Area Start X", getgenv().PabrikStartX, "PabrikStartX")
@@ -584,13 +585,22 @@ task.spawn(function()
                     end
                 end
 
-                -- FLAG ANTI BENGONG
-                local didHarvest = (#targetPanen > 0)
-                local canPlant = (#targetTanam > 0)
                 local seedSlot = GetSlotByItemName(getgenv().SelectedSeed)
+                local canPlant = (#targetTanam > 0)
+                
+                -- FLAG PRIORITAS:
+                local didHarvest = (#targetPanen > 0)
                 local didPlant = (canPlant and seedSlot ~= nil)
+                
+                -- KONDISI ANTI BENGONG: Kalo lahan kosong tapi gaada bibit, lewatin tanam dan langsung block farm
+                local needToFarmBlock = false
+                if not didHarvest and not didPlant then
+                    needToFarmBlock = true
+                end
 
-                -- 2. EKSEKUSI PANEN + SWEEP (+1 Langkah Ekstra PER-BARIS Y)
+                -- =============================================== --
+                -- EKSEKUSI PANEN + SWEEP PER-BARIS (PER Y)
+                -- =============================================== --
                 if didHarvest then
                     for i, panen in ipairs(targetPanen) do
                         if not getgenv().EnablePabrik then break end
@@ -604,7 +614,7 @@ task.spawn(function()
                             task.wait(getgenv().BreakDelay)
                         end
                         
-                        -- CEK APAKAH INI AKHIR DARI BARIS Y INI?
+                        -- Cek apakah ini panenan terakhir di BARIS Y INI?
                         local nextPanen = targetPanen[i + 1]
                         if not nextPanen or nextPanen.y ~= panen.y then
                             -- Sweep 1 kotak kedepan
@@ -615,14 +625,14 @@ task.spawn(function()
                     end
                 end
 
-                -- 3. EKSEKUSI TANAM
+                -- =============================================== --
+                -- EKSEKUSI TANAM
+                -- =============================================== --
                 if didPlant then
                     for _, spot in ipairs(targetTanam) do
                         if not getgenv().EnablePabrik then break end
-                        
-                        -- Cek lagi buat jaga-jaga kalau bibit habis di tengah jalan pas nanam
                         seedSlot = GetSlotByItemName(getgenv().SelectedSeed)
-                        if not seedSlot then break end 
+                        if not seedSlot then break end -- Kalo di tengah jalan abis, setop
                         
                         if MoveSmartlyTo(spot.x, spot.y) then
                             task.wait(0.1)
@@ -637,30 +647,31 @@ task.spawn(function()
                     end
                 end
 
-                -- 4. PABRIK BLOCK (ANTI BENGONG FIX)
-                -- Kalau udah gaada panenan, DAN (gaada spot tanah KOSONG ATAU bibitnya HABIS), barulah dia farming blok.
-                if not didHarvest and not didPlant and getgenv().EnablePabrik then
+                -- =============================================== --
+                -- PABRIK BLOCK & DROP SEED (STRICT THRESHOLD)
+                -- =============================================== --
+                if needToFarmBlock and getgenv().EnablePabrik then
                     local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                     
                     if blockSlot then
                         if MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY) then
                             local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
-                            local hitLoopCount = 0
                             
+                            -- KUNCI TERBESAR: Bot cuma keluar dari loop ini KALAU blok beneran udah di bawah/sama dengan threshold.
                             while getgenv().EnablePabrik do
                                 local currentBlockAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
                                 blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                                 
-                                -- KONDISI A: Blok di tas sentuh threshold -> Sedot SEMUA item (True Ghost Collect)
-                                if currentBlockAmt <= getgenv().BlockThreshold or hitLoopCount >= 40 or not blockSlot then
+                                -- JIKA BLOK DI TAS UDAH SEDIKIT (SENTUH THRESHOLD)
+                                if currentBlockAmt <= getgenv().BlockThreshold or not blockSlot then
                                     local hasAny, _ = CheckDropsType(BreakTarget.X, BreakTarget.Y)
                                     if hasAny then
-                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, false) -- Pungut Semua!
+                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, false) -- PUNGUT SEMUANYA
                                     end
-                                    break 
+                                    break -- Keluar dari loop pabrik, bot bakal jalan nge-drop seed terus scan ladang
                                 end
                                 
-                                -- NARUH & HANCURIN BLOK
+                                -- KALAU BLOK MASIH BANYAK, HAJAR TERUS!
                                 RemotePlace:FireServer(BreakTarget, blockSlot)
                                 task.wait(getgenv().PlaceDelay) 
                                 
@@ -669,20 +680,19 @@ task.spawn(function()
                                     RemoteBreak:FireServer(BreakTarget)
                                     task.wait(getgenv().BreakDelay)
                                 end
-                                hitLoopCount = hitLoopCount + 1
                                 
-                                -- KONDISI B: Deteksi Sapling langsung disedot pakai Ghost (Cek toggle)
+                                -- Cek Sapling Drop
                                 if getgenv().OnlyCollectSapling then
                                     local _, hasSapling = CheckDropsType(BreakTarget.X, BreakTarget.Y)
                                     if hasSapling then
-                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, true) -- Pungut Sapling Doang!
+                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, true) -- PUNGUT SAPLINGNYA DOANG
                                     end
                                 end
                             end
                         end
                     end
 
-                    -- 5. AUTO DROP SEED
+                    -- AUTO DROP SEED KELAR BATCH
                     if getgenv().EnablePabrik then
                         local currentSeedAmt = GetItemAmountByItemName(getgenv().SelectedSeed)
                         if currentSeedAmt > getgenv().KeepSeedAmt then
