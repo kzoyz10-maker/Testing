@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V60 (HARVEST TYPEWRITER + PLANT ZIGZAG)"
+getgenv().ScriptVersion = "Auto Farm V61 (HARVEST TYPEWRITER + TRUE ZIGZAG PLANT)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -198,7 +198,7 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
 end
 
 CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
-CreateToggle(TargetPage, "🌱 START AUTO PPLA", "EnableAutoPlant")
+CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
 CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
@@ -423,28 +423,46 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
 end)
 
 -- ========================================== --
--- [[ AUTO PLANT LOGIC (ZIG-ZAG MURNI) ]]
+-- [[ AUTO PLANT LOGIC (TRUE ZIG-ZAG FIXED) ]]
 -- ========================================== --
 if getgenv().KzoyzAutoPlantLoop then task.cancel(getgenv().KzoyzAutoPlantLoop) end
 getgenv().KzoyzAutoPlantLoop = task.spawn(function()
     while true do
         if getgenv().EnableAutoPlant and not getgenv().EnableSmartHarvest then 
             local tempList = {}
+            local uniqueYs = {}
+            local seenYs = {}
+
+            -- Scan area buat nanam
             for x = 0, 100 do
                 local yCol = RawWorldTiles[x]
                 if type(yCol) == "table" then
                     for y, _ in pairs(yCol) do
                         if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) then
-                            table.insert(tempList, {x = x, y = y + 1})
+                            local targetY = y + 1
+                            table.insert(tempList, {x = x, y = targetY})
+                            
+                            -- Nyimpen daftar Y yang unik biar bisa di-indeks
+                            if not seenYs[targetY] then
+                                seenYs[targetY] = true
+                                table.insert(uniqueYs, targetY)
+                            end
                         end
                     end
                 end
             end
             
-            -- LOGIKA ZIG-ZAG KHUSUS UNTUK PLANTING
+            -- SORTIR ZIG-ZAG PINTAR
+            table.sort(uniqueYs) -- Urutin dari baris paling bawah/atas
+            local yDirectionMap = {}
+            for index, yValue in ipairs(uniqueYs) do
+                -- Index ganjil = Kiri ke Kanan (True) | Index genap = Kanan ke Kiri (False)
+                yDirectionMap[yValue] = (index % 2 == 1) 
+            end
+
             table.sort(tempList, function(a, b)
                 if a.y == b.y then
-                    if a.y % 2 == 0 then 
+                    if yDirectionMap[a.y] then 
                         return a.x < b.x -- Kiri ke Kanan
                     else 
                         return a.x > b.x -- Kanan ke Kiri
