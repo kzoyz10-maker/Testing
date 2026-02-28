@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.90 - SMART AI & WALKSPEED" 
+getgenv().ScriptVersion = "Pabrik v0.91 - SMART AI (HORIZONTAL FIX)" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -438,39 +438,45 @@ task.spawn(function()
             local targetPanen = {}
             local targetTanam = {}
 
-            -- 1. SCAN WORLD (Sesuai Batas X dan Y)
+            -- 1. SCAN WORLD (Nge-Scan Y dulu dari atas/bawah, biar jalannya per-Baris)
             local sX, eX = math.min(getgenv().PabrikStartX, getgenv().PabrikEndX), math.max(getgenv().PabrikStartX, getgenv().PabrikEndX)
             local sY, eY = math.min(getgenv().PabrikStartY, getgenv().PabrikEndY), math.max(getgenv().PabrikStartY, getgenv().PabrikEndY)
 
-            for x = sX, eX do
+            for y = sY, eY do
                 if not getgenv().EnablePabrik then break end
-                local yCol = RawWorldTiles[x]
-                if type(yCol) == "table" then
-                    for y = sY, eY do
-                        if type(yCol[y]) == "table" then
-                            -- Cek Tanam
-                            if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) and (y + 1 <= eY) then
-                                table.insert(targetTanam, {x = x, y = y + 1})
-                            end
+                
+                -- Sistem Snaking (Zig-zag) biar botnya muter rapi, nggak usah jauh-jauh jalan balik ke Start X
+                local isEven = (y % 2 == 0)
+                local loopStartX = isEven and sX or eX
+                local loopEndX = isEven and eX or sX
+                local step = isEven and 1 or -1
+                
+                for x = loopStartX, loopEndX, step do
+                    local yCol = RawWorldTiles[x]
+                    if type(yCol) == "table" and type(yCol[y]) == "table" then
+                        
+                        -- Cek Tanam
+                        if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) and (y + 1 <= eY) then
+                            table.insert(targetTanam, {x = x, y = y + 1})
+                        end
+                        
+                        -- Cek Panen (Sapling Detection)
+                        for layer, data in pairs(yCol[y]) do
+                            local rawId = type(data) == "table" and data[1] or data
+                            local tileInfo = type(data) == "table" and data[2] or nil
+                            local tileStr = rawId
+                            if type(rawId) == "number" and WorldManager.NumberToStringMap then tileStr = WorldManager.NumberToStringMap[rawId] or rawId end
                             
-                            -- Cek Panen (Sapling Detection)
-                            for layer, data in pairs(yCol[y]) do
-                                local rawId = type(data) == "table" and data[1] or data
-                                local tileInfo = type(data) == "table" and data[2] or nil
-                                local tileStr = rawId
-                                if type(rawId) == "number" and WorldManager.NumberToStringMap then tileStr = WorldManager.NumberToStringMap[rawId] or rawId end
-                                
-                                if type(tileStr) == "string" and string.find(string.lower(tileStr), "sapling") and tileInfo and tileInfo.at then
-                                    local sapling = {x = x, y = y, name = tileStr, at = tileInfo.at}
-                                    local targetMatang = GetExactGrowTime(sapling.name)
-                                    if not targetMatang then
-                                        BackupAIBelajarWaktu(sapling); targetMatang = getgenv().AIDictionary[sapling.name]
-                                    end
-                                    if targetMatang then
-                                        local umurServer1 = os.time() - sapling.at
-                                        local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                                        if math.max(umurServer1, umurServer2) >= targetMatang then table.insert(targetPanen, sapling) end
-                                    end
+                            if type(tileStr) == "string" and string.find(string.lower(tileStr), "sapling") and tileInfo and tileInfo.at then
+                                local sapling = {x = x, y = y, name = tileStr, at = tileInfo.at}
+                                local targetMatang = GetExactGrowTime(sapling.name)
+                                if not targetMatang then
+                                    BackupAIBelajarWaktu(sapling); targetMatang = getgenv().AIDictionary[sapling.name]
+                                end
+                                if targetMatang then
+                                    local umurServer1 = os.time() - sapling.at
+                                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
+                                    if math.max(umurServer1, umurServer2) >= targetMatang then table.insert(targetPanen, sapling) end
                                 end
                             end
                         end
