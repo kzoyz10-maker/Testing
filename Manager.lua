@@ -14,7 +14,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Manager v1.7-AutoBan RealTime" 
+getgenv().ScriptVersion = "Manager v1.8-DualTab+SpamChat" 
 
 -- ========================================== --
 getgenv().DropDelay = 2     
@@ -43,6 +43,12 @@ getgenv().DropAmount = 50
 getgenv().TrashAmount = 50
 getgenv().TargetPosX = 0
 getgenv().TargetPosY = 0
+
+-- Variabel Auto Chat Baru
+getgenv().AutoChat = false
+getgenv().ChatText = "Halo Semuanya"
+getgenv().ChatDelay = 3
+getgenv().ChatRandomLetter = true
 
 -- Ambil UIManager buat bersihin sisa Prompt
 local UIManager
@@ -107,17 +113,105 @@ getgenv().GameInventoryModule = FindInventoryModule()
 
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
-function CreateToggle(Parent, Text, Var, OnToggle) local Btn = Instance.new("TextButton"); Btn.Parent = Parent; Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; local C = Instance.new("UICorner"); C.CornerRadius = UDim.new(0, 6); C.Parent = Btn; local T = Instance.new("TextLabel"); T.Parent = Btn; T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left; local IndBg = Instance.new("Frame"); IndBg.Parent = Btn; IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); local IC = Instance.new("UICorner"); IC.CornerRadius = UDim.new(1,0); IC.Parent = IndBg; local Dot = Instance.new("Frame"); Dot.Parent = IndBg; Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); local DC = Instance.new("UICorner"); DC.CornerRadius = UDim.new(1,0); DC.Parent = Dot; Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end if OnToggle then OnToggle(getgenv()[Var]) end end) end
-function CreateTextBox(Parent, Text, Default, Var) local Frame = Instance.new("Frame"); Frame.Parent = Parent; Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); local C = Instance.new("UICorner"); C.CornerRadius = UDim.new(0, 6); C.Parent = Frame; local Label = Instance.new("TextLabel"); Label.Parent = Frame; Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; local InputBox = Instance.new("TextBox"); InputBox.Parent = Frame; InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); local IC = Instance.new("UICorner"); IC.CornerRadius = UDim.new(0, 4); IC.Parent = InputBox; InputBox.FocusLost:Connect(function() local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end end); return InputBox end
-function CreateButton(Parent, Text, Callback) local Btn = Instance.new("TextButton"); Btn.Parent = Parent; Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; local C = Instance.new("UICorner"); C.CornerRadius = UDim.new(0, 6); C.Parent = Btn; Btn.MouseButton1Click:Connect(Callback) end
+function CreateToggle(Parent, Text, Var, OnToggle) 
+    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
+    local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
+    local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
+    IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30)
+    Btn.MouseButton1Click:Connect(function() 
+        getgenv()[Var] = not getgenv()[Var]
+        if getgenv()[Var] then 
+            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
+        else 
+            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
+        end 
+        if OnToggle then OnToggle(getgenv()[Var]) end 
+    end) 
+end
+
+-- Diupgrade biar TextBox bisa handle tulisan string selain angka
+function CreateTextBox(Parent, Text, Default, Var) 
+    local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
+    local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 4)
+    
+    getgenv()[Var] = Default
+    InputBox.FocusLost:Connect(function() 
+        if type(Default) == "number" then
+            local val = tonumber(InputBox.Text)
+            if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end 
+        else
+            getgenv()[Var] = InputBox.Text -- Kalo string, simpan langsung
+        end
+    end)
+    return InputBox 
+end
+
+function CreateButton(Parent, Text, Callback) 
+    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) 
+end
 
 -- ========================================== --
--- [[ BIKIN UI MANAGER ]]
+-- [[ SISTEM DUAL TAB ]]
 -- ========================================== --
-CreateToggle(TargetPage, "📍 Enable Auto Collect", "AutoCollect")
-local BoxX = CreateTextBox(TargetPage, "Target Grid X", 0, "TargetPosX")
-local BoxY = CreateTextBox(TargetPage, "Target Grid Y", 0, "TargetPosY")
-CreateButton(TargetPage, "📍 Save Pos (Current Loc)", function()
+local TabNav = Instance.new("Frame", TargetPage)
+TabNav.Size = UDim2.new(1, -10, 0, 35)
+TabNav.BackgroundTransparency = 1
+
+local TabMgrBtn = Instance.new("TextButton", TabNav)
+TabMgrBtn.Size = UDim2.new(0.48, 0, 1, 0)
+TabMgrBtn.BackgroundColor3 = Theme.Purple
+TabMgrBtn.Text = "Menu Manager"
+TabMgrBtn.TextColor3 = Theme.Text
+TabMgrBtn.Font = Enum.Font.GothamBold
+TabMgrBtn.TextSize = 12
+Instance.new("UICorner", TabMgrBtn).CornerRadius = UDim.new(0, 6)
+
+local TabChatBtn = Instance.new("TextButton", TabNav)
+TabChatBtn.Size = UDim2.new(0.48, 0, 1, 0)
+TabChatBtn.Position = UDim2.new(0.52, 0, 0, 0)
+TabChatBtn.BackgroundColor3 = Theme.Item
+TabChatBtn.Text = "Spam Chat"
+TabChatBtn.TextColor3 = Theme.Text
+TabChatBtn.Font = Enum.Font.GothamBold
+TabChatBtn.TextSize = 12
+Instance.new("UICorner", TabChatBtn).CornerRadius = UDim.new(0, 6)
+
+-- PAGE MANAGER
+local PageManager = Instance.new("Frame", TargetPage)
+PageManager.Size = UDim2.new(1, 0, 0, 0)
+PageManager.BackgroundTransparency = 1
+PageManager.AutomaticSize = Enum.AutomaticSize.Y
+local UIListManager = Instance.new("UIListLayout", PageManager)
+UIListManager.Padding = UDim.new(0, 5)
+
+-- PAGE CHAT
+local PageChat = Instance.new("Frame", TargetPage)
+PageChat.Size = UDim2.new(1, 0, 0, 0)
+PageChat.BackgroundTransparency = 1
+PageChat.AutomaticSize = Enum.AutomaticSize.Y
+PageChat.Visible = false
+local UIListChat = Instance.new("UIListLayout", PageChat)
+UIListChat.Padding = UDim.new(0, 5)
+
+-- Animasi Pindah Tab
+TabMgrBtn.MouseButton1Click:Connect(function()
+    PageManager.Visible = true; PageChat.Visible = false
+    TabMgrBtn.BackgroundColor3 = Theme.Purple; TabChatBtn.BackgroundColor3 = Theme.Item
+end)
+TabChatBtn.MouseButton1Click:Connect(function()
+    PageManager.Visible = false; PageChat.Visible = true
+    TabMgrBtn.BackgroundColor3 = Theme.Item; TabChatBtn.BackgroundColor3 = Theme.Purple
+end)
+
+-- ========================================== --
+-- [[ ISI UI PAGE MANAGER ]]
+-- ========================================== --
+CreateToggle(PageManager, "📍 Enable Auto Collect", "AutoCollect")
+local BoxX = CreateTextBox(PageManager, "Target Grid X", 0, "TargetPosX")
+local BoxY = CreateTextBox(PageManager, "Target Grid Y", 0, "TargetPosY")
+CreateButton(PageManager, "📍 Save Pos (Current Loc)", function()
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
     local RefPart = MyHitbox or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -129,15 +223,23 @@ CreateButton(TargetPage, "📍 Save Pos (Current Loc)", function()
     end
 end)
 
-CreateToggle(TargetPage, "📦 Auto Drop", "AutoDrop", function(state) if not state then ForceRestoreUI() end end)
-CreateTextBox(TargetPage, "📦 Drop Amount", 50, "DropAmount")
-CreateTextBox(TargetPage, "⏱️ Drop Delay (Detik)", 2, "DropDelay") 
+CreateToggle(PageManager, "📦 Auto Drop", "AutoDrop", function(state) if not state then ForceRestoreUI() end end)
+CreateTextBox(PageManager, "📦 Drop Amount", 50, "DropAmount")
+CreateTextBox(PageManager, "⏱️ Drop Delay (Detik)", 2, "DropDelay") 
 
-CreateToggle(TargetPage, "🚮 Auto Trash", "AutoTrash", function(state) if not state then ForceRestoreUI() end end)
-CreateTextBox(TargetPage, "🗑️ Trash Amount", 50, "TrashAmount")
-CreateTextBox(TargetPage, "⏱️ Trash Delay (Detik)", 2, "TrashDelay") 
+CreateToggle(PageManager, "🚮 Auto Trash", "AutoTrash", function(state) if not state then ForceRestoreUI() end end)
+CreateTextBox(PageManager, "🗑️ Trash Amount", 50, "TrashAmount")
+CreateTextBox(PageManager, "⏱️ Trash Delay (Detik)", 2, "TrashDelay") 
 
-CreateToggle(TargetPage, "🔨 Auto Ban Players (World)", "AutoBan", function(state) if not state then ForceRestoreUI() end end)
+CreateToggle(PageManager, "🔨 Auto Ban Players (World)", "AutoBan", function(state) if not state then ForceRestoreUI() end end)
+
+-- ========================================== --
+-- [[ ISI UI PAGE AUTO CHAT ]]
+-- ========================================== --
+CreateToggle(PageChat, "💬 Auto Spam Chat", "AutoChat")
+CreateTextBox(PageChat, "✍️ Pesan Chat", "Jual barang di world sini", "ChatText")
+CreateTextBox(PageChat, "⏱️ Delay (Detik)", 3, "ChatDelay")
+CreateToggle(PageChat, "🔀 Anti Spam (Huruf Random)", "ChatRandomLetter")
 
 -- ========================================== --
 -- [[ REMOTES & EVENTS ]]
@@ -147,21 +249,47 @@ local RemoteDropSafe = Remotes:WaitForChild("PlayerDrop")
 local RemoteTrashSafe = Remotes:WaitForChild("PlayerItemTrash") 
 local RemoteInspect = Remotes:WaitForChild("PlayerInspectPlayer") 
 local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent") 
+local ChatRemote = RS:WaitForChild("CB")
 
 RunService.RenderStepped:Connect(function() if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end end)
+
+
+-- [[ LOGIKA AUTO CHAT SPAM ]]
+task.spawn(function()
+    local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+    while true do
+        if getgenv().AutoChat then
+            local currentMsg = getgenv().ChatText
+            
+            -- Jika dicentang, tambahin huruf acak di akhir pesan misal: "Halo Semuanya [z]"
+            if getgenv().ChatRandomLetter then
+                local rand = math.random(1, #charset)
+                local rChar = string.sub(charset, rand, rand)
+                currentMsg = currentMsg .. " [" .. rChar .. "]"
+            end
+            
+            -- Tembak ke remote chat
+            pcall(function()
+                ChatRemote:FireServer(currentMsg)
+            end)
+            
+            task.wait(getgenv().ChatDelay) -- Tunggu sesuai inputan TextBox lu
+        else
+            task.wait(0.5)
+        end
+    end
+end)
+
 
 -- [[ FUNGSI EKSEKUSI BAN ]]
 local function ExecuteBan(targetPlayer)
     if targetPlayer == LP then return end
     
-    -- 1. Inspect
     pcall(function() RemoteInspect:FireServer(targetPlayer) end)
-    task.wait(0.1) -- Jeda bentar aja
+    task.wait(0.1) 
     
-    -- 2. Ban
     pcall(function() ManagerRemote:FireServer({ButtonAction = "ban", Inputs = {}}) end)
     
-    -- 3. Bersihin Popup
     pcall(function()
         if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
         for _, gui in pairs(LP.PlayerGui:GetDescendants()) do
@@ -186,11 +314,11 @@ task.spawn(function()
             for _, targetPlayer in ipairs(Players:GetPlayers()) do
                 if targetPlayer ~= LP then
                     ExecuteBan(targetPlayer)
-                    task.wait(0.2) -- Jeda dikit antar eksekusi biar aman
+                    task.wait(0.2) 
                 end
             end
         end
-        task.wait(0.5) -- Loop jalan lebih cepet dari sebelumnya
+        task.wait(0.5) 
     end
 end)
 
