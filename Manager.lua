@@ -14,7 +14,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Manager v2.1-PerfectDropdown" 
+getgenv().ScriptVersion = "Manager v2.3-AutoStaffDetect+Zoom" 
 
 -- ========================================== --
 getgenv().DropDelay = 2     
@@ -50,11 +50,13 @@ getgenv().ChatText = "Halo Semuanya"
 getgenv().ChatDelay = 3
 getgenv().ChatRandomLetter = true
 
--- Variabel Hide Name (Streamer Mode)
+-- Variabel Streamer Mode, Security & Zoom
 getgenv().HideName = false
 getgenv().FakeNameText = "KzoyzPlayer"
+getgenv().AntiStaff = false
+getgenv().CustomZoom = 1000
 
--- Ambil UIManager buat bersihin sisa Prompt
+-- Ambil UIManager
 local UIManager
 pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
@@ -91,19 +93,6 @@ local function ForceRestoreUI()
             if type(UIManager.ShowUI) == "function" then UIManager:ShowUI() end
         end
     end)
-    pcall(function()
-        local targetUIs = { "topbar", "gems", "playerui", "hotbar", "crosshair", "mainhud", "stats", "inventory", "backpack", "menu", "bottombar", "buttons" }
-        for _, gui in pairs(LP.PlayerGui:GetDescendants()) do
-            if gui:IsA("Frame") or gui:IsA("ScreenGui") or gui:IsA("ImageLabel") then
-                local gName = string.lower(gui.Name)
-                for _, tName in ipairs(targetUIs) do
-                    if string.find(gName, tName) and not string.find(gName, "prompt") then
-                        if gui:IsA("ScreenGui") then gui.Enabled = true else gui.Visible = true end
-                    end
-                end
-            end
-        end
-    end)
 end
 
 local function FindInventoryModule()
@@ -117,52 +106,15 @@ getgenv().GameInventoryModule = FindInventoryModule()
 
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
--- [[ UI COMPONENT BUILDERS ]]
+-- [[ UI COMPONENT BUILDERS (COMPACTED) ]]
 function CreateAccordion(Parent, Title, DefaultState)
-    local Frame = Instance.new("Frame", Parent)
-    Frame.BackgroundTransparency = 1
-    Frame.Size = UDim2.new(1, -10, 0, 0)
-    Frame.AutomaticSize = Enum.AutomaticSize.Y
-    
-    local Layout = Instance.new("UIListLayout", Frame)
-    Layout.SortOrder = Enum.SortOrder.LayoutOrder
-    Layout.Padding = UDim.new(0, 5)
-    
-    local Btn = Instance.new("TextButton", Frame)
-    Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    Btn.Size = UDim2.new(1, 0, 0, 35)
-    Btn.Text = "  " .. Title
-    Btn.TextColor3 = Color3.fromRGB(255, 215, 0) -- Gold Title
-    Btn.Font = Enum.Font.GothamBold
-    Btn.TextSize = 13
-    Btn.TextXAlignment = Enum.TextXAlignment.Left
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    
-    local Icon = Instance.new("TextLabel", Btn)
-    Icon.BackgroundTransparency = 1
-    Icon.Size = UDim2.new(0, 30, 1, 0)
-    Icon.Position = UDim2.new(1, -30, 0, 0)
-    Icon.Text = DefaultState and "v" or ">"
-    Icon.TextColor3 = Color3.new(1,1,1)
-    Icon.Font = Enum.Font.GothamBold
-    Icon.TextSize = 14
-    
-    local Content = Instance.new("Frame", Frame)
-    Content.BackgroundTransparency = 1
-    Content.Size = UDim2.new(1, 0, 0, 0)
-    Content.AutomaticSize = Enum.AutomaticSize.Y
-    Content.Visible = DefaultState
-    local CLayout = Instance.new("UIListLayout", Content)
-    CLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    CLayout.Padding = UDim.new(0, 5)
-    
+    local Frame = Instance.new("Frame", Parent); Frame.BackgroundTransparency = 1; Frame.Size = UDim2.new(1, -10, 0, 0); Frame.AutomaticSize = Enum.AutomaticSize.Y
+    local Layout = Instance.new("UIListLayout", Frame); Layout.SortOrder = Enum.SortOrder.LayoutOrder; Layout.Padding = UDim.new(0, 5)
+    local Btn = Instance.new("TextButton", Frame); Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35); Btn.Size = UDim2.new(1, 0, 0, 35); Btn.Text = "  " .. Title; Btn.TextColor3 = Color3.fromRGB(255, 215, 0); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    local Icon = Instance.new("TextLabel", Btn); Icon.BackgroundTransparency = 1; Icon.Size = UDim2.new(0, 30, 1, 0); Icon.Position = UDim2.new(1, -30, 0, 0); Icon.Text = DefaultState and "v" or ">"; Icon.TextColor3 = Color3.new(1,1,1); Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 14
+    local Content = Instance.new("Frame", Frame); Content.BackgroundTransparency = 1; Content.Size = UDim2.new(1, 0, 0, 0); Content.AutomaticSize = Enum.AutomaticSize.Y; Content.Visible = DefaultState; local CLayout = Instance.new("UIListLayout", Content); CLayout.SortOrder = Enum.SortOrder.LayoutOrder; CLayout.Padding = UDim.new(0, 5)
     local isOpen = DefaultState
-    Btn.MouseButton1Click:Connect(function()
-        isOpen = not isOpen
-        Content.Visible = isOpen
-        Icon.Text = isOpen and "v" or ">"
-    end)
-    
+    Btn.MouseButton1Click:Connect(function() isOpen = not isOpen; Content.Visible = isOpen; Icon.Text = isOpen and "v" or ">" end)
     return Content
 end
 
@@ -174,11 +126,8 @@ function CreateToggle(Parent, Text, Var, OnToggle)
     IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30)
     Btn.MouseButton1Click:Connect(function() 
         getgenv()[Var] = not getgenv()[Var]
-        if getgenv()[Var] then 
-            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
-        else 
-            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
-        end 
+        if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
+        else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end 
         if OnToggle then OnToggle(getgenv()[Var]) end 
     end) 
 end
@@ -187,15 +136,10 @@ function CreateTextBox(Parent, Text, Default, Var)
     local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, 0, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
     local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
     local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 4)
-    
     getgenv()[Var] = Default
     InputBox.FocusLost:Connect(function() 
-        if type(Default) == "number" then
-            local val = tonumber(InputBox.Text)
-            if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end 
-        else
-            getgenv()[Var] = InputBox.Text 
-        end
+        if type(Default) == "number" then local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end 
+        else getgenv()[Var] = InputBox.Text end
     end)
     return InputBox 
 end
@@ -207,61 +151,35 @@ end
 -- ========================================== --
 -- [[ SISTEM DUAL TAB ]]
 -- ========================================== --
-local TabNav = Instance.new("Frame", TargetPage)
-TabNav.Size = UDim2.new(1, -10, 0, 35)
-TabNav.BackgroundTransparency = 1
+local TabNav = Instance.new("Frame", TargetPage); TabNav.Size = UDim2.new(1, -10, 0, 35); TabNav.BackgroundTransparency = 1
+local TabMgrBtn = Instance.new("TextButton", TabNav); TabMgrBtn.Size = UDim2.new(0.48, 0, 1, 0); TabMgrBtn.BackgroundColor3 = Theme.Purple; TabMgrBtn.Text = "Menu Manager"; TabMgrBtn.TextColor3 = Theme.Text; TabMgrBtn.Font = Enum.Font.GothamBold; TabMgrBtn.TextSize = 12; Instance.new("UICorner", TabMgrBtn).CornerRadius = UDim.new(0, 6)
+local TabChatBtn = Instance.new("TextButton", TabNav); TabChatBtn.Size = UDim2.new(0.48, 0, 1, 0); TabChatBtn.Position = UDim2.new(0.52, 0, 0, 0); TabChatBtn.BackgroundColor3 = Theme.Item; TabChatBtn.Text = "Spam Chat"; TabChatBtn.TextColor3 = Theme.Text; TabChatBtn.Font = Enum.Font.GothamBold; TabChatBtn.TextSize = 12; Instance.new("UICorner", TabChatBtn).CornerRadius = UDim.new(0, 6)
 
-local TabMgrBtn = Instance.new("TextButton", TabNav)
-TabMgrBtn.Size = UDim2.new(0.48, 0, 1, 0)
-TabMgrBtn.BackgroundColor3 = Theme.Purple
-TabMgrBtn.Text = "Menu Manager"
-TabMgrBtn.TextColor3 = Theme.Text
-TabMgrBtn.Font = Enum.Font.GothamBold
-TabMgrBtn.TextSize = 12
-Instance.new("UICorner", TabMgrBtn).CornerRadius = UDim.new(0, 6)
+local PageManager = Instance.new("Frame", TargetPage); PageManager.Size = UDim2.new(1, 0, 0, 0); PageManager.BackgroundTransparency = 1; PageManager.AutomaticSize = Enum.AutomaticSize.Y; local UIListManager = Instance.new("UIListLayout", PageManager); UIListManager.Padding = UDim.new(0, 5)
+local PageChat = Instance.new("Frame", TargetPage); PageChat.Size = UDim2.new(1, 0, 0, 0); PageChat.BackgroundTransparency = 1; PageChat.AutomaticSize = Enum.AutomaticSize.Y; PageChat.Visible = false; local UIListChat = Instance.new("UIListLayout", PageChat); UIListChat.Padding = UDim.new(0, 5)
 
-local TabChatBtn = Instance.new("TextButton", TabNav)
-TabChatBtn.Size = UDim2.new(0.48, 0, 1, 0)
-TabChatBtn.Position = UDim2.new(0.52, 0, 0, 0)
-TabChatBtn.BackgroundColor3 = Theme.Item
-TabChatBtn.Text = "Spam Chat"
-TabChatBtn.TextColor3 = Theme.Text
-TabChatBtn.Font = Enum.Font.GothamBold
-TabChatBtn.TextSize = 12
-Instance.new("UICorner", TabChatBtn).CornerRadius = UDim.new(0, 6)
-
--- PAGE MANAGER
-local PageManager = Instance.new("Frame", TargetPage)
-PageManager.Size = UDim2.new(1, 0, 0, 0)
-PageManager.BackgroundTransparency = 1
-PageManager.AutomaticSize = Enum.AutomaticSize.Y
-local UIListManager = Instance.new("UIListLayout", PageManager)
-UIListManager.Padding = UDim.new(0, 5)
-
--- PAGE CHAT
-local PageChat = Instance.new("Frame", TargetPage)
-PageChat.Size = UDim2.new(1, 0, 0, 0)
-PageChat.BackgroundTransparency = 1
-PageChat.AutomaticSize = Enum.AutomaticSize.Y
-PageChat.Visible = false
-local UIListChat = Instance.new("UIListLayout", PageChat)
-UIListChat.Padding = UDim.new(0, 5)
-
--- Animasi Pindah Tab
-TabMgrBtn.MouseButton1Click:Connect(function()
-    PageManager.Visible = true; PageChat.Visible = false
-    TabMgrBtn.BackgroundColor3 = Theme.Purple; TabChatBtn.BackgroundColor3 = Theme.Item
-end)
-TabChatBtn.MouseButton1Click:Connect(function()
-    PageManager.Visible = false; PageChat.Visible = true
-    TabMgrBtn.BackgroundColor3 = Theme.Item; TabChatBtn.BackgroundColor3 = Theme.Purple
-end)
+TabMgrBtn.MouseButton1Click:Connect(function() PageManager.Visible = true; PageChat.Visible = false; TabMgrBtn.BackgroundColor3 = Theme.Purple; TabChatBtn.BackgroundColor3 = Theme.Item end)
+TabChatBtn.MouseButton1Click:Connect(function() PageManager.Visible = false; PageChat.Visible = true; TabMgrBtn.BackgroundColor3 = Theme.Item; TabChatBtn.BackgroundColor3 = Theme.Purple end)
 
 -- ========================================== --
--- [[ ISI UI PAGE MANAGER (MURNI DROPDOWN) ]]
+-- [[ ISI UI PAGE MANAGER (DROPDOWNS) ]]
 -- ========================================== --
 
--- 1. ACCORDION AUTO COLLECT
+-- 1. ACCORDION SECURITY (AUTO DETECT STAFF)
+local AccSec = CreateAccordion(PageManager, "🛡️ Security (Auto Detect Staff)", true)
+CreateToggle(AccSec, "▶ Enable Anti-Staff Auto Disconnect", "AntiStaff")
+
+-- 2. ACCORDION CAMERA ZOOM
+local AccCam = CreateAccordion(PageManager, "🎥 Camera Custom Zoom", false)
+CreateTextBox(AccCam, "Max Zoom Distance", 1000, "CustomZoom")
+CreateButton(AccCam, "Apply Camera Zoom", function()
+    pcall(function()
+        LP.CameraMaxZoomDistance = tonumber(getgenv().CustomZoom) or 1000
+        LP.CameraMinZoomDistance = 0.5 
+    end)
+end)
+
+-- 3. ACCORDION AUTO COLLECT
 local AccCollect = CreateAccordion(PageManager, "⚙️ Auto Collect Settings", false)
 CreateToggle(AccCollect, "▶ Enable Auto Collect", "AutoCollect")
 local BoxX = CreateTextBox(AccCollect, "Target Grid X", 0, "TargetPosX")
@@ -278,29 +196,28 @@ CreateButton(AccCollect, "📍 Save Pos (Current Loc)", function()
     end
 end)
 
--- 2. ACCORDION AUTO DROP
+-- 4. ACCORDION AUTO DROP
 local AccDrop = CreateAccordion(PageManager, "📦 Auto Drop Settings", false)
 CreateToggle(AccDrop, "▶ Enable Auto Drop", "AutoDrop", function(state) if not state then ForceRestoreUI() end end)
 CreateTextBox(AccDrop, "Drop Amount", 50, "DropAmount")
 CreateTextBox(AccDrop, "Drop Delay (Detik)", 2, "DropDelay") 
 
--- 3. ACCORDION AUTO TRASH
+-- 5. ACCORDION AUTO TRASH
 local AccTrash = CreateAccordion(PageManager, "🚮 Auto Trash Settings", false)
 CreateToggle(AccTrash, "▶ Enable Auto Trash", "AutoTrash", function(state) if not state then ForceRestoreUI() end end)
 CreateTextBox(AccTrash, "Trash Amount", 50, "TrashAmount")
 CreateTextBox(AccTrash, "Trash Delay (Detik)", 2, "TrashDelay") 
 
--- 4. AUTO BAN (Bebas di luar soalnya ga ada settingan tambahan)
+-- 6. AUTO BAN 
 CreateToggle(PageManager, "🔨 Auto Ban Players (World)", "AutoBan", function(state) if not state then ForceRestoreUI() end end)
 
--- 5. ACCORDION STREAMER MODE
+-- 7. ACCORDION STREAMER MODE
 local AccStreamer = CreateAccordion(PageManager, "👁️ Streamer Mode (Spoof Name)", false)
 CreateToggle(AccStreamer, "▶ Enable Spoof Name", "HideName")
 CreateTextBox(AccStreamer, "Custom Fake Name", "KzoyzPlayer", "FakeNameText")
 
-
 -- ========================================== --
--- [[ ISI UI PAGE AUTO CHAT (MURNI DROPDOWN) ]]
+-- [[ ISI UI PAGE AUTO CHAT ]]
 -- ========================================== --
 local AccChat = CreateAccordion(PageChat, "💬 Auto Spam Chat Settings", true)
 CreateToggle(AccChat, "▶ Enable Auto Chat", "AutoChat")
@@ -319,6 +236,56 @@ local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):Wait
 local ChatRemote = RS:WaitForChild("CB")
 
 RunService.RenderStepped:Connect(function() if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end end)
+
+-- [[ LOGIKA ANTI-STAFF (SMART AUTO DETECT) ]]
+local function CheckIfStaff(player)
+    if not getgenv().AntiStaff then return end
+    if player == LP then return end
+    
+    task.spawn(function()
+        pcall(function()
+            local isStaff = false
+            
+            -- 1. Deteksi Jika Creator Asli Game Masuk
+            if game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId then
+                isStaff = true
+            end
+            
+            -- 2. Deteksi Jika Game Dibikin Oleh Grup & Pangkat Player Tersebut Tinggi (Mod/Admin/Dev)
+            if game.CreatorType == Enum.CreatorType.Group then
+                local playerRank = player:GetRankInGroup(game.CreatorId)
+                if playerRank >= 100 then -- Rank 100+ biasanya Moderator ke atas
+                    isStaff = true
+                end
+            end
+            
+            -- 3. Deteksi Jika Player Punya Role Official Roblox Admin (Grup ID 1200769)
+            if player:GetRankInGroup(1200769) > 0 then
+                isStaff = true
+            end
+            
+            -- EKSEKUSI AUTO KICK
+            if isStaff then
+                LP:Kick("🛡️ Kzoyz Security: Auto Disconnect!\n\nModerator/Developer (" .. player.Name .. ") terdeteksi memasuki server.")
+            end
+        end)
+    end)
+end
+
+Players.PlayerAdded:Connect(function(newPlayer) 
+    CheckIfStaff(newPlayer)
+    if getgenv().AutoBan then ExecuteBan(newPlayer) end 
+end)
+
+task.spawn(function()
+    while true do
+        if getgenv().AntiStaff then
+            for _, p in ipairs(Players:GetPlayers()) do CheckIfStaff(p) end
+        end
+        task.wait(2)
+    end
+end)
+
 
 -- [[ LOGIKA STREAMER MODE / SPOOF NAME ]]
 task.spawn(function()
@@ -355,7 +322,6 @@ task.spawn(function()
     end
 end)
 
-
 -- [[ LOGIKA AUTO CHAT SPAM ]]
 task.spawn(function()
     local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
@@ -375,7 +341,6 @@ task.spawn(function()
     end
 end)
 
-
 -- [[ FUNGSI EKSEKUSI BAN ]]
 local function ExecuteBan(targetPlayer)
     if targetPlayer == LP then return end
@@ -389,8 +354,6 @@ local function ExecuteBan(targetPlayer)
         end
     end)
 end
-
-Players.PlayerAdded:Connect(function(newPlayer) if getgenv().AutoBan then ExecuteBan(newPlayer) end end)
 
 task.spawn(function()
     while true do
@@ -461,5 +424,40 @@ task.spawn(function()
     end 
 end)
 
--- [[ LOGIKA AUTO COLLECT GRID ]]
-task.spawn(function() while true do if getgenv().AutoCollect then local HitboxFolder = workspace:FindFirstChild("Hitbox"); local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name); if MyHitbox then local startZ = MyHitbox.Position.Z; local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5); local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5); local homeX = currentX; local homeY = currentY; local targetX = getgenv().TargetPosX; local targetY = getgenv().TargetPosY; if currentX ~= targetX or currentY ~= targetY then local function WalkGrid(tX, tY) while (currentX ~= tX or currentY ~= tY) and getgenv().AutoCollect do if currentX ~= tX then currentX = currentX + (tX > currentX and 1 or -1) elseif currentY ~= tY then currentY = currentY + (tY > currentY and 1 or -1) end; local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ); MyHitbox.CFrame = CFrame.new(newWorldPos); if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end; task.wait(getgenv().StepDelay) end end; WalkGrid(targetX, targetY); task.wait(0.6); WalkGrid(homeX, homeY) end end end; task.wait(2) end end)
+-- [[ LOGIKA AUTO COLLECT GRID (ANTI-POTONG) ]]
+task.spawn(function() 
+    while true do 
+        if getgenv().AutoCollect then 
+            local HitboxFolder = workspace:FindFirstChild("Hitbox")
+            local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+            if MyHitbox then 
+                local startZ = MyHitbox.Position.Z
+                local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+                local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+                local homeX = currentX
+                local homeY = currentY
+                local targetX = getgenv().TargetPosX
+                local targetY = getgenv().TargetPosY
+                if currentX ~= targetX or currentY ~= targetY then 
+                    local function WalkGrid(tX, tY) 
+                        while (currentX ~= tX or currentY ~= tY) and getgenv().AutoCollect do 
+                            if currentX ~= tX then 
+                                currentX = currentX + (tX > currentX and 1 or -1) 
+                            elseif currentY ~= tY then 
+                                currentY = currentY + (tY > currentY and 1 or -1) 
+                            end
+                            local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
+                            MyHitbox.CFrame = CFrame.new(newWorldPos)
+                            if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
+                            task.wait(getgenv().StepDelay) 
+                        end 
+                    end
+                    WalkGrid(targetX, targetY)
+                    task.wait(0.6)
+                    WalkGrid(homeX, homeY) 
+                end 
+            end 
+        end
+        task.wait(2) 
+    end 
+end)
