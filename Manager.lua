@@ -145,7 +145,7 @@ CreateTextBox(TargetPage, "🗑️ Trash Amount", 50, "TrashAmount")
 CreateTextBox(TargetPage, "⏱️ Trash Delay (Detik)", 2, "TrashDelay") 
 
 -- AUTO BAN UI
-CreateToggle(TargetPage, "🔨 Auto Ban Players (World)", "AutoBan", function(state) 
+CreateToggle(TargetPage, "🔨 Auto Ban Playershhh", "AutoBan", function(state) 
     if not state then ForceRestoreUI() end 
 end)
 
