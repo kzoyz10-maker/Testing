@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.95 - SYNC DROP & ONLY SAPLING" 
+getgenv().ScriptVersion = "Pabrik v0.97 - SMART DETECT & EXACT DROP" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -13,7 +13,6 @@ getgenv().BreakDelay = 0.15
 getgenv().HitCount = 3    
 
 getgenv().EnablePabrik = false
-getgenv().OnlyCollectSapling = true -- Default ON sesuai request lu
 getgenv().PabrikStartX = 0
 getgenv().PabrikEndX = 100
 getgenv().PabrikStartY = 0
@@ -29,8 +28,6 @@ getgenv().SelectedSeed = "Kosong"
 getgenv().SelectedBlock = "Kosong" 
 
 getgenv().AIDictionary = getgenv().AIDictionary or {}
-getgenv().IsGhosting = false
-getgenv().HoldCFrame = nil
 getgenv().GridSize = 4.5
 
 -- ========================================== --
@@ -55,28 +52,6 @@ pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("U
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
 LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
-
-if getgenv().KzoyzHeartbeatPabrik then getgenv().KzoyzHeartbeatPabrik:Disconnect(); getgenv().KzoyzHeartbeatPabrik = nil end
-
-getgenv().KzoyzHeartbeatPabrik = RunService.Heartbeat:Connect(function()
-    if getgenv().IsGhosting then
-        if getgenv().HoldCFrame then
-            local char = LP.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then 
-                char.HumanoidRootPart.CFrame = getgenv().HoldCFrame 
-            end
-        end
-        if PlayerMovement then
-            pcall(function()
-                PlayerMovement.VelocityY = 0
-                PlayerMovement.VelocityX = 0
-                PlayerMovement.VelocityZ = 0
-                PlayerMovement.Grounded = true
-                PlayerMovement.Jumping = false
-            end)
-        end
-    end
-end)
 
 -- ========================================== --
 -- [[ INVENTORY TRANSLATOR ]]
@@ -369,10 +344,12 @@ end
 -- ========================================== --
 -- [[ UTILS PABRIK LAINNYA ]]
 -- ========================================== --
-local function CheckDropsAtGrid(TargetGridX, TargetGridY)
+
+-- Cek Tipe Drop (Pisahin Sapling & Block Biasa)
+local function CheckDropsType(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
-    local foundAny = false
-    local foundSapling = false
+    local hasSapling = false
+    local hasAny = false
     
     for _, folder in ipairs(TargetFolders) do
         if folder then
@@ -390,10 +367,10 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
                     
                     if dX == TargetGridX and math.abs(dY - TargetGridY) <= 1 then
-                        foundAny = true
-                        
-                        -- Cek apakah item ini Sapling/Seed (Anti mungut sampah)
+                        hasAny = true
                         local isSapling = false
+                        
+                        -- Cek tag/nama kalau itu Sapling/Seed
                         for _, attrValue in pairs(obj:GetAttributes()) do
                             if type(attrValue) == "string" and (string.find(string.lower(attrValue), "sapling") or string.find(string.lower(attrValue), "seed")) then 
                                 isSapling = true; break 
@@ -413,19 +390,13 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                             end
                         end
                         
-                        if isSapling then foundSapling = true end
+                        if isSapling then hasSapling = true end
                     end
                 end
             end
         end
     end
-    
-    -- Filter dari setting UI
-    if getgenv().OnlyCollectSapling then
-        return foundSapling
-    else
-        return foundAny
-    end
+    return hasAny, hasSapling
 end
 
 local function DropItemLogic(targetName, dropAmount)
@@ -438,9 +409,7 @@ local function DropItemLogic(targetName, dropAmount)
         pcall(function() promptRemote:FireServer({ ButtonAction = "drp", Inputs = { amt = tostring(dropAmount) } }) end); task.wait(0.1)
         pcall(function() 
             for _, gui in pairs(LP.PlayerGui:GetDescendants()) do 
-                if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then 
-                    gui.Visible = false 
-                end 
+                if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end 
             end 
         end)
         return true
@@ -449,224 +418,73 @@ local function DropItemLogic(targetName, dropAmount)
 end
 
 -- ========================================== --
--- [[ UI MAKER (CLEAN & SAFE) ]]
+-- [[ UI MAKER ]]
 -- ========================================== --
 for _, v in pairs(TargetPage:GetChildren()) do 
     if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then v:Destroy() end 
 end
 
-local Theme = { 
-    Item = Color3.fromRGB(45, 45, 45), 
-    Text = Color3.fromRGB(255, 255, 255), 
-    Purple = Color3.fromRGB(140, 80, 255) 
-}
+local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
-local TabNav = Instance.new("Frame", TargetPage)
-TabNav.Size = UDim2.new(1, 0, 0, 35)
-TabNav.BackgroundTransparency = 1
-TabNav.ZIndex = 2
+local TabNav = Instance.new("Frame", TargetPage); TabNav.Size = UDim2.new(1, 0, 0, 35); TabNav.BackgroundTransparency = 1; TabNav.ZIndex = 2
+local TabPabrikBtn = Instance.new("TextButton", TabNav); TabPabrikBtn.Size = UDim2.new(0.49, 0, 1, 0); TabPabrikBtn.BackgroundColor3 = Theme.Purple; TabPabrikBtn.Text = "Pabrik Config"; TabPabrikBtn.TextColor3 = Color3.new(1,1,1); TabPabrikBtn.Font = Enum.Font.GothamBold; TabPabrikBtn.TextSize = 11; Instance.new("UICorner", TabPabrikBtn).CornerRadius = UDim.new(0, 6)
+local TabAdvBtn = Instance.new("TextButton", TabNav); TabAdvBtn.Size = UDim2.new(0.49, 0, 1, 0); TabAdvBtn.Position = UDim2.new(0.51, 0, 0, 0); TabAdvBtn.BackgroundColor3 = Theme.Item; TabAdvBtn.Text = "Advanced & Delay"; TabAdvBtn.TextColor3 = Color3.new(1,1,1); TabAdvBtn.Font = Enum.Font.GothamBold; TabAdvBtn.TextSize = 11; Instance.new("UICorner", TabAdvBtn).CornerRadius = UDim.new(0, 6)
 
-local TabPabrikBtn = Instance.new("TextButton", TabNav)
-TabPabrikBtn.Size = UDim2.new(0.49, 0, 1, 0)
-TabPabrikBtn.BackgroundColor3 = Theme.Purple
-TabPabrikBtn.Text = "Pabrik Config"
-TabPabrikBtn.TextColor3 = Color3.new(1,1,1)
-TabPabrikBtn.Font = Enum.Font.GothamBold
-TabPabrikBtn.TextSize = 11
-Instance.new("UICorner", TabPabrikBtn).CornerRadius = UDim.new(0, 6)
+local PageContainer = Instance.new("Frame", TargetPage); PageContainer.Size = UDim2.new(1, 0, 1, -45); PageContainer.Position = UDim2.new(0, 0, 0, 45); PageContainer.BackgroundTransparency = 1
+local PagePabrik = Instance.new("Frame", PageContainer); PagePabrik.Size = UDim2.new(1, 0, 0, 0); PagePabrik.BackgroundTransparency = 1; PagePabrik.AutomaticSize = Enum.AutomaticSize.Y
+local UIListPabrik = Instance.new("UIListLayout", PagePabrik); UIListPabrik.SortOrder = Enum.SortOrder.LayoutOrder; UIListPabrik.Padding = UDim.new(0, 5)
 
-local TabAdvBtn = Instance.new("TextButton", TabNav)
-TabAdvBtn.Size = UDim2.new(0.49, 0, 1, 0)
-TabAdvBtn.Position = UDim2.new(0.51, 0, 0, 0)
-TabAdvBtn.BackgroundColor3 = Theme.Item
-TabAdvBtn.Text = "Advanced & Delay"
-TabAdvBtn.TextColor3 = Color3.new(1,1,1)
-TabAdvBtn.Font = Enum.Font.GothamBold
-TabAdvBtn.TextSize = 11
-Instance.new("UICorner", TabAdvBtn).CornerRadius = UDim.new(0, 6)
+local PageAdv = Instance.new("Frame", PageContainer); PageAdv.Size = UDim2.new(1, 0, 0, 0); PageAdv.BackgroundTransparency = 1; PageAdv.Visible = false; PageAdv.AutomaticSize = Enum.AutomaticSize.Y
+local UIListAdv = Instance.new("UIListLayout", PageAdv); UIListAdv.SortOrder = Enum.SortOrder.LayoutOrder; UIListAdv.Padding = UDim.new(0, 5)
 
-local PageContainer = Instance.new("Frame", TargetPage)
-PageContainer.Size = UDim2.new(1, 0, 1, -45)
-PageContainer.Position = UDim2.new(0, 0, 0, 45)
-PageContainer.BackgroundTransparency = 1
-
-local PagePabrik = Instance.new("Frame", PageContainer)
-PagePabrik.Size = UDim2.new(1, 0, 0, 0)
-PagePabrik.BackgroundTransparency = 1
-PagePabrik.AutomaticSize = Enum.AutomaticSize.Y
-local UIListPabrik = Instance.new("UIListLayout", PagePabrik)
-UIListPabrik.SortOrder = Enum.SortOrder.LayoutOrder
-UIListPabrik.Padding = UDim.new(0, 5)
-
-local PageAdv = Instance.new("Frame", PageContainer)
-PageAdv.Size = UDim2.new(1, 0, 0, 0)
-PageAdv.BackgroundTransparency = 1
-PageAdv.Visible = false
-PageAdv.AutomaticSize = Enum.AutomaticSize.Y
-local UIListAdv = Instance.new("UIListLayout", PageAdv)
-UIListAdv.SortOrder = Enum.SortOrder.LayoutOrder
-UIListAdv.Padding = UDim.new(0, 5)
-
-TabPabrikBtn.MouseButton1Click:Connect(function() 
-    PagePabrik.Visible = true; PageAdv.Visible = false
-    TabPabrikBtn.BackgroundColor3 = Theme.Purple; TabAdvBtn.BackgroundColor3 = Theme.Item 
-end)
-
-TabAdvBtn.MouseButton1Click:Connect(function() 
-    PagePabrik.Visible = false; PageAdv.Visible = true
-    TabPabrikBtn.BackgroundColor3 = Theme.Item; TabAdvBtn.BackgroundColor3 = Theme.Purple 
-end)
+TabPabrikBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = true; PageAdv.Visible = false; TabPabrikBtn.BackgroundColor3 = Theme.Purple; TabAdvBtn.BackgroundColor3 = Theme.Item end)
+TabAdvBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = false; PageAdv.Visible = true; TabPabrikBtn.BackgroundColor3 = Theme.Item; TabAdvBtn.BackgroundColor3 = Theme.Purple end)
 
 local function CreateToggle(Parent, Text, Var) 
-    local Btn = Instance.new("TextButton", Parent)
-    Btn.BackgroundColor3 = Theme.Item
-    Btn.Size = UDim2.new(1, -10, 0, 35)
-    Btn.Text = ""
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    
-    local T = Instance.new("TextLabel", Btn)
-    T.Text = Text; T.TextColor3 = Theme.Text
-    T.Font = Enum.Font.GothamSemibold; T.TextSize = 12
-    T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0)
-    T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local IndBg = Instance.new("Frame", Btn)
-    IndBg.Size = UDim2.new(0, 36, 0, 18)
-    IndBg.Position = UDim2.new(1, -45, 0.5, -9)
-    IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30)
-    Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
-    
-    local Dot = Instance.new("Frame", IndBg)
-    Dot.Size = UDim2.new(0, 14, 0, 14)
-    Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
-    Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100)
-    Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
-    
+    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
+    local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
+    local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
     IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30)
-    
-    Btn.MouseButton1Click:Connect(function() 
-        getgenv()[Var] = not getgenv()[Var]
-        if getgenv()[Var] then 
-            Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true)
-            Dot.BackgroundColor3 = Color3.new(1,1,1)
-            IndBg.BackgroundColor3 = Theme.Purple 
-        else 
-            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true)
-            Dot.BackgroundColor3 = Color3.fromRGB(100,100,100)
-            IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
-        end 
-    end) 
+    Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end end) 
 end
 
 local function CreateTextBox(Parent, Text, Default, Var) 
-    local Frame = Instance.new("Frame", Parent)
-    Frame.BackgroundColor3 = Theme.Item
-    Frame.Size = UDim2.new(1, -10, 0, 35)
-    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
-    
-    local Label = Instance.new("TextLabel", Frame)
-    Label.Text = Text; Label.TextColor3 = Theme.Text
-    Label.BackgroundTransparency = 1
-    Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local InputBox = Instance.new("TextBox", Frame)
-    InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    InputBox.Position = UDim2.new(0.6, 0, 0.15, 0)
-    InputBox.Size = UDim2.new(0.35, 0, 0.7, 0)
-    InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12
-    InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default)
-    Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 4)
-    
-    InputBox.FocusLost:Connect(function() 
-        local val = tonumber(InputBox.Text)
-        if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end 
-    end)
+    local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
+    local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 4)
+    InputBox.FocusLost:Connect(function() local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end end)
     return InputBox 
 end
 
 local function CreateButton(Parent, Text, Callback) 
-    local Btn = Instance.new("TextButton", Parent)
-    Btn.BackgroundColor3 = Theme.Purple
-    Btn.Size = UDim2.new(1, -10, 0, 35)
-    Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1)
-    Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    Btn.MouseButton1Click:Connect(Callback) 
+    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) 
 end
 
 local function CreateDropdown(Parent, Text, DefaultOptions, Var) 
-    local Frame = Instance.new("Frame", Parent)
-    Frame.BackgroundColor3 = Theme.Item
-    Frame.Size = UDim2.new(1, -10, 0, 35)
-    Frame.ClipsDescendants = true
-    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
-    
-    local TopBtn = Instance.new("TextButton", Frame)
-    TopBtn.Size = UDim2.new(1, 0, 0, 35)
-    TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""
-    
-    local Label = Instance.new("TextLabel", TopBtn)
-    Label.Text = Text .. ": Not Selected"; Label.TextColor3 = Theme.Text
-    Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11
-    Label.Size = UDim2.new(1, -20, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local Icon = Instance.new("TextLabel", TopBtn)
-    Icon.Text = "v"; Icon.TextColor3 = Theme.Purple
-    Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 12
-    Icon.Size = UDim2.new(0, 20, 1, 0); Icon.Position = UDim2.new(1, -25, 0, 0)
-    Icon.BackgroundTransparency = 1
-    
-    local Scroll = Instance.new("ScrollingFrame", Frame)
-    Scroll.Position = UDim2.new(0,0,0,35)
-    Scroll.Size = UDim2.new(1,0,1,-35)
-    Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0
-    Scroll.ScrollBarThickness = 2; Scroll.ScrollBarImageColor3 = Theme.Purple
-    Instance.new("UIListLayout", Scroll)
+    local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""
+    local Label = Instance.new("TextLabel", TopBtn); Label.Text = Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left
+    local Icon = Instance.new("TextLabel", TopBtn); Icon.Text = "v"; Icon.TextColor3 = Theme.Purple; Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 12; Icon.Size = UDim2.new(0, 20, 1, 0); Icon.Position = UDim2.new(1, -25, 0, 0); Icon.BackgroundTransparency = 1
+    local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; Scroll.ScrollBarImageColor3 = Theme.Purple; Instance.new("UIListLayout", Scroll)
     
     local isOpen = false
-    TopBtn.MouseButton1Click:Connect(function() 
-        isOpen = not isOpen
-        if isOpen then 
-            Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true); Icon.Text = "^" 
-        else 
-            Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" 
-        end 
-    end)
-    
+    TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true); Icon.Text = "^" else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end end)
     local function RefreshOptions(Options) 
-        for _, child in ipairs(Scroll:GetChildren()) do 
-            if child:IsA("TextButton") then child:Destroy() end 
-        end
+        for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
         for _, opt in ipairs(Options) do 
-            local OptBtn = Instance.new("TextButton", Scroll)
-            OptBtn.Size = UDim2.new(1, 0, 0, 25)
-            OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35)
-            OptBtn.TextColor3 = Theme.Text
-            OptBtn.Text = tostring(opt)
-            OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11
-            OptBtn.MouseButton1Click:Connect(function() 
-                getgenv()[Var] = opt; Label.Text = Text .. ": " .. tostring(opt)
-                isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" 
-            end) 
+            local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11
+            OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end) 
         end
         Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) 
     end
-    
-    RefreshOptions(DefaultOptions)
-    return RefreshOptions 
+    RefreshOptions(DefaultOptions); return RefreshOptions 
 end
 
--- TAB 1: PABRIK CONFIG
-CreateToggle(PagePabrik, "🚀 START SMART PABRIK", "EnablePabrik")
-CreateToggle(PagePabrik, "Only Collect Sapling/Seed", "OnlyCollectSapling") -- TOGGLE BARU!
+CreateToggle(PagePabrik, "🚀 START SMART PAB7RIK", "EnablePabrik")
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
-CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() 
-    local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) 
-end)
+CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
 
 local d1 = Instance.new("Frame", PagePabrik); d1.Size=UDim2.new(1,0,0,2); d1.BackgroundColor3=Theme.Purple; d1.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Area Start X", getgenv().PabrikStartX, "PabrikStartX")
@@ -677,9 +495,7 @@ CreateTextBox(PagePabrik, "Area End Y", getgenv().PabrikEndY, "PabrikEndY")
 local d2 = Instance.new("Frame", PagePabrik); d2.Size=UDim2.new(1,0,0,2); d2.BackgroundColor3=Theme.Purple; d2.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Block Threshold (Sisa)", getgenv().BlockThreshold, "BlockThreshold")
 CreateTextBox(PagePabrik, "Keep Seed Amt (Sisa)", getgenv().KeepSeedAmt, "KeepSeedAmt")
-local Spacer1 = Instance.new("Frame", PagePabrik); Spacer1.Size = UDim2.new(1, 0, 0, 20); Spacer1.BackgroundTransparency = 1
 
--- TAB 2: ADVANCED
 CreateTextBox(PageAdv, "⚡ Walk Speed", getgenv().WalkSpeed, "WalkSpeed")
 CreateTextBox(PageAdv, "Place Delay (ms)", getgenv().PlaceDelay, "PlaceDelay")
 CreateTextBox(PageAdv, "Break Delay (ms)", getgenv().BreakDelay, "BreakDelay") 
@@ -692,8 +508,7 @@ CreateButton(PageAdv, "📍 Set Break Pos (Kamu)", function()
     local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) 
     if H then 
         local bx = math.floor(H.Position.X/4.5+0.5); local by = math.floor(H.Position.Y/4.5+0.5)
-        getgenv().BreakPosX = bx; getgenv().BreakPosY = by
-        BreakXBox.Text = tostring(bx); BreakYBox.Text = tostring(by) 
+        getgenv().BreakPosX = bx; getgenv().BreakPosY = by; BreakXBox.Text = tostring(bx); BreakYBox.Text = tostring(by) 
     end 
 end)
 
@@ -704,12 +519,9 @@ CreateButton(PageAdv, "📍 Set Drop Pos (Kamu)", function()
     local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) 
     if H then 
         local dx = math.floor(H.Position.X/4.5+0.5); local dy = math.floor(H.Position.Y/4.5+0.5)
-        getgenv().DropPosX = dx; getgenv().DropPosY = dy
-        DropXBox.Text = tostring(dx); DropYBox.Text = tostring(dy) 
+        getgenv().DropPosX = dx; getgenv().DropPosY = dy; DropXBox.Text = tostring(dx); DropYBox.Text = tostring(dy) 
     end 
 end)
-local Spacer2 = Instance.new("Frame", PageAdv); Spacer2.Size = UDim2.new(1, 0, 0, 20); Spacer2.BackgroundTransparency = 1
-
 
 -- ========================================== --
 -- [[ LOGIKA UTAMA: SMART PABRIK ]]
@@ -723,11 +535,10 @@ task.spawn(function()
                 local targetPanen = {}
                 local targetTanam = {}
 
-                -- 1. SCAN WORLD (Nge-Scan Y dulu dari atas/bawah, biar jalannya per-Baris)
+                -- 1. SCAN WORLD 
                 local sX, eX = math.min(getgenv().PabrikStartX, getgenv().PabrikEndX), math.max(getgenv().PabrikStartX, getgenv().PabrikEndX)
                 local sY, eY = math.min(getgenv().PabrikStartY, getgenv().PabrikEndY), math.max(getgenv().PabrikStartY, getgenv().PabrikEndY)
 
-                -- Loop Y adalah target posisi Tanamannya
                 for y = sY, eY do
                     if not getgenv().EnablePabrik then break end
                     
@@ -739,7 +550,6 @@ task.spawn(function()
                     for x = loopStartX, loopEndX, step do
                         local yCol = RawWorldTiles[x]
                         if type(yCol) == "table" then
-                            
                             -- Cek Tanam
                             if IsTileSolid(x, y - 1) and IsTileEmptyForPlant(x, y) then
                                 table.insert(targetTanam, {x = x, y = y})
@@ -757,7 +567,6 @@ task.spawn(function()
                                     
                                     if type(tileStr) == "string" and (string.find(string.lower(tileStr), "sapling") or string.find(string.lower(tileStr), "seed")) and tileInfo and tileInfo.at then
                                         local sapling = {x = x, y = y, name = tileStr, at = tileInfo.at, stage = tileInfo.stage}
-                                        
                                         local isReady = false
                                         if sapling.stage and sapling.stage >= 3 then
                                             isReady = true
@@ -767,26 +576,21 @@ task.spawn(function()
                                                 BackupAIBelajarWaktu(sapling)
                                                 targetMatang = getgenv().AIDictionary[sapling.name]
                                             end
-                                            
                                             if targetMatang then
                                                 local umurServer1 = os.time() - sapling.at
                                                 local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                                                if math.max(umurServer1, umurServer2) >= targetMatang then 
-                                                    isReady = true 
-                                                end
+                                                if math.max(umurServer1, umurServer2) >= targetMatang then isReady = true end
                                             end
                                         end
-                                        
                                         if isReady then table.insert(targetPanen, sapling) end
                                     end
                                 end
                             end
-                            
                         end
                     end
                 end
 
-                -- 2. EKSEKUSI PANEN DULU
+                -- 2. EKSEKUSI PANEN
                 if #targetPanen > 0 then
                     for _, panen in ipairs(targetPanen) do
                         if not getgenv().EnablePabrik then break end
@@ -794,11 +598,7 @@ task.spawn(function()
                             task.wait(0.1)
                             pcall(function() 
                                 local targetVec = Vector2.new(panen.x, panen.y)
-                                if RemoteBreak:IsA("RemoteEvent") then 
-                                    RemoteBreak:FireServer(targetVec) 
-                                else 
-                                    RemoteBreak:InvokeServer(targetVec) 
-                                end
+                                if RemoteBreak:IsA("RemoteEvent") then RemoteBreak:FireServer(targetVec) else RemoteBreak:InvokeServer(targetVec) end
                             end)
                             task.wait(getgenv().BreakDelay)
                         end
@@ -814,11 +614,9 @@ task.spawn(function()
                             if MoveSmartlyTo(spot.x, spot.y) then
                                 task.wait(0.1)
                                 pcall(function() 
-                                    local targetVec = Vector2.new(spot.x, spot.y)
-                                    local targetStr = spot.x .. ", " .. spot.y
+                                    local targetVec = Vector2.new(spot.x, spot.y); local targetStr = spot.x .. ", " .. spot.y
                                     if RemotePlace:IsA("RemoteEvent") then 
-                                        RemotePlace:FireServer(targetVec, seedSlot)
-                                        RemotePlace:FireServer(targetStr, seedSlot) 
+                                        RemotePlace:FireServer(targetVec, seedSlot); RemotePlace:FireServer(targetStr, seedSlot) 
                                     else 
                                         RemotePlace:InvokeServer(targetVec, seedSlot) 
                                     end
@@ -829,112 +627,38 @@ task.spawn(function()
                     end
                 end
 
-                -- 4. JIKA KOSONG (LAGI NUNGGU TUMBUH) -> BATCH FARM BLOCK FIX + DROP SYNC!
+                -- 4. JIKA KOSONG -> BATCH FARM BLOCK DENGAN SMART DETECT SAPLING
                 if #targetPanen == 0 and #targetTanam == 0 and getgenv().EnablePabrik then
                     local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                     
                     if blockSlot then
                         if MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY) then
                             local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
-                            local hitLoopCount = 0
                             
                             while getgenv().EnablePabrik do
-                                local currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
+                                local currentBlockAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
+                                blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                                 
-                                -- Kalau block tinggal dikit (butuh pungut) atau udah 40x ketok (biar drop ga ilang)
-                                if currentAmt <= getgenv().BlockThreshold or hitLoopCount >= 40 then
-                                    
-                                    -- Coba pungut dulu
-                                    if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
-                                        local char = LP.Character
-                                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                                        local hum = char and char:FindFirstChildOfClass("Humanoid")
-                                        local ExactHrpCF = hrp and hrp.CFrame
-                                        
-                                        if hrp then 
-                                            getgenv().HoldCFrame = ExactHrpCF
-                                            hrp.Anchored = true
-                                            getgenv().IsGhosting = true 
+                                -- A: KETIKA BLOK HABIS/MENCAPAI THRESHOLD -> WAKTUNYA SEDOT SEMUA ITEM MASSAL
+                                if currentBlockAmt <= getgenv().BlockThreshold or not blockSlot then
+                                    local hasAny, _ = CheckDropsType(BreakTarget.X, BreakTarget.Y)
+                                    if hasAny then
+                                        local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+                                        if MyHitbox then
+                                            local oldCF = MyHitbox.CFrame
+                                            MyHitbox.CanCollide = false
+                                            MyHitbox.CFrame = CFrame.new(BreakTarget.X * getgenv().GridSize, BreakTarget.Y * getgenv().GridSize, oldCF.Position.Z)
+                                            task.wait(0.3) 
+                                            MyHitbox.CFrame = oldCF
+                                            MyHitbox.CanCollide = true
                                         end
-                                        if hum then
-                                            local animator = hum:FindFirstChildOfClass("Animator")
-                                            local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
-                                            for _, track in ipairs(tracks) do track:Stop(0) end
-                                        end
-                                        
-                                        MoveSmartlyTo(BreakTarget.X, BreakTarget.Y)
-                                        local waitTimeout = 0
-                                        while CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) and waitTimeout < 15 and getgenv().EnablePabrik do
-                                            task.wait(0.1); waitTimeout = waitTimeout + 1
-                                        end
-                                        
-                                        task.wait(0.1)
-                                        MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY)
-                                        
-                                        if hrp and ExactHrpCF then 
-                                            hrp.AssemblyLinearVelocity = Vector3.zero
-                                            hrp.AssemblyAngularVelocity = Vector3.zero
-                                            hrp.CFrame = ExactHrpCF
-                                            RunService.Heartbeat:Wait()
-                                            hrp.Anchored = false 
-                                        end
-                                        getgenv().IsGhosting = false 
                                     end
-                                    
-                                    -- Habis usaha pungut, cek lagi isi tas.
-                                    currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
-                                    
-                                    -- ======================================================== --
-                                    -- SYNC DROP SEED LOGIC: Cuma jalan pas blok di tas beneran abis!
-                                    -- ======================================================== --
-                                    if currentAmt <= getgenv().BlockThreshold then
-                                        
-                                        local currentSeedAmt = GetItemAmountByItemName(getgenv().SelectedSeed)
-                                        if currentSeedAmt > getgenv().KeepSeedAmt then
-                                            if MoveSmartlyTo(getgenv().DropPosX, getgenv().DropPosY) then
-                                                task.wait(1.5)
-                                                while getgenv().EnablePabrik do
-                                                    local current = GetItemAmountByItemName(getgenv().SelectedSeed)
-                                                    local toDrop = current - getgenv().KeepSeedAmt
-                                                    if toDrop <= 0 then break end
-                                                    local dropNow = math.min(toDrop, 200)
-                                                    if DropItemLogic(getgenv().SelectedSeed, dropNow) then 
-                                                        task.wait(getgenv().DropDelay + 0.3) 
-                                                    else 
-                                                        break 
-                                                    end
-                                                end
-                                                pcall(function() 
-                                                    if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
-                                                    for _, gui in pairs(LP.PlayerGui:GetDescendants()) do 
-                                                        if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then 
-                                                            gui.Visible = false 
-                                                        end 
-                                                    end 
-                                                end)
-                                                task.wait(0.1)
-                                                pcall(function() 
-                                                    if UIManager then 
-                                                        if type(UIManager.ShowHUD) == "function" then UIManager:ShowHUD() end 
-                                                    end 
-                                                end)
-                                            end
-                                        end
-                                        
-                                        -- Beneran abis, keluar dari loop mukul batu biar balik ngecek tanaman
-                                        break 
-                                    end
-                                    
-                                    -- Kalau nambah banyak (habis di restock pungutan), LANJUT MUKUL!
-                                    hitLoopCount = 0
+                                    break -- Keluar loop farm block untuk Restock Seed / Panen lagi
                                 end
                                 
-                                local activeSlot = GetSlotByItemName(getgenv().SelectedBlock)
-                                if not activeSlot then break end 
-                                
-                                -- Pukul terus bos!
-                                RemotePlace:FireServer(BreakTarget, activeSlot)
-                                task.wait(getgenv().PlaceDelay + 0.05) 
+                                -- B: NARUH & HANCURIN BLOK
+                                RemotePlace:FireServer(BreakTarget, blockSlot)
+                                task.wait(getgenv().PlaceDelay) 
                                 
                                 for hit = 1, getgenv().HitCount do
                                     if not getgenv().EnablePabrik then break end
@@ -942,14 +666,59 @@ task.spawn(function()
                                     task.wait(getgenv().BreakDelay)
                                 end
                                 
-                                hitLoopCount = hitLoopCount + 1
+                                -- C: DETEKSI SAPLING SAAT MUKUL
+                                local hasAny, hasSapling = CheckDropsType(BreakTarget.X, BreakTarget.Y)
+                                
+                                -- Kalau ada sapling jatuh, langung micro-tp sedot.
+                                -- Kalau cuma blok/gem doang, abaikan biar numpuk nunggu BlockThreshold.
+                                if hasSapling then
+                                    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name)
+                                    if MyHitbox then
+                                        local oldCF = MyHitbox.CFrame
+                                        MyHitbox.CanCollide = false
+                                        MyHitbox.CFrame = CFrame.new(BreakTarget.X * getgenv().GridSize, BreakTarget.Y * getgenv().GridSize, oldCF.Position.Z)
+                                        task.wait(0.2) 
+                                        MyHitbox.CFrame = oldCF
+                                        MyHitbox.CanCollide = true
+                                    end
+                                end
                             end
                         end
                     end
+
+                    -- 5. AUTO DROP SEED PRECISE SISA KEEB_SEED_AMT
+                    if getgenv().EnablePabrik then
+                        local currentSeedAmt = GetItemAmountByItemName(getgenv().SelectedSeed)
+                        if currentSeedAmt > getgenv().KeepSeedAmt then
+                            if MoveSmartlyTo(getgenv().DropPosX, getgenv().DropPosY) then
+                                task.wait(1.5)
+                                while getgenv().EnablePabrik do
+                                    local current = GetItemAmountByItemName(getgenv().SelectedSeed)
+                                    local toDrop = current - getgenv().KeepSeedAmt 
+                                    
+                                    if toDrop <= 0 then break end
+                                    local dropNow = math.min(toDrop, 200)
+                                    
+                                    if DropItemLogic(getgenv().SelectedSeed, dropNow) then 
+                                        task.wait(getgenv().DropDelay + 0.3) 
+                                    else 
+                                        break 
+                                    end
+                                end
+                                
+                                pcall(function() 
+                                    if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
+                                    for _, gui in pairs(LP.PlayerGui:GetDescendants()) do 
+                                        if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end 
+                                    end 
+                                end)
+                                task.wait(0.1)
+                                pcall(function() if UIManager and type(UIManager.ShowHUD) == "function" then UIManager:ShowHUD() end end)
+                            end
+                        end
+                    end
+                    
                 end
-                
-                -- Note: Bagian 5 (Auto Drop independent) sengaja udah dihapus, 
-                -- soalnya udah di-pindahin ke dalem pengecekan BlockThreshold di atas.
             end
         end
         task.wait(0.5)
