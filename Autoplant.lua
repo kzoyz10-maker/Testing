@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V56 (BRUTE FORCE HARVEST)"
+getgenv().ScriptVersion = "Auto Farm V57 (BRUTE FORCE + SWEEP X)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -358,7 +358,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ AUTO HARVEST LOGIC (BRUTE FORCE ZIGZAG) ]]
+-- [[ AUTO HARVEST LOGIC (BRUTE FORCE ZIGZAG + SWEEP X) ]]
 -- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
@@ -408,6 +408,13 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                         else RemoteFist:InvokeServer(targetVec) end
                     end)
                     task.wait(getgenv().BreakDelay)
+                    
+                    -- LOGIC AUTO COLLECT (Geser X +1 / -1 tergantung arah)
+                    local arahX = (sapling.y % 2 == 0) and 1 or -1 
+                    
+                    -- Jalan satu blok ekstra buat mungut
+                    MoveSmartlyTo(sapling.x + arahX, sapling.y)
+                    task.wait(0.1)
                 end
             end
         end
