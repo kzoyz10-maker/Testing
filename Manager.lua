@@ -14,7 +14,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Manager v2.0-Dropdown+RealTimeSpoof" 
+getgenv().ScriptVersion = "Manager v2.1-PerfectDropdown" 
 
 -- ========================================== --
 getgenv().DropDelay = 2     
@@ -118,8 +118,56 @@ getgenv().GameInventoryModule = FindInventoryModule()
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
 -- [[ UI COMPONENT BUILDERS ]]
+function CreateAccordion(Parent, Title, DefaultState)
+    local Frame = Instance.new("Frame", Parent)
+    Frame.BackgroundTransparency = 1
+    Frame.Size = UDim2.new(1, -10, 0, 0)
+    Frame.AutomaticSize = Enum.AutomaticSize.Y
+    
+    local Layout = Instance.new("UIListLayout", Frame)
+    Layout.SortOrder = Enum.SortOrder.LayoutOrder
+    Layout.Padding = UDim.new(0, 5)
+    
+    local Btn = Instance.new("TextButton", Frame)
+    Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    Btn.Size = UDim2.new(1, 0, 0, 35)
+    Btn.Text = "  " .. Title
+    Btn.TextColor3 = Color3.fromRGB(255, 215, 0) -- Gold Title
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 13
+    Btn.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    
+    local Icon = Instance.new("TextLabel", Btn)
+    Icon.BackgroundTransparency = 1
+    Icon.Size = UDim2.new(0, 30, 1, 0)
+    Icon.Position = UDim2.new(1, -30, 0, 0)
+    Icon.Text = DefaultState and "v" or ">"
+    Icon.TextColor3 = Color3.new(1,1,1)
+    Icon.Font = Enum.Font.GothamBold
+    Icon.TextSize = 14
+    
+    local Content = Instance.new("Frame", Frame)
+    Content.BackgroundTransparency = 1
+    Content.Size = UDim2.new(1, 0, 0, 0)
+    Content.AutomaticSize = Enum.AutomaticSize.Y
+    Content.Visible = DefaultState
+    local CLayout = Instance.new("UIListLayout", Content)
+    CLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    CLayout.Padding = UDim.new(0, 5)
+    
+    local isOpen = DefaultState
+    Btn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        Content.Visible = isOpen
+        Icon.Text = isOpen and "v" or ">"
+    end)
+    
+    return Content
+end
+
 function CreateToggle(Parent, Text, Var, OnToggle) 
-    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, 0, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
     local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
     local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
     local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
@@ -136,7 +184,7 @@ function CreateToggle(Parent, Text, Var, OnToggle)
 end
 
 function CreateTextBox(Parent, Text, Default, Var) 
-    local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, 0, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
     local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
     local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 4)
     
@@ -153,18 +201,7 @@ function CreateTextBox(Parent, Text, Default, Var)
 end
 
 function CreateButton(Parent, Text, Callback) 
-    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) 
-end
-
-function CreateSubFrame(Parent)
-    local Frame = Instance.new("Frame", Parent)
-    Frame.BackgroundTransparency = 1
-    Frame.Size = UDim2.new(1, 0, 0, 0)
-    Frame.AutomaticSize = Enum.AutomaticSize.Y
-    local Layout = Instance.new("UIListLayout", Frame)
-    Layout.Padding = UDim.new(0, 5)
-    Layout.SortOrder = Enum.SortOrder.LayoutOrder
-    return Frame
+    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, 0, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) 
 end
 
 -- ========================================== --
@@ -221,17 +258,15 @@ TabChatBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ========================================== --
--- [[ ISI UI PAGE MANAGER (DROPDOWN STYLE) ]]
+-- [[ ISI UI PAGE MANAGER (MURNI DROPDOWN) ]]
 -- ========================================== --
 
--- 1. Auto Collect
-local SubCollect
-CreateToggle(PageManager, "📍 Enable Auto Collect", "AutoCollect", function(state) if SubCollect then SubCollect.Visible = state end end)
-SubCollect = CreateSubFrame(PageManager)
-SubCollect.Visible = getgenv().AutoCollect
-local BoxX = CreateTextBox(SubCollect, "↳ Target Grid X", getgenv().TargetPosX, "TargetPosX")
-local BoxY = CreateTextBox(SubCollect, "↳ Target Grid Y", getgenv().TargetPosY, "TargetPosY")
-CreateButton(SubCollect, "↳ 📍 Save Pos (Current Loc)", function()
+-- 1. ACCORDION AUTO COLLECT
+local AccCollect = CreateAccordion(PageManager, "⚙️ Auto Collect Settings", false)
+CreateToggle(AccCollect, "▶ Enable Auto Collect", "AutoCollect")
+local BoxX = CreateTextBox(AccCollect, "Target Grid X", 0, "TargetPosX")
+local BoxY = CreateTextBox(AccCollect, "Target Grid Y", 0, "TargetPosY")
+CreateButton(AccCollect, "📍 Save Pos (Current Loc)", function()
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
     local RefPart = MyHitbox or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -243,55 +278,35 @@ CreateButton(SubCollect, "↳ 📍 Save Pos (Current Loc)", function()
     end
 end)
 
--- 2. Auto Drop
-local SubDrop
-CreateToggle(PageManager, "📦 Auto Drop", "AutoDrop", function(state) 
-    if SubDrop then SubDrop.Visible = state end
-    if not state then ForceRestoreUI() end 
-end)
-SubDrop = CreateSubFrame(PageManager)
-SubDrop.Visible = getgenv().AutoDrop
-CreateTextBox(SubDrop, "↳ 📦 Drop Amount", 50, "DropAmount")
-CreateTextBox(SubDrop, "↳ ⏱️ Drop Delay (Detik)", 2, "DropDelay") 
+-- 2. ACCORDION AUTO DROP
+local AccDrop = CreateAccordion(PageManager, "📦 Auto Drop Settings", false)
+CreateToggle(AccDrop, "▶ Enable Auto Drop", "AutoDrop", function(state) if not state then ForceRestoreUI() end end)
+CreateTextBox(AccDrop, "Drop Amount", 50, "DropAmount")
+CreateTextBox(AccDrop, "Drop Delay (Detik)", 2, "DropDelay") 
 
--- 3. Auto Trash
-local SubTrash
-CreateToggle(PageManager, "🚮 Auto Trash", "AutoTrash", function(state) 
-    if SubTrash then SubTrash.Visible = state end
-    if not state then ForceRestoreUI() end 
-end)
-SubTrash = CreateSubFrame(PageManager)
-SubTrash.Visible = getgenv().AutoTrash
-CreateTextBox(SubTrash, "↳ 🗑️ Trash Amount", 50, "TrashAmount")
-CreateTextBox(SubTrash, "↳ ⏱️ Trash Delay (Detik)", 2, "TrashDelay") 
+-- 3. ACCORDION AUTO TRASH
+local AccTrash = CreateAccordion(PageManager, "🚮 Auto Trash Settings", false)
+CreateToggle(AccTrash, "▶ Enable Auto Trash", "AutoTrash", function(state) if not state then ForceRestoreUI() end end)
+CreateTextBox(AccTrash, "Trash Amount", 50, "TrashAmount")
+CreateTextBox(AccTrash, "Trash Delay (Detik)", 2, "TrashDelay") 
 
--- 4. Auto Ban (Tanpa Sub Menu)
+-- 4. AUTO BAN (Bebas di luar soalnya ga ada settingan tambahan)
 CreateToggle(PageManager, "🔨 Auto Ban Players (World)", "AutoBan", function(state) if not state then ForceRestoreUI() end end)
 
--- Pembatas Visual
-local StreamerFrame = Instance.new("Frame", PageManager)
-StreamerFrame.Size = UDim2.new(1, -10, 0, 2)
-StreamerFrame.BackgroundColor3 = Theme.Purple
-StreamerFrame.BorderSizePixel = 0
-
--- 5. Streamer Mode / Hide Name
-local SubStreamer
-CreateToggle(PageManager, "👁️ Hide/Spoof Name (Client)", "HideName", function(state) if SubStreamer then SubStreamer.Visible = state end end)
-SubStreamer = CreateSubFrame(PageManager)
-SubStreamer.Visible = getgenv().HideName
-CreateTextBox(SubStreamer, "↳ ✍️ Custom Fake Name", "KzoyzPlayer", "FakeNameText")
+-- 5. ACCORDION STREAMER MODE
+local AccStreamer = CreateAccordion(PageManager, "👁️ Streamer Mode (Spoof Name)", false)
+CreateToggle(AccStreamer, "▶ Enable Spoof Name", "HideName")
+CreateTextBox(AccStreamer, "Custom Fake Name", "KzoyzPlayer", "FakeNameText")
 
 
 -- ========================================== --
--- [[ ISI UI PAGE AUTO CHAT (DROPDOWN STYLE) ]]
+-- [[ ISI UI PAGE AUTO CHAT (MURNI DROPDOWN) ]]
 -- ========================================== --
-local SubChat
-CreateToggle(PageChat, "💬 Auto Spam Chat", "AutoChat", function(state) if SubChat then SubChat.Visible = state end end)
-SubChat = CreateSubFrame(PageChat)
-SubChat.Visible = getgenv().AutoChat
-CreateTextBox(SubChat, "↳ ✍️ Pesan Chat", "Jual barang di world sini", "ChatText")
-CreateTextBox(SubChat, "↳ ⏱️ Delay (Detik)", 3, "ChatDelay")
-CreateToggle(SubChat, "↳ 🔀 Anti Spam (Huruf Random)", "ChatRandomLetter")
+local AccChat = CreateAccordion(PageChat, "💬 Auto Spam Chat Settings", true)
+CreateToggle(AccChat, "▶ Enable Auto Chat", "AutoChat")
+CreateTextBox(AccChat, "Pesan Chat", "Jual barang di world sini", "ChatText")
+CreateTextBox(AccChat, "Delay (Detik)", 3, "ChatDelay")
+CreateToggle(AccChat, "Anti Spam (Huruf Random)", "ChatRandomLetter")
 
 -- ========================================== --
 -- [[ REMOTES & EVENTS ]]
@@ -305,60 +320,37 @@ local ChatRemote = RS:WaitForChild("CB")
 
 RunService.RenderStepped:Connect(function() if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end end)
 
--- [[ LOGIKA STREAMER MODE / SPOOF NAME (REAL-TIME FIX) ]]
+-- [[ LOGIKA STREAMER MODE / SPOOF NAME ]]
 task.spawn(function()
     local realName = LP.Name
     local realDisplay = LP.DisplayName
-    local activeFake = realName -- Menyimpan nama palsu terakhir yang terpasang
+    local activeFake = realName
     
     while true do
         local targetName = realName
         local targetDisplay = realDisplay
-        
-        -- Kalau toggle nyala, ambil inputan terbaru
         if getgenv().HideName then
             local f = getgenv().FakeNameText
             targetName = (f == "" or f == " ") and "HiddenPlayer" or f
             targetDisplay = targetName
         end
         
-        -- Eksekusi fungsi replace jika toggle on atau butuh direvert
         local function ReplaceSafe(obj)
             if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
                 local txt = obj.Text
                 local changed = false
-                
-                -- Timpa Real Name ke Target Name
-                if targetName ~= realName and txt:find(realName) then
-                    txt = string.gsub(txt, realName, targetName)
-                    changed = true
-                end
-                if targetDisplay ~= realDisplay and txt:find(realDisplay) then
-                    txt = string.gsub(txt, realDisplay, targetDisplay)
-                    changed = true
-                end
-                
-                -- Fix Real-Time Update: Timpa Fake Name lama ke Target Name (Baru / Revert)
+                if targetName ~= realName and txt:find(realName) then txt = string.gsub(txt, realName, targetName); changed = true end
+                if targetDisplay ~= realDisplay and txt:find(realDisplay) then txt = string.gsub(txt, realDisplay, targetDisplay); changed = true end
                 if activeFake ~= targetName and activeFake ~= realName and activeFake ~= realDisplay then
-                    if txt:find(activeFake) then
-                        txt = string.gsub(txt, activeFake, targetName)
-                        changed = true
-                    end
+                    if txt:find(activeFake) then txt = string.gsub(txt, activeFake, targetName); changed = true end
                 end
-                
-                if changed and obj.Text ~= txt then
-                    obj.Text = txt
-                end
+                if changed and obj.Text ~= txt then obj.Text = txt end
             end
         end
         
-        -- Mulai nyapu UI
         if LP.Character then for _, v in pairs(LP.Character:GetDescendants()) do ReplaceSafe(v) end end
         if LP:FindFirstChild("PlayerGui") then for _, v in pairs(LP.PlayerGui:GetDescendants()) do ReplaceSafe(v) end end
-        
-        -- Update state memori nama yang lagi dipakai
         activeFake = targetName
-        
         task.wait(1) 
     end
 end)
@@ -398,9 +390,7 @@ local function ExecuteBan(targetPlayer)
     end)
 end
 
-Players.PlayerAdded:Connect(function(newPlayer)
-    if getgenv().AutoBan then ExecuteBan(newPlayer) end
-end)
+Players.PlayerAdded:Connect(function(newPlayer) if getgenv().AutoBan then ExecuteBan(newPlayer) end end)
 
 task.spawn(function()
     while true do
