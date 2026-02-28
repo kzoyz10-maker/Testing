@@ -183,7 +183,7 @@ local function ScanAvailableItems()
     return items
 end
 
-CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌾 START AUTEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
