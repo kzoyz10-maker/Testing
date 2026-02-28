@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V55 (PRIORITY HARVEST + SMART AI)"
+getgenv().ScriptVersion = "Auto Farm V56 (BRUTE FORCE HARVEST)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -24,7 +24,6 @@ getgenv().PlantDelay = 0.15
 getgenv().EnableSmartHarvest = false
 getgenv().EnableAutoPlant = false
 getgenv().SelectedSeed = "Kosong"
-getgenv().AIDictionary = getgenv().AIDictionary or {}
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -50,7 +49,7 @@ local UIManager
 pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
 -- ========================================== --
--- [[ SISTEM INVENTORY TRANSLATOR (V53) ]]
+-- [[ SISTEM INVENTORY TRANSLATOR ]]
 -- ========================================== --
 getgenv().InventoryCacheNameMap = {}
 
@@ -359,81 +358,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ SCANNER DATABASE WAKTU TUMBUH ]]
--- ========================================== --
-local function DeepFindGrowTime(tbl)
-    if type(tbl) ~= "table" then return nil end
-    for k, v in pairs(tbl) do
-        if type(v) == "number" and type(k) == "string" then
-            local kl = k:lower()
-            if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
-                if v > 0 then return v end
-            end
-        elseif type(v) == "table" then
-            local res = DeepFindGrowTime(v)
-            if res then return res end
-        end
-    end
-    return nil
-end
-
-local function GetExactGrowTime(saplingName)
-    if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
-    pcall(function()
-        local baseId = string.gsub(saplingName, "_sapling", "")
-        local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
-        if itemData then
-            local foundTime = DeepFindGrowTime(itemData)
-            if foundTime then getgenv().AIDictionary[saplingName] = foundTime end
-        end
-    end)
-    return getgenv().AIDictionary[saplingName] or nil
-end
-
--- [[ FIX: AI Belajar Santai (Biar ga salah target) ]]
-local function BackupAIBelajarWaktu(sapling)
-    local sampai = MoveSmartlyTo(sapling.x, sapling.y)
-    if not sampai then return false end
-    
-    -- Jeda dikit biar bot bener-bener diem & UI HoverPart pindah ke tanaman yang bener
-    task.wait(0.3) 
-    
-    local timer = 0
-    while timer < 10 do -- Cuma dikasih 1 detik nunggu
-        local hover = workspace:FindFirstChild("HoverPart")
-        if hover then
-            for _, v in pairs(hover:GetDescendants()) do
-                if v:IsA("TextLabel") and v.Text ~= "" then
-                    local text = string.lower(v.Text)
-                    if string.find(text, "grown") or string.find(text, "harvest") or string.find(text, "100%%") or string.find(text, "h") or string.find(text, "m") then
-                        local jam = tonumber(string.match(text, "(%d+)h")) or 0
-                        local menit = tonumber(string.match(text, "(%d+)m")) or 0
-                        local detik = tonumber(string.match(text, "(%d+)s")) or 0
-                        
-                        local isReady = string.find(text, "harvest") or string.find(text, "100%%")
-                        local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
-                        if isReady then sisaWaktuLayar = 0 end
-                        
-                        local umurSekarang = os.time() - sapling.at
-                        local totalDurasi = umurSekarang + sisaWaktuLayar
-                        totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
-                        
-                        getgenv().AIDictionary[sapling.name] = totalDurasi
-                        return true
-                    end
-                end
-            end
-        end
-        timer = timer + 1; task.wait(0.1)
-    end
-    
-    -- Kalo gagal baca, default 3 menit biar ga muter disitu lagi
-    getgenv().AIDictionary[sapling.name] = 180 
-    return false
-end
-
--- ========================================== --
--- [[ AUTO FARM / HARVEST LOGIC (PRIORITY FIX) ]]
+-- [[ AUTO HARVEST LOGIC (BRUTE FORCE ZIGZAG) ]]
 -- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
@@ -446,17 +371,15 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                         if type(layers) == "table" then
                             for layer, data in pairs(layers) do
                                 local rawId = type(data) == "table" and data[1] or data
-                                local tileInfo = type(data) == "table" and data[2] or nil
-                                
                                 local tileString = rawId
+                                
                                 if type(rawId) == "number" and WorldManager.NumberToStringMap then
                                     tileString = WorldManager.NumberToStringMap[rawId] or rawId
                                 end
                                 
+                                -- Deteksi semua tanaman di map
                                 if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
-                                    if tileInfo and tileInfo.at then
-                                        table.insert(SaplingsData, {x = x, y = y, name = tileString, at = tileInfo.at})
-                                    end
+                                    table.insert(SaplingsData, {x = x, y = y})
                                 end
                             end
                         end
@@ -464,7 +387,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 end
             end
             
-            -- Sort ZigZag 
+            -- Sortir biar jalannya rapi (ZigZag)
             table.sort(SaplingsData, function(a, b)
                 if a.y == b.y then
                     if a.y % 2 == 0 then return a.x < b.x else return a.x > b.x end
@@ -472,48 +395,19 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 return a.y < b.y 
             end)
 
-            local targetPanen = {}
-            local unknownSaplings = {}
-
-            -- FASE 1: Filter prioritas! (Pisahin mana yang ready, mana yang butuh dipelajari)
+            -- Langsung samperin dan gebuk satu-satu!
             for _, sapling in ipairs(SaplingsData) do
-                local targetMatang = GetExactGrowTime(sapling.name)
+                if not getgenv().EnableSmartHarvest then break end
+                local bisaJalan = MoveSmartlyTo(sapling.x, sapling.y)
                 
-                if targetMatang then
-                    local umurServer1 = os.time() - sapling.at
-                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                    local umurTick = tick() - sapling.at
-                    local umurAsli = math.max(umurServer1, umurServer2, (umurTick > 0 and umurTick < 1000000 and umurTick or 0))
-
-                    if umurAsli >= targetMatang then
-                        table.insert(targetPanen, sapling)
-                    end
-                else
-                    table.insert(unknownSaplings, sapling)
-                end
-            end
-            
-            -- FASE 2: Eksekusi!
-            if #targetPanen > 0 then
-                -- HARVEST DULUAN (Prioritas Utama)
-                for _, panen in ipairs(targetPanen) do
-                    if not getgenv().EnableSmartHarvest then break end
-                    local bisaJalan = MoveSmartlyTo(panen.x, panen.y)
-                    if bisaJalan then
-                        task.wait(0.05)
-                        pcall(function() 
-                            local targetVec = Vector2.new(panen.x, panen.y)
-                            if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
-                            else RemoteFist:InvokeServer(targetVec) end
-                        end)
-                        task.wait(getgenv().BreakDelay)
-                    end
-                end
-            elseif #unknownSaplings > 0 then
-                -- BELAJAR (Cuma kalau lagi nganggur / gaada yang bisa dipanen)
-                -- Kita ajarin 1 tanaman aja per cycle biar ga makan waktu
-                if getgenv().EnableSmartHarvest then
-                    BackupAIBelajarWaktu(unknownSaplings[1])
+                if bisaJalan then
+                    task.wait(0.05)
+                    pcall(function() 
+                        local targetVec = Vector2.new(sapling.x, sapling.y)
+                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                        else RemoteFist:InvokeServer(targetVec) end
+                    end)
+                    task.wait(getgenv().BreakDelay)
                 end
             end
         end
