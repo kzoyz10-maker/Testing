@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V51 (USER INVENTORY FIX)"
+getgenv().ScriptVersion = "Auto Farm V52 (FIX PREMATURE HARVEST & INV ID TRANSLATOR)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -136,27 +136,27 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
 end
 
 -- ========================================== --
--- [[ SISTEM INVENTORY & SLOT FIX ]]
+-- [[ SISTEM INVENTORY & TRANSLATOR ID FIX ]]
 -- ========================================== --
+local function GetItemNameTrans(rawId)
+    local itemID = rawId
+    if type(itemID) == "number" and WorldManager and WorldManager.NumberToStringMap then
+        itemID = WorldManager.NumberToStringMap[itemID] or itemID
+    end
+    return tostring(itemID)
+end
+
 local function GetSlotByItemID(targetID)
     if not InventoryMod or not InventoryMod.Stacks then return nil end
     for slotIndex, data in pairs(InventoryMod.Stacks) do
-        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
-            if not data.Amount or data.Amount > 0 then return slotIndex end
+        if type(data) == "table" and data.Id then
+            local currentID = GetItemNameTrans(data.Id)
+            if currentID == tostring(targetID) then
+                if not data.Amount or data.Amount > 0 then return slotIndex end
+            end
         end
     end
     return nil
-end
-
-local function GetItemAmountByID(targetID)
-    local total = 0
-    if not InventoryMod or not InventoryMod.Stacks then return total end
-    for _, data in pairs(InventoryMod.Stacks) do
-        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
-            total = total + (data.Amount or 1)
-        end
-    end
-    return total
 end
 
 local function ScanAvailableItems()
@@ -165,13 +165,21 @@ local function ScanAvailableItems()
         if InventoryMod and InventoryMod.Stacks then
             for _, data in pairs(InventoryMod.Stacks) do
                 if type(data) == "table" and data.Id then
-                    local itemID = tostring(data.Id)
-                    if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
+                    -- Filter 1: Pastikan item ada isinya (> 0)
+                    if not data.Amount or data.Amount > 0 then
+                        -- Filter 2: Terjemahin angka jadi teks nama asli
+                        local itemID = GetItemNameTrans(data.Id)
+                        if not dict[itemID] then 
+                            dict[itemID] = true
+                            table.insert(items, itemID) 
+                        end
+                    end
                 end
             end
         end
     end)
     if #items == 0 then items = {"Kosong"} end
+    table.sort(items) -- Biar rapi sesuai abjad
     return items
 end
 
@@ -405,7 +413,7 @@ local function BackupAIBelajarWaktu(sapling)
                 if v:IsA("TextLabel") and v.Text ~= "" then
                     local text = string.lower(v.Text)
                     if string.find(text, "grown") or string.find(text, "harvest") or string.find(text, "100%%") or string.find(text, "ready") then
-                        getgenv().AIDictionary[sapling.name] = 0 
+                        -- FIX BESAR: Gak nyatet 0 ke database biar tanaman lain gak ikut dirusak!
                         return true
                     end
                 end
@@ -433,8 +441,10 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 local umurAsli = math.max(os.time() - sapling.at, workspace:GetServerTimeNow() - sapling.at)
 
                 if targetMatang then
+                    -- Kalau udah ketemu waktu matang dari database game
                     if umurAsli >= targetMatang then table.insert(targetPanen, sapling) end
                 else
+                    -- Kalau ga ketemu, samperin satu-satu buat ngecek manual (aman)
                     local isReady = BackupAIBelajarWaktu(sapling)
                     if isReady then 
                         table.insert(targetPanen, sapling) 
