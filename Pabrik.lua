@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.93 - CLASSIC BATCH FIX (SAFE EXECUTION)" 
+getgenv().ScriptVersion = "Pabrik v0.94 - ULTIMATE BATCH & Y-FIX" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -147,7 +147,7 @@ local function ScanAvailableItems()
 end
 
 -- ========================================== --
--- [[ RADAR INVERTED & A-STAR (BEBAS CONTINUE) ]]
+-- [[ RADAR INVERTED & A-STAR ]]
 -- ========================================== --
 local BlockSolidityCache = {}
 local function IsTileSolid(gridX, gridY)
@@ -374,18 +374,18 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
                 local pos = nil
-                if obj:IsA("BasePart") then 
-                    pos = obj.Position
-                elseif obj:IsA("Model") and obj.PrimaryPart then 
-                    pos = obj.PrimaryPart.Position
+                if obj:IsA("BasePart") then pos = obj.Position
+                elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
                 elseif obj:IsA("Model") then
                     local firstPart = obj:FindFirstChildWhichIsA("BasePart")
                     if firstPart then pos = firstPart.Position end
                 end
+                
                 if pos then
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
-                    if dX == TargetGridX and dY == TargetGridY then
+                    -- Dikasih toleransi Y sedikit biar barang yang jatuh agak ke bawah tetep kepungut
+                    if dX == TargetGridX and math.abs(dY - TargetGridY) <= 1 then
                         return true
                     end
                 end
@@ -693,6 +693,7 @@ task.spawn(function()
                 local sX, eX = math.min(getgenv().PabrikStartX, getgenv().PabrikEndX), math.max(getgenv().PabrikStartX, getgenv().PabrikEndX)
                 local sY, eY = math.min(getgenv().PabrikStartY, getgenv().PabrikEndY), math.max(getgenv().PabrikStartY, getgenv().PabrikEndY)
 
+                -- [[ Y-FIX: Loop Y ini adalah target posisi Tanamannya (Bukan Tanahnya) ]]
                 for y = sY, eY do
                     if not getgenv().EnablePabrik then break end
                     
@@ -703,47 +704,50 @@ task.spawn(function()
                     
                     for x = loopStartX, loopEndX, step do
                         local yCol = RawWorldTiles[x]
-                        if type(yCol) == "table" and type(yCol[y]) == "table" then
+                        if type(yCol) == "table" then
                             
-                            -- Cek Tanam
-                            if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) and (y + 1 <= eY) then
-                                table.insert(targetTanam, {x = x, y = y + 1})
+                            -- Cek Tanam: Tanah ada di (y-1) dan tempat tanam di (y) harus kosong
+                            if IsTileSolid(x, y - 1) and IsTileEmptyForPlant(x, y) then
+                                table.insert(targetTanam, {x = x, y = y})
                             end
                             
-                            -- Cek Panen (Sapling & Seed Detection)
-                            for layer, data in pairs(yCol[y]) do
-                                local rawId = type(data) == "table" and data[1] or data
-                                local tileInfo = type(data) == "table" and data[2] or nil
-                                local tileStr = rawId
-                                if type(rawId) == "number" and WorldManager.NumberToStringMap then 
-                                    tileStr = WorldManager.NumberToStringMap[rawId] or rawId 
-                                end
-                                
-                                if type(tileStr) == "string" and (string.find(string.lower(tileStr), "sapling") or string.find(string.lower(tileStr), "seed")) and tileInfo and tileInfo.at then
-                                    local sapling = {x = x, y = y, name = tileStr, at = tileInfo.at, stage = tileInfo.stage}
-                                    
-                                    local isReady = false
-                                    if sapling.stage and sapling.stage >= 3 then
-                                        isReady = true
-                                    else
-                                        local targetMatang = GetExactGrowTime(sapling.name)
-                                        if not targetMatang then
-                                            BackupAIBelajarWaktu(sapling)
-                                            targetMatang = getgenv().AIDictionary[sapling.name]
-                                        end
-                                        
-                                        if targetMatang then
-                                            local umurServer1 = os.time() - sapling.at
-                                            local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                                            if math.max(umurServer1, umurServer2) >= targetMatang then 
-                                                isReady = true 
-                                            end
-                                        end
+                            -- Cek Panen: Cek ada tanaman ga di titik (y) ini?
+                            if type(yCol[y]) == "table" then
+                                for layer, data in pairs(yCol[y]) do
+                                    local rawId = type(data) == "table" and data[1] or data
+                                    local tileInfo = type(data) == "table" and data[2] or nil
+                                    local tileStr = rawId
+                                    if type(rawId) == "number" and WorldManager.NumberToStringMap then 
+                                        tileStr = WorldManager.NumberToStringMap[rawId] or rawId 
                                     end
                                     
-                                    if isReady then table.insert(targetPanen, sapling) end
+                                    if type(tileStr) == "string" and (string.find(string.lower(tileStr), "sapling") or string.find(string.lower(tileStr), "seed")) and tileInfo and tileInfo.at then
+                                        local sapling = {x = x, y = y, name = tileStr, at = tileInfo.at, stage = tileInfo.stage}
+                                        
+                                        local isReady = false
+                                        if sapling.stage and sapling.stage >= 3 then
+                                            isReady = true
+                                        else
+                                            local targetMatang = GetExactGrowTime(sapling.name)
+                                            if not targetMatang then
+                                                BackupAIBelajarWaktu(sapling)
+                                                targetMatang = getgenv().AIDictionary[sapling.name]
+                                            end
+                                            
+                                            if targetMatang then
+                                                local umurServer1 = os.time() - sapling.at
+                                                local umurServer2 = workspace:GetServerTimeNow() - sapling.at
+                                                if math.max(umurServer1, umurServer2) >= targetMatang then 
+                                                    isReady = true 
+                                                end
+                                            end
+                                        end
+                                        
+                                        if isReady then table.insert(targetPanen, sapling) end
+                                    end
                                 end
                             end
+                            
                         end
                     end
                 end
@@ -791,20 +795,22 @@ task.spawn(function()
                     end
                 end
 
-                -- 4. JIKA KOSONG (LAGI NUNGGU TUMBUH) -> FARMING BLOCK BATCH COLLECT!
+                -- 4. JIKA KOSONG (LAGI NUNGGU TUMBUH) -> BATCH FARM BLOCK FIX!
                 if #targetPanen == 0 and #targetTanam == 0 and getgenv().EnablePabrik then
-                    local currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
+                    local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                     
-                    if currentAmt > getgenv().BlockThreshold then
+                    if blockSlot then
                         if MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY) then
                             local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
-                            
                             local hitLoopCount = 0
+                            
                             while getgenv().EnablePabrik do
-                                currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
-                                local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
+                                local currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
                                 
-                                if currentAmt <= getgenv().BlockThreshold or not blockSlot or hitLoopCount > 40 then
+                                -- Kalo block tinggal dikit (butuh pungut) atau udah 40x ketok (biar drop ga ilang)
+                                if currentAmt <= getgenv().BlockThreshold or hitLoopCount >= 40 then
+                                    
+                                    -- Coba pungut dulu
                                     if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
                                         local char = LP.Character
                                         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -840,10 +846,23 @@ task.spawn(function()
                                         end
                                         getgenv().IsGhosting = false 
                                     end
-                                    break 
+                                    
+                                    -- Habis usaha pungut, cek lagi isi tas.
+                                    currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
+                                    if currentAmt <= getgenv().BlockThreshold then
+                                        -- Kalau masi tetep dikit (berarti beneran habis), keluar loop mukul batu biar balik ngecek tanaman
+                                        break 
+                                    end
+                                    
+                                    -- Kalau nambah banyak habis mungut, auto reset jumlah loop dan LANJUT mukul tanpa balik ke tanaman dulu!
+                                    hitLoopCount = 0
                                 end
                                 
-                                RemotePlace:FireServer(BreakTarget, blockSlot)
+                                local activeSlot = GetSlotByItemName(getgenv().SelectedBlock)
+                                if not activeSlot then break end -- Safeguard 
+                                
+                                -- Pukul terus bos!
+                                RemotePlace:FireServer(BreakTarget, activeSlot)
                                 task.wait(getgenv().PlaceDelay + 0.05) 
                                 
                                 for hit = 1, getgenv().HitCount do
