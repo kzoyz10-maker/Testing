@@ -1,6 +1,6 @@
 -- [[ KZOYZ HUB - INDEX LOADER V.0.60 (INJECT TO UI) ]] --
 
-getgenv().HubVersion = "v0.08" 
+getgenv().HubVersion = "v0.09" 
 
 local CoreGui = game:GetService("CoreGui")
 local UIS = game:GetService("UserInputService")
