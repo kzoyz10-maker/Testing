@@ -627,7 +627,7 @@ local function CreateDropdown(Parent, Text, DefaultOptions, Var)
 end
 
 -- TAB 1: PABRIK CONFIG
-CreateToggle(PagePabrik, "🚀 START SMART PABRIK", "EnablePabrik")
+CreateToggle(PagePabrik, "🚀 START SMART PABRIKinitu", "EnablePabrik")
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
 CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() 
