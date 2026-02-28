@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V49 (FIX SORTING CRASH & INV SCAN)"
+getgenv().ScriptVersion = "Auto Farm V51 (USER INVENTORY FIX)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -138,13 +138,33 @@ end
 -- ========================================== --
 -- [[ SISTEM INVENTORY & SLOT FIX ]]
 -- ========================================== --
+local function GetSlotByItemID(targetID)
+    if not InventoryMod or not InventoryMod.Stacks then return nil end
+    for slotIndex, data in pairs(InventoryMod.Stacks) do
+        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
+            if not data.Amount or data.Amount > 0 then return slotIndex end
+        end
+    end
+    return nil
+end
+
+local function GetItemAmountByID(targetID)
+    local total = 0
+    if not InventoryMod or not InventoryMod.Stacks then return total end
+    for _, data in pairs(InventoryMod.Stacks) do
+        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
+            total = total + (data.Amount or 1)
+        end
+    end
+    return total
+end
+
 local function ScanAvailableItems()
     local items = {}; local dict = {}
     pcall(function()
         if InventoryMod and InventoryMod.Stacks then
-            for slot, data in pairs(InventoryMod.Stacks) do
-                -- FIX: Pastikan slotnya berupa angka/tonumber bisa (menghindari "Hotbar", "Selected", dll)
-                if type(data) == "table" and data.Id and (type(slot) == "number" or tonumber(slot)) then
+            for _, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and data.Id then
                     local itemID = tostring(data.Id)
                     if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
                 end
@@ -153,21 +173,6 @@ local function ScanAvailableItems()
     end)
     if #items == 0 then items = {"Kosong"} end
     return items
-end
-
-local function GetSlotByItemID(itemID)
-    local foundSlot = nil
-    pcall(function()
-        if InventoryMod and InventoryMod.Stacks then
-            for slot, data in pairs(InventoryMod.Stacks) do
-                -- FIX: Pastikan yang kita tembak slot beneran (angka), bukan slot UI
-                if type(data) == "table" and tostring(data.Id) == tostring(itemID) and (type(slot) == "number" or tonumber(slot)) then
-                    foundSlot = slot; break
-                end
-            end
-        end
-    end)
-    return foundSlot
 end
 
 CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
@@ -353,7 +358,6 @@ local function ScanWorld()
         end
     end
     
-    -- FIX SORTING CRASH: Logika sortir dibikin basic (atas ke bawah, kiri ke kanan)
     table.sort(SaplingsData, function(a, b)
         if a.y == b.y then return a.x < b.x end
         return a.y < b.y 
@@ -474,7 +478,6 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 end
             end
             
-            -- FIX SORTING CRASH
             table.sort(tempList, function(a, b)
                 if a.y == b.y then return a.x < b.x end
                 return a.y < b.y 
