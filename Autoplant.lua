@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V53 (USER INVENTORY CODE + HARVEST FIX)"
+getgenv().ScriptVersion = "Auto Farm V53 (FULL INVENTORY FIX)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -43,7 +43,7 @@ local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
 -- ========================================== --
--- [[ SISTEM INVENTORY (DARI USER) ]]
+-- [[ SISTEM INVENTORY (UDAH DI-FIX) ]]
 -- ========================================== --
 local InventoryMod
 pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
@@ -51,42 +51,87 @@ pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild(
 local UIManager
 pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
-local function GetSlotByItemID(targetID)
+-- Dictionary buat nyimpen mapping Nama Item -> ID aslinya
+getgenv().InventoryCacheNameMap = {}
+
+-- Fungsi pinter buat nerjemahin ID mentah jadi Nama Item
+local function GetItemName(rawId)
+    if type(rawId) == "string" then return rawId end
+    -- Cari di WorldManager
+    if WorldManager and WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] then
+        return WorldManager.NumberToStringMap[rawId]
+    end
+    -- Cari di ItemsManager
+    if ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[rawId] then
+        local data = ItemsManager.ItemsData[rawId]
+        if type(data) == "table" and data.Name then return data.Name end
+    end
+    return tostring(rawId)
+end
+
+local function ScanAvailableItems()
+    local items = {}
+    local dict = {}
+    getgenv().InventoryCacheNameMap = {} -- Reset cache tiap discan
+    
+    pcall(function()
+        if InventoryMod and InventoryMod.Stacks then
+            for slotIndex, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and data.Id then
+                    if not data.Amount or data.Amount > 0 then
+                        local realId = data.Id
+                        local itemName = GetItemName(realId)
+                        
+                        -- Cuma nambahin ke list kalau belum ada (biar gak dobel)
+                        if not dict[itemName] then 
+                            dict[itemName] = true
+                            table.insert(items, itemName)
+                            -- Simpan ID aslinya di balik nama buat dipake bot nanti
+                            getgenv().InventoryCacheNameMap[itemName] = realId
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    if #items == 0 then 
+        table.insert(items, "Kosong") 
+        getgenv().InventoryCacheNameMap["Kosong"] = nil
+    end
+    table.sort(items)
+    return items
+end
+
+-- Cari slot berdasarkan NAMA yang lu klik di UI, bukan ID mentah
+local function GetSlotByItemName(targetName)
     if not InventoryMod or not InventoryMod.Stacks then return nil end
+    
+    -- Tarik ID aslinya dari kamus yang kita buat di fungsi Scan
+    local targetID = getgenv().InventoryCacheNameMap[targetName]
+    if not targetID then targetID = targetName end -- Fallback aman
+    
     for slotIndex, data in pairs(InventoryMod.Stacks) do
         if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
-            if not data.Amount or data.Amount > 0 then return slotIndex end
+            if not data.Amount or data.Amount > 0 then 
+                return slotIndex 
+            end
         end
     end
     return nil
 end
 
-local function GetItemAmountByID(targetID)
+local function GetItemAmountByItemName(targetName)
     local total = 0
     if not InventoryMod or not InventoryMod.Stacks then return total end
+    local targetID = getgenv().InventoryCacheNameMap[targetName]
+    if not targetID then targetID = targetName end
     for _, data in pairs(InventoryMod.Stacks) do
         if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
             total = total + (data.Amount or 1)
         end
     end
     return total
-end
-
-local function ScanAvailableItems()
-    local items = {}; local dict = {}
-    pcall(function()
-        if InventoryMod and InventoryMod.Stacks then
-            for _, data in pairs(InventoryMod.Stacks) do
-                if type(data) == "table" and data.Id then
-                    local itemID = tostring(data.Id)
-                    if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
-                end
-            end
-        end
-    end)
-    if #items == 0 then items = {"Kosong"} end
-    table.sort(items)
-    return items
 end
 
 -- ========================================== --
@@ -179,7 +224,7 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
     end)
 end
 
-CreateToggle(TargetPage, "🌾 START AUTO bhnjjST", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
@@ -483,7 +528,8 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 if not getgenv().EnableAutoPlant or getgenv().EnableSmartHarvest then break end
                 local bibit = getgenv().SelectedSeed
                 if bibit ~= "Kosong" and bibit ~= "None" then 
-                    local seedSlot = GetSlotByItemID(bibit)
+                    -- UDAH DI-FIX: Pake GetSlotByItemName bukan GetSlotByItemID lagi
+                    local seedSlot = GetSlotByItemName(bibit)
                     if not seedSlot then
                         warn("⚠️ Bibit habis / Slot tidak valid!"); getgenv().EnableAutoPlant = false; break
                     end
