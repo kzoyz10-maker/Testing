@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.91 - SMART AI (HORIZONTAL FIX)" 
+getgenv().ScriptVersion = "Pabrik v0.95 - SUPER BATCH FARM & FIX" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -27,7 +27,6 @@ getgenv().KeepSeedAmt = 20
 getgenv().SelectedSeed = "Kosong"
 getgenv().SelectedBlock = "Kosong" 
 
-getgenv().AIDictionary = getgenv().AIDictionary or {}
 getgenv().IsGhosting = false
 getgenv().HoldCFrame = nil
 getgenv().GridSize = 4.5
@@ -72,10 +71,50 @@ getgenv().KzoyzHeartbeatPabrik = RunService.Heartbeat:Connect(function()
 end)
 
 -- ========================================== --
--- [[ INVENTORY & SLOTS LOGIC ]]
+-- [[ SISTEM INVENTORY TRANSLATOR (UDAH DI-FIX) ]]
 -- ========================================== --
-local function GetSlotByItemID(targetID)
+getgenv().InventoryCacheNameMap = {}
+
+local function GetItemName(rawId)
+    if type(rawId) == "string" then return rawId end
+    if WorldManager and WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] then
+        return WorldManager.NumberToStringMap[rawId]
+    end
+    if ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[rawId] then
+        local data = ItemsManager.ItemsData[rawId]
+        if type(data) == "table" and data.Name then return data.Name end
+    end
+    return tostring(rawId)
+end
+
+local function ScanAvailableItems()
+    local items = {}; local dict = {}
+    getgenv().InventoryCacheNameMap = {}
+    pcall(function()
+        if InventoryMod and InventoryMod.Stacks then
+            for slotIndex, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and data.Id then
+                    if not data.Amount or data.Amount > 0 then
+                        local realId = data.Id
+                        local itemName = GetItemName(realId)
+                        if not dict[itemName] then 
+                            dict[itemName] = true
+                            table.insert(items, itemName)
+                            getgenv().InventoryCacheNameMap[itemName] = realId
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    if #items == 0 then table.insert(items, "Kosong"); getgenv().InventoryCacheNameMap["Kosong"] = nil end
+    table.sort(items)
+    return items
+end
+
+local function GetSlotByItemName(targetName)
     if not InventoryMod or not InventoryMod.Stacks then return nil end
+    local targetID = getgenv().InventoryCacheNameMap[targetName] or targetName
     for slotIndex, data in pairs(InventoryMod.Stacks) do
         if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
             if not data.Amount or data.Amount > 0 then return slotIndex end
@@ -84,31 +123,16 @@ local function GetSlotByItemID(targetID)
     return nil
 end
 
-local function GetItemAmountByID(targetID)
+local function GetItemAmountByItemName(targetName)
     local total = 0
     if not InventoryMod or not InventoryMod.Stacks then return total end
+    local targetID = getgenv().InventoryCacheNameMap[targetName] or targetName
     for _, data in pairs(InventoryMod.Stacks) do
         if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
             total = total + (data.Amount or 1)
         end
     end
     return total
-end
-
-local function ScanAvailableItems()
-    local items = {}; local dict = {}
-    pcall(function()
-        if InventoryMod and InventoryMod.Stacks then
-            for _, data in pairs(InventoryMod.Stacks) do
-                if type(data) == "table" and data.Id then
-                    local itemID = tostring(data.Id)
-                    if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
-                end
-            end
-        end
-    end)
-    if #items == 0 then items = {"Kosong"} end
-    return items
 end
 
 -- ========================================== --
@@ -118,17 +142,14 @@ local BlockSolidityCache = {}
 local function IsTileSolid(gridX, gridY)
     if gridX < 0 or gridX > 100 then return true end
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
-    
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = rawId
         if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
         local nameStr = tostring(tileString):lower()
-        
         if BlockSolidityCache[nameStr] ~= nil then 
             if BlockSolidityCache[nameStr] == true then return true end; continue 
         end
-
         if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "door") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
             BlockSolidityCache[nameStr] = false; continue 
         end
@@ -199,7 +220,6 @@ end
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
-    
     local startPos = MyHitbox.Position
     local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
     local duration = dist / getgenv().WalkSpeed
@@ -211,10 +231,8 @@ local function SmoothWalkTo(targetPos)
             local dt = RunService.Heartbeat:Wait()
             t = t + dt
             local alpha = math.clamp(t / duration, 0, 1)
-            local currentPos = startPos:Lerp(targetPos, alpha)
-            
-            MyHitbox.CFrame = CFrame.new(currentPos)
-            if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+            MyHitbox.CFrame = CFrame.new(startPos:Lerp(targetPos, alpha))
+            if PlayerMovement then pcall(function() PlayerMovement.Position = startPos:Lerp(targetPos, alpha) end) end
         end
     end
     
@@ -245,70 +263,6 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ SMART AI HARVEST WAKTU ]]
--- ========================================== --
-local function DeepFindGrowTime(tbl)
-    if type(tbl) ~= "table" then return nil end
-    for k, v in pairs(tbl) do
-        if type(v) == "number" and type(k) == "string" then
-            local kl = k:lower()
-            if kl:find("grow") or kl:find("time") or kl:find("harvest") or kl:find("duration") or kl:find("age") then
-                if v > 0 then return v end
-            end
-        elseif type(v) == "table" then
-            local res = DeepFindGrowTime(v)
-            if res then return res end
-        end
-    end
-    return nil
-end
-
-local function GetExactGrowTime(saplingName)
-    if getgenv().AIDictionary[saplingName] then return getgenv().AIDictionary[saplingName] end
-    pcall(function()
-        local baseId = string.gsub(saplingName, "_sapling", "")
-        local itemData = ItemsManager.ItemsData[baseId] or ItemsManager.ItemsData[saplingName]
-        if itemData then
-            local foundTime = DeepFindGrowTime(itemData)
-            if foundTime then getgenv().AIDictionary[saplingName] = foundTime end
-        end
-    end)
-    return getgenv().AIDictionary[saplingName] or nil
-end
-
-local function BackupAIBelajarWaktu(sapling)
-    local sampai = MoveSmartlyTo(sapling.x, sapling.y)
-    if not sampai then return false end
-    local timer = 0
-    while timer < 30 do
-        if not getgenv().EnablePabrik then return false end
-        local hover = workspace:FindFirstChild("HoverPart")
-        if hover then
-            for _, v in pairs(hover:GetDescendants()) do
-                if v:IsA("TextLabel") and v.Text ~= "" then
-                    local text = string.lower(v.Text)
-                    if string.find(text, "grown") or string.find(text, "harvest") then
-                        local jam = tonumber(string.match(text, "(%d+)h")) or 0
-                        local menit = tonumber(string.match(text, "(%d+)m")) or 0
-                        local detik = tonumber(string.match(text, "(%d+)s")) or 0
-                        local isReady = string.find(text, "harvest") or string.find(text, "100%%")
-                        local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
-                        if isReady then sisaWaktuLayar = 0 end
-                        local umurSekarang = os.time() - sapling.at
-                        local totalDurasi = umurSekarang + sisaWaktuLayar
-                        totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
-                        getgenv().AIDictionary[sapling.name] = totalDurasi
-                        return true
-                    end
-                end
-            end
-        end
-        timer = timer + 1; task.wait(0.1)
-    end
-    return false
-end
-
--- ========================================== --
 -- [[ UTILS PABRIK LAINNYA ]]
 -- ========================================== --
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
@@ -326,16 +280,7 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
                     if dX == TargetGridX and dY == TargetGridY then
-                        local isSapling = false
-                        for _, attrValue in pairs(obj:GetAttributes()) do if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end end
-                        if not isSapling then
-                            for _, child in ipairs(obj:GetDescendants()) do
-                                if child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then isSapling = true; break end
-                                for _, attrValue in pairs(child:GetAttributes()) do if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end end
-                                if isSapling then break end
-                            end
-                        end
-                        if isSapling then return true end
+                        return true
                     end
                 end
             end
@@ -344,8 +289,8 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     return false
 end
 
-local function DropItemLogic(targetID, dropAmount)
-    local slot = GetSlotByItemID(targetID)
+local function DropItemLogic(targetName, dropAmount)
+    local slot = GetSlotByItemName(targetName)
     if not slot then return false end
     local dropRemote = RS:WaitForChild("Remotes"):FindFirstChild("PlayerDrop") or RS:WaitForChild("Remotes"):FindFirstChild("PlayerDropItem")
     local promptRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):FindFirstChild("UIPromptEvent")
@@ -357,7 +302,6 @@ local function DropItemLogic(targetID, dropAmount)
     end
     return false
 end
-
 
 -- ========================================== --
 -- [[ UI MAKER (FRAME BIASA) ]]
@@ -428,7 +372,7 @@ local Spacer2 = Instance.new("Frame", PageAdv); Spacer2.Size = UDim2.new(1, 0, 0
 
 
 -- ========================================== --
--- [[ LOGIKA UTAMA: SMART PABRIK ]]
+-- [[ LOGIKA UTAMA: SMART PABRIK BATCH FARM ]]
 -- ========================================== --
 task.spawn(function()
     while true do
@@ -437,6 +381,8 @@ task.spawn(function()
             
             local targetPanen = {}
             local targetTanam = {}
+            local uniquePanen = {}
+            local uniqueTanam = {}
 
             -- 1. SCAN WORLD (Nge-Scan Y dulu dari atas/bawah, biar jalannya per-Baris)
             local sX, eX = math.min(getgenv().PabrikStartX, getgenv().PabrikEndX), math.max(getgenv().PabrikStartX, getgenv().PabrikEndX)
@@ -445,7 +391,6 @@ task.spawn(function()
             for y = sY, eY do
                 if not getgenv().EnablePabrik then break end
                 
-                -- Sistem Snaking (Zig-zag) biar botnya muter rapi, nggak usah jauh-jauh jalan balik ke Start X
                 local isEven = (y % 2 == 0)
                 local loopStartX = isEven and sX or eX
                 local loopEndX = isEven and eX or sX
@@ -455,28 +400,38 @@ task.spawn(function()
                     local yCol = RawWorldTiles[x]
                     if type(yCol) == "table" and type(yCol[y]) == "table" then
                         
-                        -- Cek Tanam
+                        -- Cek Tanam (Aman dari duplikat)
                         if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) and (y + 1 <= eY) then
-                            table.insert(targetTanam, {x = x, y = y + 1})
+                            local key = x .. "_" .. (y+1)
+                            if not uniqueTanam[key] then
+                                uniqueTanam[key] = true
+                                table.insert(targetTanam, {x = x, y = y + 1})
+                            end
                         end
                         
-                        -- Cek Panen (Sapling Detection)
+                        -- Cek Panen (Akurat pakai Stage/Waktu, termasuk "seed")
                         for layer, data in pairs(yCol[y]) do
                             local rawId = type(data) == "table" and data[1] or data
                             local tileInfo = type(data) == "table" and data[2] or nil
-                            local tileStr = rawId
-                            if type(rawId) == "number" and WorldManager.NumberToStringMap then tileStr = WorldManager.NumberToStringMap[rawId] or rawId end
+                            local tileStr = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
                             
-                            if type(tileStr) == "string" and string.find(string.lower(tileStr), "sapling") and tileInfo and tileInfo.at then
-                                local sapling = {x = x, y = y, name = tileStr, at = tileInfo.at}
-                                local targetMatang = GetExactGrowTime(sapling.name)
-                                if not targetMatang then
-                                    BackupAIBelajarWaktu(sapling); targetMatang = getgenv().AIDictionary[sapling.name]
+                            if type(tileStr) == "string" and (string.find(string.lower(tileStr), "sapling") or string.find(string.lower(tileStr), "seed")) then
+                                local isReady = false
+                                
+                                if tileInfo and tileInfo.stage and tileInfo.stage >= 3 then
+                                    isReady = true
+                                elseif tileInfo and tileInfo.at then
+                                    -- Bypass AI, hajar hitungan server
+                                    local umurAsli = tick() - tileInfo.at
+                                    if umurAsli >= 180 then isReady = true end -- Asumsi semua matang di 3 menit
                                 end
-                                if targetMatang then
-                                    local umurServer1 = os.time() - sapling.at
-                                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                                    if math.max(umurServer1, umurServer2) >= targetMatang then table.insert(targetPanen, sapling) end
+                                
+                                if isReady then
+                                    local key = x .. "_" .. y
+                                    if not uniquePanen[key] then
+                                        uniquePanen[key] = true
+                                        table.insert(targetPanen, {x = x, y = y})
+                                    end
                                 end
                             end
                         end
@@ -489,7 +444,7 @@ task.spawn(function()
                 for _, panen in ipairs(targetPanen) do
                     if not getgenv().EnablePabrik then break end
                     if MoveSmartlyTo(panen.x, panen.y) then
-                        task.wait(0.1)
+                        task.wait(0.05)
                         pcall(function() 
                             local targetVec = Vector2.new(panen.x, panen.y)
                             if RemoteBreak:IsA("RemoteEvent") then RemoteBreak:FireServer(targetVec) else RemoteBreak:InvokeServer(targetVec) end
@@ -501,12 +456,12 @@ task.spawn(function()
 
             -- 3. EKSEKUSI TANAM
             if #targetTanam > 0 and getgenv().EnablePabrik then
-                local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
+                local seedSlot = GetSlotByItemName(getgenv().SelectedSeed)
                 if seedSlot then
                     for _, spot in ipairs(targetTanam) do
                         if not getgenv().EnablePabrik then break end
                         if MoveSmartlyTo(spot.x, spot.y) then
-                            task.wait(0.1)
+                            task.wait(0.05)
                             pcall(function() 
                                 local targetVec = Vector2.new(spot.x, spot.y); local targetStr = spot.x .. ", " .. spot.y
                                 if RemotePlace:IsA("RemoteEvent") then 
@@ -519,51 +474,56 @@ task.spawn(function()
                 end
             end
 
-            -- 4. JIKA KOSONG (LAGI NUNGGU TUMBUH) -> FARMING BLOCK!
+            -- 4. BATCH FARMING BLOCK (Tunggu Habis Baru Collect!)
             if #targetPanen == 0 and #targetTanam == 0 and getgenv().EnablePabrik then
-                local currentAmt = GetItemAmountByID(getgenv().SelectedBlock)
+                local currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
                 if currentAmt > getgenv().BlockThreshold then
-                    
                     if MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY) then
                         local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
-                        local blockSlot = GetSlotByItemID(getgenv().SelectedBlock)
                         
-                        if blockSlot then
-                            RemotePlace:FireServer(BreakTarget, blockSlot); task.wait(getgenv().PlaceDelay + 0.1) 
+                        local blockFarmCount = 0
+                        -- Terus naruh & hancurin tanpa mungut, SAMPAI threshold kecapai atau udah 40x (biar item di tanah ga hilang)
+                        while getgenv().EnablePabrik do
+                            currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
+                            local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
+                            
+                            -- Waktunya Collect Bar-Bar!
+                            if currentAmt <= getgenv().BlockThreshold or not blockSlot or blockFarmCount >= 40 then
+                                if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
+                                    local char = LP.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                                    local ExactHrpCF = hrp and hrp.CFrame
+                                    
+                                    if hrp then getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true end
+                                    if hum then for _, track in ipairs(hum:GetPlayingAnimationTracks()) do track:Stop(0) end end
+                                    
+                                    MoveSmartlyTo(BreakTarget.X, BreakTarget.Y)
+                                    local waitTimeout = 0
+                                    while CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) and waitTimeout < 15 and getgenv().EnablePabrik do
+                                        task.wait(0.1); waitTimeout = waitTimeout + 1
+                                    end
+                                    
+                                    task.wait(0.1); MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY)
+                                    
+                                    if hrp and ExactHrpCF then 
+                                        hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
+                                        hrp.CFrame = ExactHrpCF; RunService.Heartbeat:Wait()
+                                        hrp.Anchored = false 
+                                    end
+                                    getgenv().IsGhosting = false 
+                                end
+                                break -- Udah keambil, keluar loop buat cek panenan lagi
+                            end
+                            
+                            -- Naruh dan hancurin aja, item dibiarin jatuh
+                            RemotePlace:FireServer(BreakTarget, blockSlot); task.wait(getgenv().PlaceDelay + 0.05) 
                             
                             for hit = 1, getgenv().HitCount do
                                 if not getgenv().EnablePabrik then break end
                                 RemoteBreak:FireServer(BreakTarget); task.wait(getgenv().BreakDelay)
                             end
                             
-                            -- Smart Collect (Ghosting)
-                            if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
-                                local char = LP.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                                local ExactHrpCF = hrp and hrp.CFrame
-                                
-                                if hrp then getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true end
-                                if hum then
-                                    local animator = hum:FindFirstChildOfClass("Animator")
-                                    local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
-                                    for _, track in ipairs(tracks) do track:Stop(0) end
-                                end
-                                
-                                MoveSmartlyTo(BreakTarget.X, BreakTarget.Y)
-                                local waitTimeout = 0
-                                while CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) and waitTimeout < 15 and getgenv().EnablePabrik do
-                                    task.wait(0.1); waitTimeout = waitTimeout + 1
-                                end
-                                
-                                task.wait(0.1); MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY)
-                                
-                                if hrp and ExactHrpCF then 
-                                    hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
-                                    hrp.CFrame = ExactHrpCF; RunService.Heartbeat:Wait()
-                                    hrp.Anchored = false 
-                                end
-                                getgenv().IsGhosting = false 
-                            end
+                            blockFarmCount = blockFarmCount + 1
                         end
                     end
                 end
@@ -571,12 +531,12 @@ task.spawn(function()
 
             -- 5. AUTO DROP SEED KALO KEPENUHAN
             if getgenv().EnablePabrik then
-                local currentSeedAmt = GetItemAmountByID(getgenv().SelectedSeed)
+                local currentSeedAmt = GetItemAmountByItemName(getgenv().SelectedSeed)
                 if currentSeedAmt > getgenv().KeepSeedAmt then
                     if MoveSmartlyTo(getgenv().DropPosX, getgenv().DropPosY) then
                         task.wait(1.5)
                         while getgenv().EnablePabrik do
-                            local current = GetItemAmountByID(getgenv().SelectedSeed)
+                            local current = GetItemAmountByItemName(getgenv().SelectedSeed)
                             local toDrop = current - getgenv().KeepSeedAmt
                             if toDrop <= 0 then break end
                             local dropNow = math.min(toDrop, 200)
