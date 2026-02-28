@@ -168,7 +168,7 @@ local function GetSlotByItemID(itemID)
     return foundSlot
 end
 
-CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌾 START AUTO HVEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
