@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V47 + PLANT (PERFORMANCE & ANTI-NGENDET FIX)"
+getgenv().ScriptVersion = "Auto Farm V48 (FIX DETECTION & STABILITY)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -168,7 +168,7 @@ local function GetSlotByItemID(itemID)
     return foundSlot
 end
 
-CreateToggle(TargetPage, "🌾 START AUTO HARVESTs", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
@@ -234,8 +234,8 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     table.insert(openSet, {x = startX, y = startY, key = startKey})
     gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
 
-    -- FIX #1: Max Iterations dikurangi drastis biar script ga ngelag kalau kehalang
-    local maxIterations, iterations = 800, 0
+    -- FIX: Iterasi dinaikkan ke 2000 biar dia ga gampang nyerah kalau tanamannya agak jauh/kelok-kelok
+    local maxIterations, iterations = 2000, 0
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
     while #openSet > 0 do
@@ -387,14 +387,13 @@ local function GetExactGrowTime(saplingName)
     return getgenv().AIDictionary[saplingName] or nil
 end
 
--- FIX #2: Sistem Belajar dibikin ngebut parah.
+-- FIX: Delay nunggu dibikin pas (1.5 detik), cukup buat nunggu UI muncul tanpa bikin lag
 local function BackupAIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
     
     local timer = 0
-    -- CUMA NUNGGU MAKSIMAL 0.3 DETIK, bukan 30 detik lagi biar gak ngendet
-    while timer < 3 do 
+    while timer < 15 do -- 1.5 detik toleransi nunggu UI server
         local hover = workspace:FindFirstChild("HoverPart")
         if hover then
             for _, v in pairs(hover:GetDescendants()) do
@@ -410,8 +409,7 @@ local function BackupAIBelajarWaktu(sapling)
         timer = timer + 1; task.wait(0.1)
     end
     
-    -- Kalau ga kebaca, kasih delay tembak 60 detik biar dia ga spam nyamperin terus-terusan
-    getgenv().AIDictionary[sapling.name] = 60 
+    -- Kalau ga kebaca, JANGAN ditandain rusak selamanya. Balikin false biar dicek lagi nanti.
     return false
 end
 
@@ -429,14 +427,17 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 if not getgenv().EnableSmartHarvest then break end
                 
                 local targetMatang = GetExactGrowTime(sapling.name)
-                if not targetMatang then
-                    BackupAIBelajarWaktu(sapling)
-                    targetMatang = getgenv().AIDictionary[sapling.name]
-                end
-                
+                local umurAsli = math.max(os.time() - sapling.at, workspace:GetServerTimeNow() - sapling.at)
+
                 if targetMatang then
-                    local umurAsli = math.max(os.time() - sapling.at, workspace:GetServerTimeNow() - sapling.at)
+                    -- Kalau udah tahu waktunya, gampang
                     if umurAsli >= targetMatang then table.insert(targetPanen, sapling) end
+                else
+                    -- Kalau ga tahu, bot ngecek manual. Kalau nemu, masukkin ke list panen
+                    local isReady = BackupAIBelajarWaktu(sapling)
+                    if isReady then 
+                        table.insert(targetPanen, sapling) 
+                    end
                 end
             end
             
