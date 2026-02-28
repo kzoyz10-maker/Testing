@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V46 + PLANT (HORIZONTAL Y-FIRST FIX)"
+getgenv().ScriptVersion = "Auto Farm V55 (PRIORITY HARVEST + SMART AI)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -23,7 +23,7 @@ getgenv().PlantDelay = 0.15
 
 getgenv().EnableSmartHarvest = false
 getgenv().EnableAutoPlant = false
-getgenv().SelectedSeed = "None"
+getgenv().SelectedSeed = "Kosong"
 getgenv().AIDictionary = getgenv().AIDictionary or {}
 
 local Players = game:GetService("Players")
@@ -48,6 +48,64 @@ pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild(
 
 local UIManager
 pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
+
+-- ========================================== --
+-- [[ SISTEM INVENTORY TRANSLATOR (V53) ]]
+-- ========================================== --
+getgenv().InventoryCacheNameMap = {}
+
+local function GetItemName(rawId)
+    if type(rawId) == "string" then return rawId end
+    if WorldManager and WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] then
+        return WorldManager.NumberToStringMap[rawId]
+    end
+    if ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[rawId] then
+        local data = ItemsManager.ItemsData[rawId]
+        if type(data) == "table" and data.Name then return data.Name end
+    end
+    return tostring(rawId)
+end
+
+local function ScanAvailableItems()
+    local items = {}
+    local dict = {}
+    getgenv().InventoryCacheNameMap = {} 
+    
+    pcall(function()
+        if InventoryMod and InventoryMod.Stacks then
+            for slotIndex, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and data.Id then
+                    if not data.Amount or data.Amount > 0 then
+                        local realId = data.Id
+                        local itemName = GetItemName(realId)
+                        
+                        if not dict[itemName] then 
+                            dict[itemName] = true
+                            table.insert(items, itemName)
+                            getgenv().InventoryCacheNameMap[itemName] = realId
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    if #items == 0 then table.insert(items, "Kosong"); getgenv().InventoryCacheNameMap["Kosong"] = nil end
+    table.sort(items)
+    return items
+end
+
+local function GetSlotByItemName(targetName)
+    if not InventoryMod or not InventoryMod.Stacks then return nil end
+    local targetID = getgenv().InventoryCacheNameMap[targetName] or targetName
+    
+    for slotIndex, data in pairs(InventoryMod.Stacks) do
+        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
+            if not data.Amount or data.Amount > 0 then return slotIndex end
+        end
+    end
+    return nil
+end
 
 -- ========================================== --
 -- [[ BIKIN UI MENU ]]
@@ -140,41 +198,7 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
     end)
 end
 
--- ========================================== --
--- [[ SISTEM INVENTORY & SLOT ]]
--- ========================================== --
-local function ScanAvailableItems()
-    local items = {}; local dict = {}
-    pcall(function()
-        if InventoryMod and InventoryMod.Stacks then
-            for _, data in pairs(InventoryMod.Stacks) do
-                if type(data) == "table" and data.Id then
-                    local itemID = tostring(data.Id)
-                    if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
-                end
-            end
-        end
-    end)
-    if #items == 0 then items = {"Kosong"} end
-    return items
-end
-
-local function GetSlotByItemID(itemID)
-    local foundSlot = nil
-    pcall(function()
-        if InventoryMod and InventoryMod.Stacks then
-            for slot, data in pairs(InventoryMod.Stacks) do
-                if type(data) == "table" and tostring(data.Id) == tostring(itemID) then
-                    foundSlot = slot
-                    break
-                end
-            end
-        end
-    end)
-    return foundSlot
-end
-
-CreateToggle(TargetPage, "🌾 START AUTO HARvgggVEST", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
@@ -242,7 +266,7 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     table.insert(openSet, {x = startX, y = startY, key = startKey})
     gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
 
-    local maxIterations, iterations = 5000, 0
+    local maxIterations, iterations = 3000, 0
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
     while #openSet > 0 do
@@ -309,7 +333,7 @@ local function SmoothWalkTo(targetPos)
     
     MyHitbox.CFrame = CFrame.new(targetPos)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
-    task.wait(0.02) 
+    task.wait(0.01) 
     return true
 end
 
@@ -337,47 +361,6 @@ end
 -- ========================================== --
 -- [[ SCANNER DATABASE WAKTU TUMBUH ]]
 -- ========================================== --
-local SaplingsData = {}
-
-local function ScanWorld()
-    SaplingsData = {}
-    for x, yCol in pairs(RawWorldTiles) do
-        if type(yCol) == "table" then
-            for y, layers in pairs(yCol) do
-                if type(layers) == "table" then
-                    for layer, data in pairs(layers) do
-                        local rawId = type(data) == "table" and data[1] or data
-                        local tileInfo = type(data) == "table" and data[2] or nil
-                        
-                        local tileString = rawId
-                        if type(rawId) == "number" and WorldManager.NumberToStringMap then
-                            tileString = WorldManager.NumberToStringMap[rawId] or rawId
-                        end
-                        
-                        if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
-                            if tileInfo and tileInfo.at then
-                                table.insert(SaplingsData, {x = x, y = y, name = tileString, at = tileInfo.at})
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    -- [[ FIX: SORTING Y (BARIS) DULU, BARU X (KOLOM) SECARA ZIGZAG ]]
-    table.sort(SaplingsData, function(a, b)
-        if a.y == b.y then
-            if a.y % 2 == 0 then
-                return a.x < b.x -- Baris genap: Kiri ke Kanan
-            else
-                return a.x > b.x -- Baris ganjil: Kanan ke Kiri (Zig-zag)
-            end
-        end
-        return a.y < b.y -- Sort Y dari bawah ke atas
-    end)
-end
-
 local function DeepFindGrowTime(tbl)
     if type(tbl) ~= "table" then return nil end
     for k, v in pairs(tbl) do
@@ -407,18 +390,22 @@ local function GetExactGrowTime(saplingName)
     return getgenv().AIDictionary[saplingName] or nil
 end
 
+-- [[ FIX: AI Belajar Santai (Biar ga salah target) ]]
 local function BackupAIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
     
+    -- Jeda dikit biar bot bener-bener diem & UI HoverPart pindah ke tanaman yang bener
+    task.wait(0.3) 
+    
     local timer = 0
-    while timer < 30 do
+    while timer < 10 do -- Cuma dikasih 1 detik nunggu
         local hover = workspace:FindFirstChild("HoverPart")
         if hover then
             for _, v in pairs(hover:GetDescendants()) do
                 if v:IsA("TextLabel") and v.Text ~= "" then
                     local text = string.lower(v.Text)
-                    if string.find(text, "grown") or string.find(text, "harvest") then
+                    if string.find(text, "grown") or string.find(text, "harvest") or string.find(text, "100%%") or string.find(text, "h") or string.find(text, "m") then
                         local jam = tonumber(string.match(text, "(%d+)h")) or 0
                         local menit = tonumber(string.match(text, "(%d+)m")) or 0
                         local detik = tonumber(string.match(text, "(%d+)s")) or 0
@@ -439,52 +426,94 @@ local function BackupAIBelajarWaktu(sapling)
         end
         timer = timer + 1; task.wait(0.1)
     end
+    
+    -- Kalo gagal baca, default 3 menit biar ga muter disitu lagi
+    getgenv().AIDictionary[sapling.name] = 180 
     return false
 end
 
 -- ========================================== --
--- [[ AUTO FARM / HARVEST LOGIC ]]
+-- [[ AUTO FARM / HARVEST LOGIC (PRIORITY FIX) ]]
 -- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
     while true do
         if getgenv().EnableSmartHarvest then
-            ScanWorld()
-            local targetPanen = {}
-
-            -- Karena SaplingsData udah di-sort Y dulu, targetPanen juga otomatis rapi
-            for _, sapling in ipairs(SaplingsData) do
-                if not getgenv().EnableSmartHarvest then break end
-                
-                local targetMatang = GetExactGrowTime(sapling.name)
-                
-                if not targetMatang then
-                    BackupAIBelajarWaktu(sapling)
-                    targetMatang = getgenv().AIDictionary[sapling.name]
-                end
-                
-                if targetMatang then
-                    local umurServer1 = os.time() - sapling.at
-                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                    local umurAsli = math.max(umurServer1, umurServer2)
-
-                    if umurAsli >= targetMatang then
-                        table.insert(targetPanen, sapling)
+            local SaplingsData = {}
+            for x, yCol in pairs(RawWorldTiles) do
+                if type(yCol) == "table" then
+                    for y, layers in pairs(yCol) do
+                        if type(layers) == "table" then
+                            for layer, data in pairs(layers) do
+                                local rawId = type(data) == "table" and data[1] or data
+                                local tileInfo = type(data) == "table" and data[2] or nil
+                                
+                                local tileString = rawId
+                                if type(rawId) == "number" and WorldManager.NumberToStringMap then
+                                    tileString = WorldManager.NumberToStringMap[rawId] or rawId
+                                end
+                                
+                                if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
+                                    if tileInfo and tileInfo.at then
+                                        table.insert(SaplingsData, {x = x, y = y, name = tileString, at = tileInfo.at})
+                                    end
+                                end
+                            end
+                        end
                     end
                 end
             end
             
-            for _, panen in ipairs(targetPanen) do
-                if not getgenv().EnableSmartHarvest then break end
-                local bisaJalan = MoveSmartlyTo(panen.x, panen.y)
-                if bisaJalan then
-                    task.wait(0.1)
-                    pcall(function() 
-                        local targetVec = Vector2.new(panen.x, panen.y)
-                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
-                        else RemoteFist:InvokeServer(targetVec) end
-                    end)
-                    task.wait(getgenv().BreakDelay)
+            -- Sort ZigZag 
+            table.sort(SaplingsData, function(a, b)
+                if a.y == b.y then
+                    if a.y % 2 == 0 then return a.x < b.x else return a.x > b.x end
+                end
+                return a.y < b.y 
+            end)
+
+            local targetPanen = {}
+            local unknownSaplings = {}
+
+            -- FASE 1: Filter prioritas! (Pisahin mana yang ready, mana yang butuh dipelajari)
+            for _, sapling in ipairs(SaplingsData) do
+                local targetMatang = GetExactGrowTime(sapling.name)
+                
+                if targetMatang then
+                    local umurServer1 = os.time() - sapling.at
+                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
+                    local umurTick = tick() - sapling.at
+                    local umurAsli = math.max(umurServer1, umurServer2, (umurTick > 0 and umurTick < 1000000 and umurTick or 0))
+
+                    if umurAsli >= targetMatang then
+                        table.insert(targetPanen, sapling)
+                    end
+                else
+                    table.insert(unknownSaplings, sapling)
+                end
+            end
+            
+            -- FASE 2: Eksekusi!
+            if #targetPanen > 0 then
+                -- HARVEST DULUAN (Prioritas Utama)
+                for _, panen in ipairs(targetPanen) do
+                    if not getgenv().EnableSmartHarvest then break end
+                    local bisaJalan = MoveSmartlyTo(panen.x, panen.y)
+                    if bisaJalan then
+                        task.wait(0.05)
+                        pcall(function() 
+                            local targetVec = Vector2.new(panen.x, panen.y)
+                            if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                            else RemoteFist:InvokeServer(targetVec) end
+                        end)
+                        task.wait(getgenv().BreakDelay)
+                    end
+                end
+            elseif #unknownSaplings > 0 then
+                -- BELAJAR (Cuma kalau lagi nganggur / gaada yang bisa dipanen)
+                -- Kita ajarin 1 tanaman aja per cycle biar ga makan waktu
+                if getgenv().EnableSmartHarvest then
+                    BackupAIBelajarWaktu(unknownSaplings[1])
                 end
             end
         end
@@ -493,15 +522,13 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
 end)
 
 -- ========================================== --
--- [[ AUTO PLANT LOGIC (Y-FIRST & ZIGZAG FIX) ]]
+-- [[ AUTO PLANT LOGIC ]]
 -- ========================================== --
 if getgenv().KzoyzAutoPlantLoop then task.cancel(getgenv().KzoyzAutoPlantLoop) end
 getgenv().KzoyzAutoPlantLoop = task.spawn(function()
     while true do
         if getgenv().EnableAutoPlant and not getgenv().EnableSmartHarvest then 
             local tempList = {}
-            
-            -- Scan semua data dari map
             for x = 0, 100 do
                 local yCol = RawWorldTiles[x]
                 if type(yCol) == "table" then
@@ -513,42 +540,32 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 end
             end
             
-            -- [[ FIX: SORTING Y (BARIS) DULU, BARU X (KOLOM) SECARA ZIGZAG ]]
             table.sort(tempList, function(a, b)
                 if a.y == b.y then
-                    if a.y % 2 == 0 then
-                        return a.x < b.x -- Kiri ke kanan
-                    else
-                        return a.x > b.x -- Kanan ke kiri (Biar ga usah puter balik)
-                    end
+                    if a.y % 2 == 0 then return a.x < b.x else return a.x > b.x end
                 end
-                return a.y < b.y -- Bawah ke atas
+                return a.y < b.y 
             end)
 
-            local targetTanam = tempList
-            
-            for _, spot in ipairs(targetTanam) do
+            for _, spot in ipairs(tempList) do
                 if not getgenv().EnableAutoPlant or getgenv().EnableSmartHarvest then break end
                 
                 local bibit = getgenv().SelectedSeed
                 if bibit ~= "Kosong" and bibit ~= "None" then 
                     
-                    local seedSlot = GetSlotByItemID(bibit)
-                    
+                    local seedSlot = GetSlotByItemName(bibit)
                     if not seedSlot then
-                        warn("⚠️ Bibit " .. tostring(bibit) .. " nggak ketemu di tas / Habis!")
+                        warn("⚠️ Bibit " .. tostring(bibit) .. " habis!")
                         getgenv().EnableAutoPlant = false
                         break
                     end
                     
                     local bisaJalan = MoveSmartlyTo(spot.x, spot.y)
                     if bisaJalan then
-                        task.wait(0.1)
-                        
+                        task.wait(0.05)
                         pcall(function() 
                             local targetVec = Vector2.new(spot.x, spot.y)
                             local targetStr = tostring(spot.x) .. ", " .. tostring(spot.y)
-                            
                             if RemotePlace:IsA("RemoteEvent") then 
                                 RemotePlace:FireServer(targetVec, seedSlot) 
                                 RemotePlace:FireServer(targetStr, seedSlot) 
@@ -556,7 +573,6 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                                 RemotePlace:InvokeServer(targetVec, seedSlot) 
                             end
                         end)
-                        
                         task.wait(getgenv().PlantDelay)
                     end
                 end
