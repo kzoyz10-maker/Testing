@@ -14,7 +14,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Manager v1.9-StreamerMode" 
+getgenv().ScriptVersion = "Manager v2.0-Dropdown+RealTimeSpoof" 
 
 -- ========================================== --
 getgenv().DropDelay = 2     
@@ -117,6 +117,7 @@ getgenv().GameInventoryModule = FindInventoryModule()
 
 local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
 
+-- [[ UI COMPONENT BUILDERS ]]
 function CreateToggle(Parent, Text, Var, OnToggle) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
     local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
@@ -153,6 +154,17 @@ end
 
 function CreateButton(Parent, Text, Callback) 
     local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) 
+end
+
+function CreateSubFrame(Parent)
+    local Frame = Instance.new("Frame", Parent)
+    Frame.BackgroundTransparency = 1
+    Frame.Size = UDim2.new(1, 0, 0, 0)
+    Frame.AutomaticSize = Enum.AutomaticSize.Y
+    local Layout = Instance.new("UIListLayout", Frame)
+    Layout.Padding = UDim.new(0, 5)
+    Layout.SortOrder = Enum.SortOrder.LayoutOrder
+    return Frame
 end
 
 -- ========================================== --
@@ -209,12 +221,17 @@ TabChatBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ========================================== --
--- [[ ISI UI PAGE MANAGER ]]
+-- [[ ISI UI PAGE MANAGER (DROPDOWN STYLE) ]]
 -- ========================================== --
-CreateToggle(PageManager, "📍 Enable Auto Collect", "AutoCollect")
-local BoxX = CreateTextBox(PageManager, "Target Grid X", 0, "TargetPosX")
-local BoxY = CreateTextBox(PageManager, "Target Grid Y", 0, "TargetPosY")
-CreateButton(PageManager, "📍 Save Pos (Current Loc)", function()
+
+-- 1. Auto Collect
+local SubCollect
+CreateToggle(PageManager, "📍 Enable Auto Collect", "AutoCollect", function(state) if SubCollect then SubCollect.Visible = state end end)
+SubCollect = CreateSubFrame(PageManager)
+SubCollect.Visible = getgenv().AutoCollect
+local BoxX = CreateTextBox(SubCollect, "↳ Target Grid X", getgenv().TargetPosX, "TargetPosX")
+local BoxY = CreateTextBox(SubCollect, "↳ Target Grid Y", getgenv().TargetPosY, "TargetPosY")
+CreateButton(SubCollect, "↳ 📍 Save Pos (Current Loc)", function()
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
     local RefPart = MyHitbox or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
@@ -226,33 +243,55 @@ CreateButton(PageManager, "📍 Save Pos (Current Loc)", function()
     end
 end)
 
-CreateToggle(PageManager, "📦 Auto Drop", "AutoDrop", function(state) if not state then ForceRestoreUI() end end)
-CreateTextBox(PageManager, "📦 Drop Amount", 50, "DropAmount")
-CreateTextBox(PageManager, "⏱️ Drop Delay (Detik)", 2, "DropDelay") 
+-- 2. Auto Drop
+local SubDrop
+CreateToggle(PageManager, "📦 Auto Drop", "AutoDrop", function(state) 
+    if SubDrop then SubDrop.Visible = state end
+    if not state then ForceRestoreUI() end 
+end)
+SubDrop = CreateSubFrame(PageManager)
+SubDrop.Visible = getgenv().AutoDrop
+CreateTextBox(SubDrop, "↳ 📦 Drop Amount", 50, "DropAmount")
+CreateTextBox(SubDrop, "↳ ⏱️ Drop Delay (Detik)", 2, "DropDelay") 
 
-CreateToggle(PageManager, "🚮 Auto Trash", "AutoTrash", function(state) if not state then ForceRestoreUI() end end)
-CreateTextBox(PageManager, "🗑️ Trash Amount", 50, "TrashAmount")
-CreateTextBox(PageManager, "⏱️ Trash Delay (Detik)", 2, "TrashDelay") 
+-- 3. Auto Trash
+local SubTrash
+CreateToggle(PageManager, "🚮 Auto Trash", "AutoTrash", function(state) 
+    if SubTrash then SubTrash.Visible = state end
+    if not state then ForceRestoreUI() end 
+end)
+SubTrash = CreateSubFrame(PageManager)
+SubTrash.Visible = getgenv().AutoTrash
+CreateTextBox(SubTrash, "↳ 🗑️ Trash Amount", 50, "TrashAmount")
+CreateTextBox(SubTrash, "↳ ⏱️ Trash Delay (Detik)", 2, "TrashDelay") 
 
+-- 4. Auto Ban (Tanpa Sub Menu)
 CreateToggle(PageManager, "🔨 Auto Ban Players (World)", "AutoBan", function(state) if not state then ForceRestoreUI() end end)
 
--- UI STREAMER MODE
+-- Pembatas Visual
 local StreamerFrame = Instance.new("Frame", PageManager)
 StreamerFrame.Size = UDim2.new(1, -10, 0, 2)
 StreamerFrame.BackgroundColor3 = Theme.Purple
 StreamerFrame.BorderSizePixel = 0
 
-CreateToggle(PageManager, "👁️ Hide/Spoof Name (Client)", "HideName")
-CreateTextBox(PageManager, "✍️ Custom Fake Name", "KzoyzPlayer", "FakeNameText")
+-- 5. Streamer Mode / Hide Name
+local SubStreamer
+CreateToggle(PageManager, "👁️ Hide/Spoof Name (Client)", "HideName", function(state) if SubStreamer then SubStreamer.Visible = state end end)
+SubStreamer = CreateSubFrame(PageManager)
+SubStreamer.Visible = getgenv().HideName
+CreateTextBox(SubStreamer, "↳ ✍️ Custom Fake Name", "KzoyzPlayer", "FakeNameText")
 
 
 -- ========================================== --
--- [[ ISI UI PAGE AUTO CHAT ]]
+-- [[ ISI UI PAGE AUTO CHAT (DROPDOWN STYLE) ]]
 -- ========================================== --
-CreateToggle(PageChat, "💬 Auto Spam Chat", "AutoChat")
-CreateTextBox(PageChat, "✍️ Pesan Chat", "Jual barang di world sini", "ChatText")
-CreateTextBox(PageChat, "⏱️ Delay (Detik)", 3, "ChatDelay")
-CreateToggle(PageChat, "🔀 Anti Spam (Huruf Random)", "ChatRandomLetter")
+local SubChat
+CreateToggle(PageChat, "💬 Auto Spam Chat", "AutoChat", function(state) if SubChat then SubChat.Visible = state end end)
+SubChat = CreateSubFrame(PageChat)
+SubChat.Visible = getgenv().AutoChat
+CreateTextBox(SubChat, "↳ ✍️ Pesan Chat", "Jual barang di world sini", "ChatText")
+CreateTextBox(SubChat, "↳ ⏱️ Delay (Detik)", 3, "ChatDelay")
+CreateToggle(SubChat, "↳ 🔀 Anti Spam (Huruf Random)", "ChatRandomLetter")
 
 -- ========================================== --
 -- [[ REMOTES & EVENTS ]]
@@ -266,36 +305,61 @@ local ChatRemote = RS:WaitForChild("CB")
 
 RunService.RenderStepped:Connect(function() if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end end)
 
--- [[ LOGIKA STREAMER MODE / SPOOF NAME (VISUAL ONLY) ]]
+-- [[ LOGIKA STREAMER MODE / SPOOF NAME (REAL-TIME FIX) ]]
 task.spawn(function()
     local realName = LP.Name
     local realDisplay = LP.DisplayName
+    local activeFake = realName -- Menyimpan nama palsu terakhir yang terpasang
     
     while true do
+        local targetName = realName
+        local targetDisplay = realDisplay
+        
+        -- Kalau toggle nyala, ambil inputan terbaru
         if getgenv().HideName then
-            local fakeName = (getgenv().FakeNameText == "" or getgenv().FakeNameText == " ") and "HiddenPlayer" or getgenv().FakeNameText
-            
-            local function ReplaceSafe(obj)
-                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-                    if obj.Text:find(realName) or obj.Text:find(realDisplay) then
-                        local newText = string.gsub(obj.Text, realName, fakeName)
-                        newText = string.gsub(newText, realDisplay, fakeName)
-                        if obj.Text ~= newText then obj.Text = newText end
+            local f = getgenv().FakeNameText
+            targetName = (f == "" or f == " ") and "HiddenPlayer" or f
+            targetDisplay = targetName
+        end
+        
+        -- Eksekusi fungsi replace jika toggle on atau butuh direvert
+        local function ReplaceSafe(obj)
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                local txt = obj.Text
+                local changed = false
+                
+                -- Timpa Real Name ke Target Name
+                if targetName ~= realName and txt:find(realName) then
+                    txt = string.gsub(txt, realName, targetName)
+                    changed = true
+                end
+                if targetDisplay ~= realDisplay and txt:find(realDisplay) then
+                    txt = string.gsub(txt, realDisplay, targetDisplay)
+                    changed = true
+                end
+                
+                -- Fix Real-Time Update: Timpa Fake Name lama ke Target Name (Baru / Revert)
+                if activeFake ~= targetName and activeFake ~= realName and activeFake ~= realDisplay then
+                    if txt:find(activeFake) then
+                        txt = string.gsub(txt, activeFake, targetName)
+                        changed = true
                     end
                 end
-            end
-            
-            -- Ganti teks di atas kepala karakter
-            if LP.Character then
-                for _, v in pairs(LP.Character:GetDescendants()) do ReplaceSafe(v) end
-            end
-            
-            -- Ganti teks di dalam UI (Leaderboard, Chatlog, dll)
-            if LP:FindFirstChild("PlayerGui") then
-                for _, v in pairs(LP.PlayerGui:GetDescendants()) do ReplaceSafe(v) end
+                
+                if changed and obj.Text ~= txt then
+                    obj.Text = txt
+                end
             end
         end
-        task.wait(1) -- Cek setiap 1 detik biar game lu ngga ngelag
+        
+        -- Mulai nyapu UI
+        if LP.Character then for _, v in pairs(LP.Character:GetDescendants()) do ReplaceSafe(v) end end
+        if LP:FindFirstChild("PlayerGui") then for _, v in pairs(LP.PlayerGui:GetDescendants()) do ReplaceSafe(v) end end
+        
+        -- Update state memori nama yang lagi dipakai
+        activeFake = targetName
+        
+        task.wait(1) 
     end
 end)
 
