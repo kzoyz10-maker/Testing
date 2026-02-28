@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V48 (FIX DETECTION & STABILITY)"
+getgenv().ScriptVersion = "Auto Farm V49 (FIX SORTING CRASH & INV SCAN)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -136,14 +136,15 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
 end
 
 -- ========================================== --
--- [[ SISTEM INVENTORY & SLOT ]]
+-- [[ SISTEM INVENTORY & SLOT FIX ]]
 -- ========================================== --
 local function ScanAvailableItems()
     local items = {}; local dict = {}
     pcall(function()
         if InventoryMod and InventoryMod.Stacks then
-            for _, data in pairs(InventoryMod.Stacks) do
-                if type(data) == "table" and data.Id then
+            for slot, data in pairs(InventoryMod.Stacks) do
+                -- FIX: Pastikan slotnya berupa angka/tonumber bisa (menghindari "Hotbar", "Selected", dll)
+                if type(data) == "table" and data.Id and (type(slot) == "number" or tonumber(slot)) then
                     local itemID = tostring(data.Id)
                     if not dict[itemID] then dict[itemID] = true; table.insert(items, itemID) end
                 end
@@ -159,7 +160,8 @@ local function GetSlotByItemID(itemID)
     pcall(function()
         if InventoryMod and InventoryMod.Stacks then
             for slot, data in pairs(InventoryMod.Stacks) do
-                if type(data) == "table" and tostring(data.Id) == tostring(itemID) then
+                -- FIX: Pastikan yang kita tembak slot beneran (angka), bukan slot UI
+                if type(data) == "table" and tostring(data.Id) == tostring(itemID) and (type(slot) == "number" or tonumber(slot)) then
                     foundSlot = slot; break
                 end
             end
@@ -168,7 +170,7 @@ local function GetSlotByItemID(itemID)
     return foundSlot
 end
 
-CreateToggle(TargetPage, "🌾 START AUTO HVEST", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
@@ -234,7 +236,6 @@ local function FindPathAStar(startX, startY, targetX, targetY)
     table.insert(openSet, {x = startX, y = startY, key = startKey})
     gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
 
-    -- FIX: Iterasi dinaikkan ke 2000 biar dia ga gampang nyerah kalau tanamannya agak jauh/kelok-kelok
     local maxIterations, iterations = 2000, 0
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
@@ -352,8 +353,9 @@ local function ScanWorld()
         end
     end
     
+    -- FIX SORTING CRASH: Logika sortir dibikin basic (atas ke bawah, kiri ke kanan)
     table.sort(SaplingsData, function(a, b)
-        if a.y == b.y then return (a.y % 2 == 0) and (a.x < b.x) or (a.x > b.x) end
+        if a.y == b.y then return a.x < b.x end
         return a.y < b.y 
     end)
 end
@@ -387,20 +389,19 @@ local function GetExactGrowTime(saplingName)
     return getgenv().AIDictionary[saplingName] or nil
 end
 
--- FIX: Delay nunggu dibikin pas (1.5 detik), cukup buat nunggu UI muncul tanpa bikin lag
 local function BackupAIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
     
     local timer = 0
-    while timer < 15 do -- 1.5 detik toleransi nunggu UI server
+    while timer < 15 do 
         local hover = workspace:FindFirstChild("HoverPart")
         if hover then
             for _, v in pairs(hover:GetDescendants()) do
                 if v:IsA("TextLabel") and v.Text ~= "" then
                     local text = string.lower(v.Text)
                     if string.find(text, "grown") or string.find(text, "harvest") or string.find(text, "100%%") or string.find(text, "ready") then
-                        getgenv().AIDictionary[sapling.name] = 0 -- Auto set ready
+                        getgenv().AIDictionary[sapling.name] = 0 
                         return true
                     end
                 end
@@ -408,8 +409,6 @@ local function BackupAIBelajarWaktu(sapling)
         end
         timer = timer + 1; task.wait(0.1)
     end
-    
-    -- Kalau ga kebaca, JANGAN ditandain rusak selamanya. Balikin false biar dicek lagi nanti.
     return false
 end
 
@@ -430,10 +429,8 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 local umurAsli = math.max(os.time() - sapling.at, workspace:GetServerTimeNow() - sapling.at)
 
                 if targetMatang then
-                    -- Kalau udah tahu waktunya, gampang
                     if umurAsli >= targetMatang then table.insert(targetPanen, sapling) end
                 else
-                    -- Kalau ga tahu, bot ngecek manual. Kalau nemu, masukkin ke list panen
                     local isReady = BackupAIBelajarWaktu(sapling)
                     if isReady then 
                         table.insert(targetPanen, sapling) 
@@ -477,8 +474,9 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 end
             end
             
+            -- FIX SORTING CRASH
             table.sort(tempList, function(a, b)
-                if a.y == b.y then return (a.y % 2 == 0) and (a.x < b.x) or (a.x > b.x) end
+                if a.y == b.y then return a.x < b.x end
                 return a.y < b.y 
             end)
 
@@ -488,7 +486,7 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 if bibit ~= "Kosong" and bibit ~= "None" then 
                     local seedSlot = GetSlotByItemID(bibit)
                     if not seedSlot then
-                        warn("⚠️ Bibit habis!"); getgenv().EnableAutoPlant = false; break
+                        warn("⚠️ Bibit habis / Slot tidak valid!"); getgenv().EnableAutoPlant = false; break
                     end
                     
                     if MoveSmartlyTo(spot.x, spot.y) then
