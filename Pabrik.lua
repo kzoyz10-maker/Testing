@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.94 - ULTIMATE BATCH & Y-FIX" 
+getgenv().ScriptVersion = "Pabrik v0.95 - SYNC DROP & ONLY SAPLING" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -13,6 +13,7 @@ getgenv().BreakDelay = 0.15
 getgenv().HitCount = 3    
 
 getgenv().EnablePabrik = false
+getgenv().OnlyCollectSapling = true -- Default ON sesuai request lu
 getgenv().PabrikStartX = 0
 getgenv().PabrikEndX = 100
 getgenv().PabrikStartY = 0
@@ -370,6 +371,9 @@ end
 -- ========================================== --
 local function CheckDropsAtGrid(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
+    local foundAny = false
+    local foundSapling = false
+    
     for _, folder in ipairs(TargetFolders) do
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
@@ -384,15 +388,44 @@ local function CheckDropsAtGrid(TargetGridX, TargetGridY)
                 if pos then
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
-                    -- Dikasih toleransi Y sedikit biar barang yang jatuh agak ke bawah tetep kepungut
+                    
                     if dX == TargetGridX and math.abs(dY - TargetGridY) <= 1 then
-                        return true
+                        foundAny = true
+                        
+                        -- Cek apakah item ini Sapling/Seed (Anti mungut sampah)
+                        local isSapling = false
+                        for _, attrValue in pairs(obj:GetAttributes()) do
+                            if type(attrValue) == "string" and (string.find(string.lower(attrValue), "sapling") or string.find(string.lower(attrValue), "seed")) then 
+                                isSapling = true; break 
+                            end
+                        end
+                        if not isSapling then
+                            for _, child in ipairs(obj:GetDescendants()) do
+                                if child:IsA("StringValue") and (string.find(string.lower(child.Value), "sapling") or string.find(string.lower(child.Value), "seed")) then 
+                                    isSapling = true; break 
+                                end
+                                for _, attrValue in pairs(child:GetAttributes()) do
+                                    if type(attrValue) == "string" and (string.find(string.lower(attrValue), "sapling") or string.find(string.lower(attrValue), "seed")) then 
+                                        isSapling = true; break 
+                                    end
+                                end
+                                if isSapling then break end
+                            end
+                        end
+                        
+                        if isSapling then foundSapling = true end
                     end
                 end
             end
         end
     end
-    return false
+    
+    -- Filter dari setting UI
+    if getgenv().OnlyCollectSapling then
+        return foundSapling
+    else
+        return foundAny
+    end
 end
 
 local function DropItemLogic(targetName, dropAmount)
@@ -627,7 +660,8 @@ local function CreateDropdown(Parent, Text, DefaultOptions, Var)
 end
 
 -- TAB 1: PABRIK CONFIG
-CreateToggle(PagePabrik, "🚀 START SMART PABRIKinitu", "EnablePabrik")
+CreateToggle(PagePabrik, "🚀 START SMART PABRIK", "EnablePabrik")
+CreateToggle(PagePabrik, "Only Collect Sapling/Seed", "OnlyCollectSapling") -- TOGGLE BARU!
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
 CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() 
@@ -693,7 +727,7 @@ task.spawn(function()
                 local sX, eX = math.min(getgenv().PabrikStartX, getgenv().PabrikEndX), math.max(getgenv().PabrikStartX, getgenv().PabrikEndX)
                 local sY, eY = math.min(getgenv().PabrikStartY, getgenv().PabrikEndY), math.max(getgenv().PabrikStartY, getgenv().PabrikEndY)
 
-                -- [[ Y-FIX: Loop Y ini adalah target posisi Tanamannya (Bukan Tanahnya) ]]
+                -- Loop Y adalah target posisi Tanamannya
                 for y = sY, eY do
                     if not getgenv().EnablePabrik then break end
                     
@@ -706,12 +740,12 @@ task.spawn(function()
                         local yCol = RawWorldTiles[x]
                         if type(yCol) == "table" then
                             
-                            -- Cek Tanam: Tanah ada di (y-1) dan tempat tanam di (y) harus kosong
+                            -- Cek Tanam
                             if IsTileSolid(x, y - 1) and IsTileEmptyForPlant(x, y) then
                                 table.insert(targetTanam, {x = x, y = y})
                             end
                             
-                            -- Cek Panen: Cek ada tanaman ga di titik (y) ini?
+                            -- Cek Panen
                             if type(yCol[y]) == "table" then
                                 for layer, data in pairs(yCol[y]) do
                                     local rawId = type(data) == "table" and data[1] or data
@@ -795,7 +829,7 @@ task.spawn(function()
                     end
                 end
 
-                -- 4. JIKA KOSONG (LAGI NUNGGU TUMBUH) -> BATCH FARM BLOCK FIX!
+                -- 4. JIKA KOSONG (LAGI NUNGGU TUMBUH) -> BATCH FARM BLOCK FIX + DROP SYNC!
                 if #targetPanen == 0 and #targetTanam == 0 and getgenv().EnablePabrik then
                     local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                     
@@ -807,7 +841,7 @@ task.spawn(function()
                             while getgenv().EnablePabrik do
                                 local currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
                                 
-                                -- Kalo block tinggal dikit (butuh pungut) atau udah 40x ketok (biar drop ga ilang)
+                                -- Kalau block tinggal dikit (butuh pungut) atau udah 40x ketok (biar drop ga ilang)
                                 if currentAmt <= getgenv().BlockThreshold or hitLoopCount >= 40 then
                                     
                                     -- Coba pungut dulu
@@ -849,17 +883,54 @@ task.spawn(function()
                                     
                                     -- Habis usaha pungut, cek lagi isi tas.
                                     currentAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
+                                    
+                                    -- ======================================================== --
+                                    -- SYNC DROP SEED LOGIC: Cuma jalan pas blok di tas beneran abis!
+                                    -- ======================================================== --
                                     if currentAmt <= getgenv().BlockThreshold then
-                                        -- Kalau masi tetep dikit (berarti beneran habis), keluar loop mukul batu biar balik ngecek tanaman
+                                        
+                                        local currentSeedAmt = GetItemAmountByItemName(getgenv().SelectedSeed)
+                                        if currentSeedAmt > getgenv().KeepSeedAmt then
+                                            if MoveSmartlyTo(getgenv().DropPosX, getgenv().DropPosY) then
+                                                task.wait(1.5)
+                                                while getgenv().EnablePabrik do
+                                                    local current = GetItemAmountByItemName(getgenv().SelectedSeed)
+                                                    local toDrop = current - getgenv().KeepSeedAmt
+                                                    if toDrop <= 0 then break end
+                                                    local dropNow = math.min(toDrop, 200)
+                                                    if DropItemLogic(getgenv().SelectedSeed, dropNow) then 
+                                                        task.wait(getgenv().DropDelay + 0.3) 
+                                                    else 
+                                                        break 
+                                                    end
+                                                end
+                                                pcall(function() 
+                                                    if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
+                                                    for _, gui in pairs(LP.PlayerGui:GetDescendants()) do 
+                                                        if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then 
+                                                            gui.Visible = false 
+                                                        end 
+                                                    end 
+                                                end)
+                                                task.wait(0.1)
+                                                pcall(function() 
+                                                    if UIManager then 
+                                                        if type(UIManager.ShowHUD) == "function" then UIManager:ShowHUD() end 
+                                                    end 
+                                                end)
+                                            end
+                                        end
+                                        
+                                        -- Beneran abis, keluar dari loop mukul batu biar balik ngecek tanaman
                                         break 
                                     end
                                     
-                                    -- Kalau nambah banyak habis mungut, auto reset jumlah loop dan LANJUT mukul tanpa balik ke tanaman dulu!
+                                    -- Kalau nambah banyak (habis di restock pungutan), LANJUT MUKUL!
                                     hitLoopCount = 0
                                 end
                                 
                                 local activeSlot = GetSlotByItemName(getgenv().SelectedBlock)
-                                if not activeSlot then break end -- Safeguard 
+                                if not activeSlot then break end 
                                 
                                 -- Pukul terus bos!
                                 RemotePlace:FireServer(BreakTarget, activeSlot)
@@ -876,41 +947,9 @@ task.spawn(function()
                         end
                     end
                 end
-
-                -- 5. AUTO DROP SEED KALO KEPENUHAN
-                if getgenv().EnablePabrik then
-                    local currentSeedAmt = GetItemAmountByItemName(getgenv().SelectedSeed)
-                    if currentSeedAmt > getgenv().KeepSeedAmt then
-                        if MoveSmartlyTo(getgenv().DropPosX, getgenv().DropPosY) then
-                            task.wait(1.5)
-                            while getgenv().EnablePabrik do
-                                local current = GetItemAmountByItemName(getgenv().SelectedSeed)
-                                local toDrop = current - getgenv().KeepSeedAmt
-                                if toDrop <= 0 then break end
-                                local dropNow = math.min(toDrop, 200)
-                                if DropItemLogic(getgenv().SelectedSeed, dropNow) then 
-                                    task.wait(getgenv().DropDelay + 0.3) 
-                                else 
-                                    break 
-                                end
-                            end
-                            pcall(function() 
-                                if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
-                                for _, gui in pairs(LP.PlayerGui:GetDescendants()) do 
-                                    if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then 
-                                        gui.Visible = false 
-                                    end 
-                                end 
-                            end)
-                            task.wait(0.1)
-                            pcall(function() 
-                                if UIManager then 
-                                    if type(UIManager.ShowHUD) == "function" then UIManager:ShowHUD() end 
-                                end 
-                            end)
-                        end
-                    end
-                end
+                
+                -- Note: Bagian 5 (Auto Drop independent) sengaja udah dihapus, 
+                -- soalnya udah di-pindahin ke dalem pengecekan BlockThreshold di atas.
             end
         end
         task.wait(0.5)
