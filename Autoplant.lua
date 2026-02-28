@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V46 + PLANT (SLOT TAS FIX) + WALKSPEED"
+getgenv().ScriptVersion = "Auto Farm V46 + PLANT (HORIZONTAL Y-FIRST FIX)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -159,7 +159,6 @@ local function ScanAvailableItems()
     return items
 end
 
--- FUNGSI BARU: Ambil Slot ID berdasarkan Item
 local function GetSlotByItemID(itemID)
     local foundSlot = nil
     pcall(function()
@@ -175,7 +174,7 @@ local function GetSlotByItemID(itemID)
     return foundSlot
 end
 
-CreateToggle(TargetPage, "🌾 START AUTOT", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌾 START AUTO HARvgggVEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
@@ -365,6 +364,18 @@ local function ScanWorld()
             end
         end
     end
+    
+    -- [[ FIX: SORTING Y (BARIS) DULU, BARU X (KOLOM) SECARA ZIGZAG ]]
+    table.sort(SaplingsData, function(a, b)
+        if a.y == b.y then
+            if a.y % 2 == 0 then
+                return a.x < b.x -- Baris genap: Kiri ke Kanan
+            else
+                return a.x > b.x -- Baris ganjil: Kanan ke Kiri (Zig-zag)
+            end
+        end
+        return a.y < b.y -- Sort Y dari bawah ke atas
+    end)
 end
 
 local function DeepFindGrowTime(tbl)
@@ -441,6 +452,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             ScanWorld()
             local targetPanen = {}
 
+            -- Karena SaplingsData udah di-sort Y dulu, targetPanen juga otomatis rapi
             for _, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 
@@ -481,34 +493,39 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
 end)
 
 -- ========================================== --
--- [[ AUTO PLANT LOGIC (SLOT TAS FIX) ]]
+-- [[ AUTO PLANT LOGIC (Y-FIRST & ZIGZAG FIX) ]]
 -- ========================================== --
 if getgenv().KzoyzAutoPlantLoop then task.cancel(getgenv().KzoyzAutoPlantLoop) end
 getgenv().KzoyzAutoPlantLoop = task.spawn(function()
     while true do
         if getgenv().EnableAutoPlant and not getgenv().EnableSmartHarvest then 
-            local targetTanam = {}
+            local tempList = {}
             
-            -- Scan X berurutan dari 0 sampai 100 biar bot jalannya rapi dari kiri ke kanan
+            -- Scan semua data dari map
             for x = 0, 100 do
                 local yCol = RawWorldTiles[x]
                 if type(yCol) == "table" then
-                    local yKeys = {}
                     for y, _ in pairs(yCol) do
-                        table.insert(yKeys, y)
-                    end
-                    table.sort(yKeys)
-                    
-                    for _, y in ipairs(yKeys) do
-                        if not getgenv().EnableAutoPlant then break end
-                        
-                        -- Cari spot KOSONG tepat di ATAS tanah
                         if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) then
-                            table.insert(targetTanam, {x = x, y = y + 1})
+                            table.insert(tempList, {x = x, y = y + 1})
                         end
                     end
                 end
             end
+            
+            -- [[ FIX: SORTING Y (BARIS) DULU, BARU X (KOLOM) SECARA ZIGZAG ]]
+            table.sort(tempList, function(a, b)
+                if a.y == b.y then
+                    if a.y % 2 == 0 then
+                        return a.x < b.x -- Kiri ke kanan
+                    else
+                        return a.x > b.x -- Kanan ke kiri (Biar ga usah puter balik)
+                    end
+                end
+                return a.y < b.y -- Bawah ke atas
+            end)
+
+            local targetTanam = tempList
             
             for _, spot in ipairs(targetTanam) do
                 if not getgenv().EnableAutoPlant or getgenv().EnableSmartHarvest then break end
@@ -516,7 +533,6 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                 local bibit = getgenv().SelectedSeed
                 if bibit ~= "Kosong" and bibit ~= "None" then 
                     
-                    -- Cari NOMOR SLOT dari bibit yang dipilih
                     local seedSlot = GetSlotByItemID(bibit)
                     
                     if not seedSlot then
@@ -533,7 +549,6 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                             local targetVec = Vector2.new(spot.x, spot.y)
                             local targetStr = tostring(spot.x) .. ", " .. tostring(spot.y)
                             
-                            -- Nanam pakai RemotePlace (PlayerPlaceItem) dengan argument NOMOR SLOT tas
                             if RemotePlace:IsA("RemoteEvent") then 
                                 RemotePlace:FireServer(targetVec, seedSlot) 
                                 RemotePlace:FireServer(targetStr, seedSlot) 
