@@ -1,100 +1,148 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.90 - SMART AI & WALKSPEED" 
+TargetPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+TargetPage.CanvasSize = UDim2.new(0, 0, 0, 0)
+local listLayout = TargetPage:FindFirstChildWhichIsA("UIListLayout")
+if listLayout then
+    TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
+    end)
+end
+
+getgenv().ScriptVersion = "Auto Farm V46 + PLANT (SLOT TAS FIX) + WALKSPEED"
 
 -- ========================================== --
--- [[ DEFAULT SETTINGS ]]
+-- [[ KONFIGURASI AWAL ]]
 -- ========================================== --
-getgenv().WalkSpeed = 16     
-getgenv().PlaceDelay = 0.15  
-getgenv().DropDelay = 0.5      
-getgenv().BreakDelay = 0.15 
-getgenv().HitCount = 3    
-
-getgenv().EnablePabrik = false
-getgenv().PabrikStartX = 0
-getgenv().PabrikEndX = 100
-getgenv().PabrikStartY = 0
-getgenv().PabrikEndY = 100
-
-getgenv().BreakPosX = 0; getgenv().BreakPosY = 0
-getgenv().DropPosX = 0; getgenv().DropPosY = 0
-
-getgenv().BlockThreshold = 20 
-getgenv().KeepSeedAmt = 20    
-
-getgenv().SelectedSeed = "Kosong"
-getgenv().SelectedBlock = "Kosong" 
-
-getgenv().AIDictionary = getgenv().AIDictionary or {}
-getgenv().IsGhosting = false
-getgenv().HoldCFrame = nil
 getgenv().GridSize = 4.5
+getgenv().WalkSpeed = 16     
+getgenv().BreakDelay = 0.15  
+getgenv().PlantDelay = 0.15
 
--- ========================================== --
--- [[ SERVICES & MANAGERS ]]
--- ========================================== --
+getgenv().EnableSmartHarvest = false
+getgenv().EnableAutoPlant = false
+getgenv().SelectedSeed = "None"
+getgenv().AIDictionary = getgenv().AIDictionary or {}
+
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser") 
 local RunService = game:GetService("RunService")
 
-local RemoteBreak = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
+-- REMOTES
+local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
 local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem") 
 
+-- MANAGERS
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
 local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
-local InventoryMod, UIManager, PlayerMovement
-pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
-pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
+
+local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
-LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
+local InventoryMod
+pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
 
-if getgenv().KzoyzHeartbeatPabrik then getgenv().KzoyzHeartbeatPabrik:Disconnect(); getgenv().KzoyzHeartbeatPabrik = nil end
-
--- Ghosting Anti-Fling buat farming block
-getgenv().KzoyzHeartbeatPabrik = RunService.Heartbeat:Connect(function()
-    if getgenv().IsGhosting then
-        if getgenv().HoldCFrame then
-            local char = LP.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then char.HumanoidRootPart.CFrame = getgenv().HoldCFrame end
-        end
-        if PlayerMovement then
-            pcall(function()
-                PlayerMovement.VelocityY = 0; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true; PlayerMovement.Jumping = false
-            end)
-        end
-    end
-end)
+local UIManager
+pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
 -- ========================================== --
--- [[ INVENTORY & SLOTS LOGIC ]]
+-- [[ BIKIN UI MENU ]]
 -- ========================================== --
-local function GetSlotByItemID(targetID)
-    if not InventoryMod or not InventoryMod.Stacks then return nil end
-    for slotIndex, data in pairs(InventoryMod.Stacks) do
-        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
-            if not data.Amount or data.Amount > 0 then return slotIndex end
-        end
-    end
-    return nil
+function CreateToggle(Parent, Text, Var) 
+    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
+    local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 40, 0, 20); IndBg.Position = UDim2.new(1, -50, 0.5, -10); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
+    local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 16, 0, 16); Dot.Position = getgenv()[Var] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); 
+
+    Btn.MouseButton1Click:Connect(function() 
+        getgenv()[Var] = not getgenv()[Var]; 
+        if getgenv()[Var] then 
+            Dot:TweenPosition(UDim2.new(1, -18, 0.5, -8), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Color3.fromRGB(255, 80, 80) 
+        else 
+            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -8), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
+        end 
+    end) 
 end
 
-local function GetItemAmountByID(targetID)
-    local total = 0
-    if not InventoryMod or not InventoryMod.Stacks then return total end
-    for _, data in pairs(InventoryMod.Stacks) do
-        if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
-            total = total + (data.Amount or 1)
-        end
-    end
-    return total
+function CreateInput(Parent, Text, Var, DefaultValue)
+    local Frame = Instance.new("Frame", Parent)
+    Frame.Size = UDim2.new(1, -10, 0, 40)
+    Frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    
+    local Label = Instance.new("TextLabel", Frame)
+    Label.Size = UDim2.new(0.6, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = Text; Label.TextColor3 = Color3.fromRGB(255, 255, 255); Label.Font = Enum.Font.GothamBold; Label.TextSize = 13; Label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local TextBox = Instance.new("TextBox", Frame)
+    TextBox.Size = UDim2.new(0.3, 0, 0.7, 0)
+    TextBox.Position = UDim2.new(0.65, 0, 0.15, 0)
+    TextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); TextBox.TextColor3 = Color3.fromRGB(255, 255, 255); TextBox.Font = Enum.Font.Gotham; TextBox.TextSize = 13; TextBox.Text = tostring(DefaultValue); TextBox.ClearTextOnFocus = false
+
+    getgenv()[Var] = DefaultValue
+    TextBox.FocusLost:Connect(function()
+        local num = tonumber(TextBox.Text)
+        if num then getgenv()[Var] = num else TextBox.Text = tostring(getgenv()[Var]) end
+    end)
 end
 
+function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
+    local Container = Instance.new("Frame", Parent)
+    Container.Size = UDim2.new(1, -10, 0, 40)
+    Container.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    Container.ClipsDescendants = true
+    
+    local MainBtn = Instance.new("TextButton", Container)
+    MainBtn.Size = UDim2.new(1, 0, 0, 40)
+    MainBtn.BackgroundTransparency = 1
+    MainBtn.Text = "  " .. Text .. ": " .. tostring(getgenv()[Var])
+    MainBtn.TextColor3 = Color3.fromRGB(255, 215, 0) 
+    MainBtn.Font = Enum.Font.GothamBold; MainBtn.TextSize = 13; MainBtn.TextXAlignment = Enum.TextXAlignment.Left
+
+    local Scroll = Instance.new("ScrollingFrame", Container)
+    Scroll.Size = UDim2.new(1, 0, 1, -40); Scroll.Position = UDim2.new(0, 0, 0, 40)
+    Scroll.BackgroundColor3 = Color3.fromRGB(35, 35, 35); Scroll.ScrollBarThickness = 4
+    local UIList = Instance.new("UIListLayout", Scroll)
+    
+    local isOpen = false
+    MainBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        if isOpen then
+            local options = GetOptionsFunc()
+            for _, child in ipairs(Scroll:GetChildren()) do
+                if child:IsA("TextButton") then child:Destroy() end
+            end
+            
+            local ySize = 0
+            for _, opt in ipairs(options) do
+                local btn = Instance.new("TextButton", Scroll)
+                btn.Size = UDim2.new(1, 0, 0, 30); btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                btn.Text = "  " .. tostring(opt); btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                btn.Font = Enum.Font.Gotham; btn.TextSize = 12; btn.TextXAlignment = Enum.TextXAlignment.Left
+                ySize = ySize + 30
+                
+                btn.MouseButton1Click:Connect(function()
+                    getgenv()[Var] = opt
+                    MainBtn.Text = "  " .. Text .. ": " .. tostring(opt)
+                    Container.Size = UDim2.new(1, -10, 0, 40)
+                    isOpen = false
+                end)
+            end
+            Scroll.CanvasSize = UDim2.new(0, 0, 0, ySize)
+            Container.Size = UDim2.new(1, -10, 0, 140) 
+        else
+            Container.Size = UDim2.new(1, -10, 0, 40) 
+        end
+    end)
+end
+
+-- ========================================== --
+-- [[ SISTEM INVENTORY & SLOT ]]
+-- ========================================== --
 local function ScanAvailableItems()
     local items = {}; local dict = {}
     pcall(function()
@@ -111,10 +159,34 @@ local function ScanAvailableItems()
     return items
 end
 
+-- FUNGSI BARU: Ambil Slot ID berdasarkan Item
+local function GetSlotByItemID(itemID)
+    local foundSlot = nil
+    pcall(function()
+        if InventoryMod and InventoryMod.Stacks then
+            for slot, data in pairs(InventoryMod.Stacks) do
+                if type(data) == "table" and tostring(data.Id) == tostring(itemID) then
+                    foundSlot = slot
+                    break
+                end
+            end
+        end
+    end)
+    return foundSlot
+end
+
+CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
+CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
+CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
+CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
+CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
+CreateInput(TargetPage, "🌿 Plant Delay", "PlantDelay", 0.15)
+
 -- ========================================== --
--- [[ RADAR INVERTED & A-STAR ]]
+-- [[ RADAR INVERTED (ANTI MENTOK) ]]
 -- ========================================== --
 local BlockSolidityCache = {}
+
 local function IsTileSolid(gridX, gridY)
     if gridX < 0 or gridX > 100 then return true end
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
@@ -122,17 +194,23 @@ local function IsTileSolid(gridX, gridY)
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = rawId
-        if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
+        if type(rawId) == "number" and WorldManager.NumberToStringMap then
+            tileString = WorldManager.NumberToStringMap[rawId] or rawId
+        end
         local nameStr = tostring(tileString):lower()
         
         if BlockSolidityCache[nameStr] ~= nil then 
-            if BlockSolidityCache[nameStr] == true then return true end; continue 
+            if BlockSolidityCache[nameStr] == true then return true end
+            continue 
         end
 
         if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "door") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
-            BlockSolidityCache[nameStr] = false; continue 
+            BlockSolidityCache[nameStr] = false
+            continue 
         end
-        BlockSolidityCache[nameStr] = true; return true
+        
+        BlockSolidityCache[nameStr] = true
+        return true
     end
     return false
 end
@@ -142,7 +220,9 @@ local function IsTileEmptyForPlant(gridX, gridY)
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = rawId
-        if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
+        if type(rawId) == "number" and WorldManager.NumberToStringMap then
+            tileString = WorldManager.NumberToStringMap[rawId] or rawId
+        end
         local nameStr = tostring(tileString):lower()
         if not string.find(nameStr, "bg") and not string.find(nameStr, "background") and not string.find(nameStr, "air") and not string.find(nameStr, "water") then 
             return false
@@ -151,31 +231,41 @@ local function IsTileEmptyForPlant(gridX, gridY)
     return true
 end
 
+-- ========================================== --
+-- [[ A-STAR & MOVEMENT ]]
+-- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
     local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
     local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
+
     local startKey = startX .. "," .. startY
     table.insert(openSet, {x = startX, y = startY, key = startKey})
     gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
-    local maxIterations, iterations = 2000, 0
+
+    local maxIterations, iterations = 5000, 0
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
     while #openSet > 0 do
         iterations = iterations + 1; if iterations > maxIterations then break end
+
         local current, currentIndex = openSet[1], 1
-        for i = 2, #openSet do if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end end
+        for i = 2, #openSet do
+            if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end
+        end
 
         if current.x == targetX and current.y == targetY then
             local path, currKey = {}, current.key
             while cameFrom[currKey] do
-                local node = cameFrom[currKey]; table.insert(path, 1, {x = current.x, y = current.y})
+                local node = cameFrom[currKey]
+                table.insert(path, 1, {x = current.x, y = current.y})
                 current = node; currKey = node.x .. "," .. node.y
             end
             return path
         end
 
         table.remove(openSet, currentIndex); closedSet[current.key] = true
+
         for _, dir in ipairs(directions) do
             local nextX, nextY = current.x + dir[1], current.y + dir[2]
             local nextKey = nextX .. "," .. nextY
@@ -207,7 +297,7 @@ local function SmoothWalkTo(targetPos)
     if duration > 0 then 
         local t = 0
         while t < duration do
-            if not getgenv().EnablePabrik then return false end
+            if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then return false end
             local dt = RunService.Heartbeat:Wait()
             t = t + dt
             local alpha = math.clamp(t / duration, 0, 1)
@@ -233,11 +323,12 @@ local function MoveSmartlyTo(targetX, targetY)
     local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
 
     if myGridX == targetX and myGridY == targetY then return true end
+    
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     if not route then return false end
 
     for _, stepPos in ipairs(route) do
-        if not getgenv().EnablePabrik then break end
+        if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then break end
         local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
         if not SmoothWalkTo(pos) then return false end
     end
@@ -245,8 +336,37 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ SMART AI HARVEST WAKTU ]]
+-- [[ SCANNER DATABASE WAKTU TUMBUH ]]
 -- ========================================== --
+local SaplingsData = {}
+
+local function ScanWorld()
+    SaplingsData = {}
+    for x, yCol in pairs(RawWorldTiles) do
+        if type(yCol) == "table" then
+            for y, layers in pairs(yCol) do
+                if type(layers) == "table" then
+                    for layer, data in pairs(layers) do
+                        local rawId = type(data) == "table" and data[1] or data
+                        local tileInfo = type(data) == "table" and data[2] or nil
+                        
+                        local tileString = rawId
+                        if type(rawId) == "number" and WorldManager.NumberToStringMap then
+                            tileString = WorldManager.NumberToStringMap[rawId] or rawId
+                        end
+                        
+                        if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
+                            if tileInfo and tileInfo.at then
+                                table.insert(SaplingsData, {x = x, y = y, name = tileString, at = tileInfo.at})
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 local function DeepFindGrowTime(tbl)
     if type(tbl) ~= "table" then return nil end
     for k, v in pairs(tbl) do
@@ -279,9 +399,9 @@ end
 local function BackupAIBelajarWaktu(sapling)
     local sampai = MoveSmartlyTo(sapling.x, sapling.y)
     if not sampai then return false end
+    
     local timer = 0
     while timer < 30 do
-        if not getgenv().EnablePabrik then return false end
         local hover = workspace:FindFirstChild("HoverPart")
         if hover then
             for _, v in pairs(hover:GetDescendants()) do
@@ -291,12 +411,15 @@ local function BackupAIBelajarWaktu(sapling)
                         local jam = tonumber(string.match(text, "(%d+)h")) or 0
                         local menit = tonumber(string.match(text, "(%d+)m")) or 0
                         local detik = tonumber(string.match(text, "(%d+)s")) or 0
+                        
                         local isReady = string.find(text, "harvest") or string.find(text, "100%%")
                         local sisaWaktuLayar = (jam * 3600) + (menit * 60) + detik
                         if isReady then sisaWaktuLayar = 0 end
+                        
                         local umurSekarang = os.time() - sapling.at
                         local totalDurasi = umurSekarang + sisaWaktuLayar
                         totalDurasi = math.floor((totalDurasi + 5) / 10) * 10
+                        
                         getgenv().AIDictionary[sapling.name] = totalDurasi
                         return true
                     end
@@ -309,282 +432,121 @@ local function BackupAIBelajarWaktu(sapling)
 end
 
 -- ========================================== --
--- [[ UTILS PABRIK LAINNYA ]]
+-- [[ AUTO FARM / HARVEST LOGIC ]]
 -- ========================================== --
-local function CheckDropsAtGrid(TargetGridX, TargetGridY)
-    local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
-    for _, folder in ipairs(TargetFolders) do
-        if folder then
-            for _, obj in pairs(folder:GetChildren()) do
-                local pos = nil
-                if obj:IsA("BasePart") then pos = obj.Position
-                elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
-                elseif obj:IsA("Model") then
-                    local firstPart = obj:FindFirstChildWhichIsA("BasePart"); if firstPart then pos = firstPart.Position end
+if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
+getgenv().KzoyzAutoFarmLoop = task.spawn(function()
+    while true do
+        if getgenv().EnableSmartHarvest then
+            ScanWorld()
+            local targetPanen = {}
+
+            for _, sapling in ipairs(SaplingsData) do
+                if not getgenv().EnableSmartHarvest then break end
+                
+                local targetMatang = GetExactGrowTime(sapling.name)
+                
+                if not targetMatang then
+                    BackupAIBelajarWaktu(sapling)
+                    targetMatang = getgenv().AIDictionary[sapling.name]
                 end
-                if pos then
-                    local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
-                    local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
-                    if dX == TargetGridX and dY == TargetGridY then
-                        local isSapling = false
-                        for _, attrValue in pairs(obj:GetAttributes()) do if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end end
-                        if not isSapling then
-                            for _, child in ipairs(obj:GetDescendants()) do
-                                if child:IsA("StringValue") and string.find(string.lower(child.Value), "sapling") then isSapling = true; break end
-                                for _, attrValue in pairs(child:GetAttributes()) do if type(attrValue) == "string" and string.find(string.lower(attrValue), "sapling") then isSapling = true; break end end
-                                if isSapling then break end
-                            end
-                        end
-                        if isSapling then return true end
+                
+                if targetMatang then
+                    local umurServer1 = os.time() - sapling.at
+                    local umurServer2 = workspace:GetServerTimeNow() - sapling.at
+                    local umurAsli = math.max(umurServer1, umurServer2)
+
+                    if umurAsli >= targetMatang then
+                        table.insert(targetPanen, sapling)
                     end
                 end
             end
-        end
-    end
-    return false
-end
-
-local function DropItemLogic(targetID, dropAmount)
-    local slot = GetSlotByItemID(targetID)
-    if not slot then return false end
-    local dropRemote = RS:WaitForChild("Remotes"):FindFirstChild("PlayerDrop") or RS:WaitForChild("Remotes"):FindFirstChild("PlayerDropItem")
-    local promptRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):FindFirstChild("UIPromptEvent")
-    if dropRemote and promptRemote then
-        pcall(function() dropRemote:FireServer(slot) end); task.wait(0.2) 
-        pcall(function() promptRemote:FireServer({ ButtonAction = "drp", Inputs = { amt = tostring(dropAmount) } }) end); task.wait(0.1)
-        pcall(function() for _, gui in pairs(LP.PlayerGui:GetDescendants()) do if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end end end)
-        return true
-    end
-    return false
-end
-
-
--- ========================================== --
--- [[ UI MAKER (FRAME BIASA) ]]
--- ========================================== --
-for _, v in pairs(TargetPage:GetChildren()) do if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then v:Destroy() end end
-
-local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
-
-local TabNav = Instance.new("Frame", TargetPage); TabNav.Size = UDim2.new(1, 0, 0, 35); TabNav.BackgroundTransparency = 1; TabNav.ZIndex = 2
-local TabPabrikBtn = Instance.new("TextButton", TabNav); TabPabrikBtn.Size = UDim2.new(0.49, 0, 1, 0); TabPabrikBtn.BackgroundColor3 = Theme.Purple; TabPabrikBtn.Text = "Pabrik Config"; TabPabrikBtn.TextColor3 = Color3.new(1,1,1); TabPabrikBtn.Font = Enum.Font.GothamBold; TabPabrikBtn.TextSize = 11; Instance.new("UICorner", TabPabrikBtn).CornerRadius = UDim.new(0, 6)
-local TabAdvBtn = Instance.new("TextButton", TabNav); TabAdvBtn.Size = UDim2.new(0.49, 0, 1, 0); TabAdvBtn.Position = UDim2.new(0.51, 0, 0, 0); TabAdvBtn.BackgroundColor3 = Theme.Item; TabAdvBtn.Text = "Advanced & Delay"; TabAdvBtn.TextColor3 = Color3.new(1,1,1); TabAdvBtn.Font = Enum.Font.GothamBold; TabAdvBtn.TextSize = 11; Instance.new("UICorner", TabAdvBtn).CornerRadius = UDim.new(0, 6)
-
-local PageContainer = Instance.new("Frame", TargetPage); PageContainer.Size = UDim2.new(1, 0, 1, -45); PageContainer.Position = UDim2.new(0, 0, 0, 45); PageContainer.BackgroundTransparency = 1
-
-local PagePabrik = Instance.new("Frame", PageContainer); PagePabrik.Size = UDim2.new(1, 0, 0, 0); PagePabrik.BackgroundTransparency = 1; PagePabrik.AutomaticSize = Enum.AutomaticSize.Y
-local UIListPabrik = Instance.new("UIListLayout", PagePabrik); UIListPabrik.SortOrder = Enum.SortOrder.LayoutOrder; UIListPabrik.Padding = UDim.new(0, 5)
-
-local PageAdv = Instance.new("Frame", PageContainer); PageAdv.Size = UDim2.new(1, 0, 0, 0); PageAdv.BackgroundTransparency = 1; PageAdv.Visible = false; PageAdv.AutomaticSize = Enum.AutomaticSize.Y
-local UIListAdv = Instance.new("UIListLayout", PageAdv); UIListAdv.SortOrder = Enum.SortOrder.LayoutOrder; UIListAdv.Padding = UDim.new(0, 5)
-
-TabPabrikBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = true; PageAdv.Visible = false; TabPabrikBtn.BackgroundColor3 = Theme.Purple; TabAdvBtn.BackgroundColor3 = Theme.Item end)
-TabAdvBtn.MouseButton1Click:Connect(function() PagePabrik.Visible = false; PageAdv.Visible = true; TabPabrikBtn.BackgroundColor3 = Theme.Item; TabAdvBtn.BackgroundColor3 = Theme.Purple end)
-
-function CreateToggle(Parent, Text, Var) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = ""; local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6); local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left; local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); local IC = Instance.new("UICorner", IndBg); IC.CornerRadius = UDim.new(1,0); local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); local DC = Instance.new("UICorner", Dot); DC.CornerRadius = UDim.new(1,0); IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30); Btn.MouseButton1Click:Connect(function() getgenv()[Var] = not getgenv()[Var]; if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end end) end
-function CreateTextBox(Parent, Text, Default, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6); local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left; local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); local IC = Instance.new("UICorner", InputBox); IC.CornerRadius = UDim.new(0, 4); InputBox.FocusLost:Connect(function() local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end end); return InputBox end
-function CreateButton(Parent, Text, Callback) local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, -10, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; local C = Instance.new("UICorner", Btn); C.CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) end
-function CreateDropdown(Parent, Text, DefaultOptions, Var) local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Frame.ClipsDescendants = true; local C = Instance.new("UICorner", Frame); C.CornerRadius = UDim.new(0, 6); local TopBtn = Instance.new("TextButton", Frame); TopBtn.Size = UDim2.new(1, 0, 0, 35); TopBtn.BackgroundTransparency = 1; TopBtn.Text = ""; local Label = Instance.new("TextLabel", TopBtn); Label.Text = Text .. ": Not Selected"; Label.TextColor3 = Theme.Text; Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 11; Label.Size = UDim2.new(1, -20, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.BackgroundTransparency = 1; Label.TextXAlignment = Enum.TextXAlignment.Left; local Icon = Instance.new("TextLabel", TopBtn); Icon.Text = "v"; Icon.TextColor3 = Theme.Purple; Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 12; Icon.Size = UDim2.new(0, 20, 1, 0); Icon.Position = UDim2.new(1, -25, 0, 0); Icon.BackgroundTransparency = 1; local Scroll = Instance.new("ScrollingFrame", Frame); Scroll.Position = UDim2.new(0,0,0,35); Scroll.Size = UDim2.new(1,0,1,-35); Scroll.BackgroundTransparency = 1; Scroll.BorderSizePixel = 0; Scroll.ScrollBarThickness = 2; Scroll.ScrollBarImageColor3 = Theme.Purple; local List = Instance.new("UIListLayout", Scroll); local isOpen = false; TopBtn.MouseButton1Click:Connect(function() isOpen = not isOpen; if isOpen then Frame:TweenSize(UDim2.new(1, -10, 0, 110), "Out", "Quad", 0.2, true); Icon.Text = "^" else Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end end); local function RefreshOptions(Options) for _, child in ipairs(Scroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end; for _, opt in ipairs(Options) do local OptBtn = Instance.new("TextButton", Scroll); OptBtn.Size = UDim2.new(1, 0, 0, 25); OptBtn.BackgroundColor3 = Color3.fromRGB(35,35,35); OptBtn.TextColor3 = Theme.Text; OptBtn.Text = tostring(opt); OptBtn.Font = Enum.Font.Gotham; OptBtn.TextSize = 11; OptBtn.MouseButton1Click:Connect(function() getgenv()[Var] = opt; Label.Text = Text .. ": " .. tostring(opt); isOpen = false; Frame:TweenSize(UDim2.new(1, -10, 0, 35), "Out", "Quad", 0.2, true); Icon.Text = "v" end) end; Scroll.CanvasSize = UDim2.new(0, 0, 0, #Options * 25) end; RefreshOptions(DefaultOptions); return RefreshOptions end
-
--- TAB 1: PABRIK CONFIG
-CreateToggle(PagePabrik, "🚀 START SMART PABRIK", "EnablePabrik")
-local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
-local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
-CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
-
-local d1 = Instance.new("Frame", PagePabrik); d1.Size=UDim2.new(1,0,0,2); d1.BackgroundColor3=Theme.Purple; d1.BorderSizePixel=0
-CreateTextBox(PagePabrik, "Area Start X", getgenv().PabrikStartX, "PabrikStartX")
-CreateTextBox(PagePabrik, "Area End X", getgenv().PabrikEndX, "PabrikEndX")
-CreateTextBox(PagePabrik, "Area Start Y", getgenv().PabrikStartY, "PabrikStartY")
-CreateTextBox(PagePabrik, "Area End Y", getgenv().PabrikEndY, "PabrikEndY")
-
-local d2 = Instance.new("Frame", PagePabrik); d2.Size=UDim2.new(1,0,0,2); d2.BackgroundColor3=Theme.Purple; d2.BorderSizePixel=0
-CreateTextBox(PagePabrik, "Block Threshold (Sisa)", getgenv().BlockThreshold, "BlockThreshold")
-CreateTextBox(PagePabrik, "Keep Seed Amt (Sisa)", getgenv().KeepSeedAmt, "KeepSeedAmt")
-local Spacer1 = Instance.new("Frame", PagePabrik); Spacer1.Size = UDim2.new(1, 0, 0, 20); Spacer1.BackgroundTransparency = 1
-
--- TAB 2: ADVANCED
-CreateTextBox(PageAdv, "⚡ Walk Speed", getgenv().WalkSpeed, "WalkSpeed")
-CreateTextBox(PageAdv, "Place Delay (ms)", getgenv().PlaceDelay, "PlaceDelay")
-CreateTextBox(PageAdv, "Break Delay (ms)", getgenv().BreakDelay, "BreakDelay") 
-CreateTextBox(PageAdv, "Hit Count (Pukulan)", getgenv().HitCount, "HitCount")
-
-local d3 = Instance.new("Frame", PageAdv); d3.Size=UDim2.new(1,0,0,2); d3.BackgroundColor3=Theme.Purple; d3.BorderSizePixel=0
-local BreakXBox = CreateTextBox(PageAdv, "Break Pos X", getgenv().BreakPosX, "BreakPosX")
-local BreakYBox = CreateTextBox(PageAdv, "Break Pos Y", getgenv().BreakPosY, "BreakPosY")
-CreateButton(PageAdv, "📍 Set Break Pos (Kamu)", function() 
-    local H = workspace.Hitbox:FindFirstChild(LP.Name) 
-    if H then local bx = math.floor(H.Position.X/4.5+0.5); local by = math.floor(H.Position.Y/4.5+0.5); getgenv().BreakPosX = bx; getgenv().BreakPosY = by; BreakXBox.Text = tostring(bx); BreakYBox.Text = tostring(by) end 
-end)
-
-local d4 = Instance.new("Frame", PageAdv); d4.Size=UDim2.new(1,0,0,2); d4.BackgroundColor3=Theme.Purple; d4.BorderSizePixel=0
-local DropXBox = CreateTextBox(PageAdv, "Drop Pos X", getgenv().DropPosX, "DropPosX")
-local DropYBox = CreateTextBox(PageAdv, "Drop Pos Y", getgenv().DropPosY, "DropPosY")
-CreateButton(PageAdv, "📍 Set Drop Pos (Kamu)", function() 
-    local H = workspace.Hitbox:FindFirstChild(LP.Name) 
-    if H then local dx = math.floor(H.Position.X/4.5+0.5); local dy = math.floor(H.Position.Y/4.5+0.5); getgenv().DropPosX = dx; getgenv().DropPosY = dy; DropXBox.Text = tostring(dx); DropYBox.Text = tostring(dy) end 
-end)
-local Spacer2 = Instance.new("Frame", PageAdv); Spacer2.Size = UDim2.new(1, 0, 0, 20); Spacer2.BackgroundTransparency = 1
-
-
--- ========================================== --
--- [[ LOGIKA UTAMA: SMART PABRIK ]]
--- ========================================== --
-task.spawn(function()
-    while true do
-        if getgenv().EnablePabrik then
-            if getgenv().SelectedSeed == "Kosong" or getgenv().SelectedBlock == "Kosong" then task.wait(2); continue end
             
-            local targetPanen = {}
+            for _, panen in ipairs(targetPanen) do
+                if not getgenv().EnableSmartHarvest then break end
+                local bisaJalan = MoveSmartlyTo(panen.x, panen.y)
+                if bisaJalan then
+                    task.wait(0.1)
+                    pcall(function() 
+                        local targetVec = Vector2.new(panen.x, panen.y)
+                        if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
+                        else RemoteFist:InvokeServer(targetVec) end
+                    end)
+                    task.wait(getgenv().BreakDelay)
+                end
+            end
+        end
+        task.wait(1) 
+    end
+end)
+
+-- ========================================== --
+-- [[ AUTO PLANT LOGIC (SLOT TAS FIX) ]]
+-- ========================================== --
+if getgenv().KzoyzAutoPlantLoop then task.cancel(getgenv().KzoyzAutoPlantLoop) end
+getgenv().KzoyzAutoPlantLoop = task.spawn(function()
+    while true do
+        if getgenv().EnableAutoPlant and not getgenv().EnableSmartHarvest then 
             local targetTanam = {}
-
-            -- 1. SCAN WORLD (Sesuai Batas X dan Y)
-            local sX, eX = math.min(getgenv().PabrikStartX, getgenv().PabrikEndX), math.max(getgenv().PabrikStartX, getgenv().PabrikEndX)
-            local sY, eY = math.min(getgenv().PabrikStartY, getgenv().PabrikEndY), math.max(getgenv().PabrikStartY, getgenv().PabrikEndY)
-
-            for x = sX, eX do
-                if not getgenv().EnablePabrik then break end
+            
+            -- Scan X berurutan dari 0 sampai 100 biar bot jalannya rapi dari kiri ke kanan
+            for x = 0, 100 do
                 local yCol = RawWorldTiles[x]
                 if type(yCol) == "table" then
-                    for y = sY, eY do
-                        if type(yCol[y]) == "table" then
-                            -- Cek Tanam
-                            if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) and (y + 1 <= eY) then
-                                table.insert(targetTanam, {x = x, y = y + 1})
-                            end
-                            
-                            -- Cek Panen (Sapling Detection)
-                            for layer, data in pairs(yCol[y]) do
-                                local rawId = type(data) == "table" and data[1] or data
-                                local tileInfo = type(data) == "table" and data[2] or nil
-                                local tileStr = rawId
-                                if type(rawId) == "number" and WorldManager.NumberToStringMap then tileStr = WorldManager.NumberToStringMap[rawId] or rawId end
-                                
-                                if type(tileStr) == "string" and string.find(string.lower(tileStr), "sapling") and tileInfo and tileInfo.at then
-                                    local sapling = {x = x, y = y, name = tileStr, at = tileInfo.at}
-                                    local targetMatang = GetExactGrowTime(sapling.name)
-                                    if not targetMatang then
-                                        BackupAIBelajarWaktu(sapling); targetMatang = getgenv().AIDictionary[sapling.name]
-                                    end
-                                    if targetMatang then
-                                        local umurServer1 = os.time() - sapling.at
-                                        local umurServer2 = workspace:GetServerTimeNow() - sapling.at
-                                        if math.max(umurServer1, umurServer2) >= targetMatang then table.insert(targetPanen, sapling) end
-                                    end
-                                end
-                            end
-                        end
+                    local yKeys = {}
+                    for y, _ in pairs(yCol) do
+                        table.insert(yKeys, y)
                     end
-                end
-            end
-
-            -- 2. EKSEKUSI PANEN DULU
-            if #targetPanen > 0 then
-                for _, panen in ipairs(targetPanen) do
-                    if not getgenv().EnablePabrik then break end
-                    if MoveSmartlyTo(panen.x, panen.y) then
-                        task.wait(0.1)
-                        pcall(function() 
-                            local targetVec = Vector2.new(panen.x, panen.y)
-                            if RemoteBreak:IsA("RemoteEvent") then RemoteBreak:FireServer(targetVec) else RemoteBreak:InvokeServer(targetVec) end
-                        end)
-                        task.wait(getgenv().BreakDelay)
-                    end
-                end
-            end
-
-            -- 3. EKSEKUSI TANAM
-            if #targetTanam > 0 and getgenv().EnablePabrik then
-                local seedSlot = GetSlotByItemID(getgenv().SelectedSeed)
-                if seedSlot then
-                    for _, spot in ipairs(targetTanam) do
-                        if not getgenv().EnablePabrik then break end
-                        if MoveSmartlyTo(spot.x, spot.y) then
-                            task.wait(0.1)
-                            pcall(function() 
-                                local targetVec = Vector2.new(spot.x, spot.y); local targetStr = spot.x .. ", " .. spot.y
-                                if RemotePlace:IsA("RemoteEvent") then 
-                                    RemotePlace:FireServer(targetVec, seedSlot); RemotePlace:FireServer(targetStr, seedSlot) 
-                                else RemotePlace:InvokeServer(targetVec, seedSlot) end
-                            end)
-                            task.wait(getgenv().PlaceDelay)
-                        end
-                    end
-                end
-            end
-
-            -- 4. JIKA KOSONG (LAGI NUNGGU TUMBUH) -> FARMING BLOCK!
-            if #targetPanen == 0 and #targetTanam == 0 and getgenv().EnablePabrik then
-                local currentAmt = GetItemAmountByID(getgenv().SelectedBlock)
-                if currentAmt > getgenv().BlockThreshold then
+                    table.sort(yKeys)
                     
-                    if MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY) then
-                        local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
-                        local blockSlot = GetSlotByItemID(getgenv().SelectedBlock)
+                    for _, y in ipairs(yKeys) do
+                        if not getgenv().EnableAutoPlant then break end
                         
-                        if blockSlot then
-                            RemotePlace:FireServer(BreakTarget, blockSlot); task.wait(getgenv().PlaceDelay + 0.1) 
-                            
-                            for hit = 1, getgenv().HitCount do
-                                if not getgenv().EnablePabrik then break end
-                                RemoteBreak:FireServer(BreakTarget); task.wait(getgenv().BreakDelay)
-                            end
-                            
-                            -- Smart Collect (Ghosting)
-                            if CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) then
-                                local char = LP.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                                local ExactHrpCF = hrp and hrp.CFrame
-                                
-                                if hrp then getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true end
-                                if hum then
-                                    local animator = hum:FindFirstChildOfClass("Animator")
-                                    local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
-                                    for _, track in ipairs(tracks) do track:Stop(0) end
-                                end
-                                
-                                MoveSmartlyTo(BreakTarget.X, BreakTarget.Y)
-                                local waitTimeout = 0
-                                while CheckDropsAtGrid(BreakTarget.X, BreakTarget.Y) and waitTimeout < 15 and getgenv().EnablePabrik do
-                                    task.wait(0.1); waitTimeout = waitTimeout + 1
-                                end
-                                
-                                task.wait(0.1); MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY)
-                                
-                                if hrp and ExactHrpCF then 
-                                    hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
-                                    hrp.CFrame = ExactHrpCF; RunService.Heartbeat:Wait()
-                                    hrp.Anchored = false 
-                                end
-                                getgenv().IsGhosting = false 
-                            end
+                        -- Cari spot KOSONG tepat di ATAS tanah
+                        if IsTileSolid(x, y) and IsTileEmptyForPlant(x, y + 1) then
+                            table.insert(targetTanam, {x = x, y = y + 1})
                         end
                     end
                 end
             end
-
-            -- 5. AUTO DROP SEED KALO KEPENUHAN
-            if getgenv().EnablePabrik then
-                local currentSeedAmt = GetItemAmountByID(getgenv().SelectedSeed)
-                if currentSeedAmt > getgenv().KeepSeedAmt then
-                    if MoveSmartlyTo(getgenv().DropPosX, getgenv().DropPosY) then
-                        task.wait(1.5)
-                        while getgenv().EnablePabrik do
-                            local current = GetItemAmountByID(getgenv().SelectedSeed)
-                            local toDrop = current - getgenv().KeepSeedAmt
-                            if toDrop <= 0 then break end
-                            local dropNow = math.min(toDrop, 200)
-                            if DropItemLogic(getgenv().SelectedSeed, dropNow) then task.wait(getgenv().DropDelay + 0.3) else break end
-                        end
-                        -- Force restore UI setelah drop prompt
-                        pcall(function() if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end; for _, gui in pairs(LP.PlayerGui:GetDescendants()) do if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end end end)
+            
+            for _, spot in ipairs(targetTanam) do
+                if not getgenv().EnableAutoPlant or getgenv().EnableSmartHarvest then break end
+                
+                local bibit = getgenv().SelectedSeed
+                if bibit ~= "Kosong" and bibit ~= "None" then 
+                    
+                    -- Cari NOMOR SLOT dari bibit yang dipilih
+                    local seedSlot = GetSlotByItemID(bibit)
+                    
+                    if not seedSlot then
+                        warn("⚠️ Bibit " .. tostring(bibit) .. " nggak ketemu di tas / Habis!")
+                        getgenv().EnableAutoPlant = false
+                        break
+                    end
+                    
+                    local bisaJalan = MoveSmartlyTo(spot.x, spot.y)
+                    if bisaJalan then
                         task.wait(0.1)
-                        pcall(function() if UIManager then if type(UIManager.ShowHUD) == "function" then UIManager:ShowHUD() end end end)
+                        
+                        pcall(function() 
+                            local targetVec = Vector2.new(spot.x, spot.y)
+                            local targetStr = tostring(spot.x) .. ", " .. tostring(spot.y)
+                            
+                            -- Nanam pakai RemotePlace (PlayerPlaceItem) dengan argument NOMOR SLOT tas
+                            if RemotePlace:IsA("RemoteEvent") then 
+                                RemotePlace:FireServer(targetVec, seedSlot) 
+                                RemotePlace:FireServer(targetStr, seedSlot) 
+                            else 
+                                RemotePlace:InvokeServer(targetVec, seedSlot) 
+                            end
+                        end)
+                        
+                        task.wait(getgenv().PlantDelay)
                     end
                 end
             end
-
         end
-        task.wait(0.5)
+        task.wait(1.5) 
     end
 end)
