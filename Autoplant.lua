@@ -198,7 +198,7 @@ function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
 end
 
 CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
-CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
+CreateToggle(TargetPage, "🌱 START AUTO PPLA", "EnableAutoPlant")
 CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
 CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
