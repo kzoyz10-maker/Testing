@@ -14,7 +14,7 @@ if listLayout then
 end
 ------------------------------
 
-getgenv().ScriptVersion = "Manager v1.8-DualTab+SpamChat" 
+getgenv().ScriptVersion = "Manager v1.9-StreamerMode" 
 
 -- ========================================== --
 getgenv().DropDelay = 2     
@@ -44,11 +44,15 @@ getgenv().TrashAmount = 50
 getgenv().TargetPosX = 0
 getgenv().TargetPosY = 0
 
--- Variabel Auto Chat Baru
+-- Variabel Auto Chat 
 getgenv().AutoChat = false
 getgenv().ChatText = "Halo Semuanya"
 getgenv().ChatDelay = 3
 getgenv().ChatRandomLetter = true
+
+-- Variabel Hide Name (Streamer Mode)
+getgenv().HideName = false
+getgenv().FakeNameText = "KzoyzPlayer"
 
 -- Ambil UIManager buat bersihin sisa Prompt
 local UIManager
@@ -130,7 +134,6 @@ function CreateToggle(Parent, Text, Var, OnToggle)
     end) 
 end
 
--- Diupgrade biar TextBox bisa handle tulisan string selain angka
 function CreateTextBox(Parent, Text, Default, Var) 
     local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, -10, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
     local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
@@ -142,7 +145,7 @@ function CreateTextBox(Parent, Text, Default, Var)
             local val = tonumber(InputBox.Text)
             if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end 
         else
-            getgenv()[Var] = InputBox.Text -- Kalo string, simpan langsung
+            getgenv()[Var] = InputBox.Text 
         end
     end)
     return InputBox 
@@ -233,6 +236,16 @@ CreateTextBox(PageManager, "⏱️ Trash Delay (Detik)", 2, "TrashDelay")
 
 CreateToggle(PageManager, "🔨 Auto Ban Players (World)", "AutoBan", function(state) if not state then ForceRestoreUI() end end)
 
+-- UI STREAMER MODE
+local StreamerFrame = Instance.new("Frame", PageManager)
+StreamerFrame.Size = UDim2.new(1, -10, 0, 2)
+StreamerFrame.BackgroundColor3 = Theme.Purple
+StreamerFrame.BorderSizePixel = 0
+
+CreateToggle(PageManager, "👁️ Hide/Spoof Name (Client)", "HideName")
+CreateTextBox(PageManager, "✍️ Custom Fake Name", "KzoyzPlayer", "FakeNameText")
+
+
 -- ========================================== --
 -- [[ ISI UI PAGE AUTO CHAT ]]
 -- ========================================== --
@@ -253,6 +266,39 @@ local ChatRemote = RS:WaitForChild("CB")
 
 RunService.RenderStepped:Connect(function() if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end end)
 
+-- [[ LOGIKA STREAMER MODE / SPOOF NAME (VISUAL ONLY) ]]
+task.spawn(function()
+    local realName = LP.Name
+    local realDisplay = LP.DisplayName
+    
+    while true do
+        if getgenv().HideName then
+            local fakeName = (getgenv().FakeNameText == "" or getgenv().FakeNameText == " ") and "HiddenPlayer" or getgenv().FakeNameText
+            
+            local function ReplaceSafe(obj)
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                    if obj.Text:find(realName) or obj.Text:find(realDisplay) then
+                        local newText = string.gsub(obj.Text, realName, fakeName)
+                        newText = string.gsub(newText, realDisplay, fakeName)
+                        if obj.Text ~= newText then obj.Text = newText end
+                    end
+                end
+            end
+            
+            -- Ganti teks di atas kepala karakter
+            if LP.Character then
+                for _, v in pairs(LP.Character:GetDescendants()) do ReplaceSafe(v) end
+            end
+            
+            -- Ganti teks di dalam UI (Leaderboard, Chatlog, dll)
+            if LP:FindFirstChild("PlayerGui") then
+                for _, v in pairs(LP.PlayerGui:GetDescendants()) do ReplaceSafe(v) end
+            end
+        end
+        task.wait(1) -- Cek setiap 1 detik biar game lu ngga ngelag
+    end
+end)
+
 
 -- [[ LOGIKA AUTO CHAT SPAM ]]
 task.spawn(function()
@@ -260,20 +306,13 @@ task.spawn(function()
     while true do
         if getgenv().AutoChat then
             local currentMsg = getgenv().ChatText
-            
-            -- Jika dicentang, tambahin huruf acak di akhir pesan misal: "Halo Semuanya [z]"
             if getgenv().ChatRandomLetter then
                 local rand = math.random(1, #charset)
                 local rChar = string.sub(charset, rand, rand)
                 currentMsg = currentMsg .. " [" .. rChar .. "]"
             end
-            
-            -- Tembak ke remote chat
-            pcall(function()
-                ChatRemote:FireServer(currentMsg)
-            end)
-            
-            task.wait(getgenv().ChatDelay) -- Tunggu sesuai inputan TextBox lu
+            pcall(function() ChatRemote:FireServer(currentMsg) end)
+            task.wait(getgenv().ChatDelay) 
         else
             task.wait(0.5)
         end
@@ -284,38 +323,26 @@ end)
 -- [[ FUNGSI EKSEKUSI BAN ]]
 local function ExecuteBan(targetPlayer)
     if targetPlayer == LP then return end
-    
     pcall(function() RemoteInspect:FireServer(targetPlayer) end)
     task.wait(0.1) 
-    
     pcall(function() ManagerRemote:FireServer({ButtonAction = "ban", Inputs = {}}) end)
-    
     pcall(function()
         if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
         for _, gui in pairs(LP.PlayerGui:GetDescendants()) do
-            if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then 
-                gui.Visible = false 
-            end
+            if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end
         end
     end)
 end
 
--- [[ LOGIKA AUTO BAN (REAL-TIME EVENT) ]]
 Players.PlayerAdded:Connect(function(newPlayer)
-    if getgenv().AutoBan then
-        ExecuteBan(newPlayer)
-    end
+    if getgenv().AutoBan then ExecuteBan(newPlayer) end
 end)
 
--- [[ LOGIKA AUTO BAN (LOOP BACKUP) ]]
 task.spawn(function()
     while true do
         if getgenv().AutoBan then
             for _, targetPlayer in ipairs(Players:GetPlayers()) do
-                if targetPlayer ~= LP then
-                    ExecuteBan(targetPlayer)
-                    task.wait(0.2) 
-                end
+                if targetPlayer ~= LP then ExecuteBan(targetPlayer); task.wait(0.2) end
             end
         end
         task.wait(0.5) 
@@ -342,7 +369,6 @@ task.spawn(function()
             end); 
             task.wait(0.2)
             pcall(function() ManagerRemote:FireServer(unpack({{ ButtonAction = "drp", Inputs = { amt = tostring(Amt) } }})) end)
-            
             pcall(function() for _, gui in pairs(LP.PlayerGui:GetDescendants()) do if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end end end)
             task.wait(getgenv().DropDelay) 
         else
@@ -372,7 +398,6 @@ task.spawn(function()
             end); 
             task.wait(0.2)
             pcall(function() ManagerRemote:FireServer(unpack({{ ButtonAction = "trsh", Inputs = { amt = tostring(Amt) } }})) end)
-            
             pcall(function() for _, gui in pairs(LP.PlayerGui:GetDescendants()) do if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end end end)
             task.wait(getgenv().TrashDelay)
         else
