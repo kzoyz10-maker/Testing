@@ -1,7 +1,7 @@
 local TargetPage = ...
 if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
 
-getgenv().ScriptVersion = "Pabrik v0.98 - SWEEP +1 & TRUE GHOST COLLECT" 
+getgenv().ScriptVersion = "Pabrik v0.99 - SWEEP PER-BARIS & ANTI BENGONG" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -82,9 +82,7 @@ getgenv().InventoryCacheNameMap = {}
 
 local function GetItemName(rawId)
     if type(rawId) == "string" then return rawId end
-    if WorldManager and WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] then
-        return WorldManager.NumberToStringMap[rawId]
-    end
+    if WorldManager and WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] then return WorldManager.NumberToStringMap[rawId] end
     if ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[rawId] then
         local data = ItemsManager.ItemsData[rawId]
         if type(data) == "table" and data.Name then return data.Name end
@@ -140,7 +138,7 @@ local function ScanAvailableItems()
 end
 
 -- ========================================== --
--- [[ RADAR INVERTED & MOVEMENT ]]
+-- [[ RADAR INVERTED & A-STAR ]]
 -- ========================================== --
 local BlockSolidityCache = {}
 local function IsTileSolid(gridX, gridY)
@@ -190,16 +188,13 @@ local function FindPathAStar(startX, startY, targetX, targetY)
         iterations = iterations + 1; if iterations > maxIterations then break end
         local current, currentIndex = openSet[1], 1
         for i = 2, #openSet do if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end end
-
         if current.x == targetX and current.y == targetY then
             local path, currKey = {}, current.key
             while cameFrom[currKey] do
-                local node = cameFrom[currKey]; table.insert(path, 1, {x = current.x, y = current.y})
-                current = node; currKey = node.x .. "," .. node.y
+                local node = cameFrom[currKey]; table.insert(path, 1, {x = current.x, y = current.y}); current = node; currKey = node.x .. "," .. node.y
             end
             return path
         end
-
         table.remove(openSet, currentIndex); closedSet[current.key] = true
         for _, dir in ipairs(directions) do
             local nextX, nextY = current.x + dir[1], current.y + dir[2]
@@ -224,7 +219,6 @@ end
 local function SmoothWalkTo(targetPos)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
-    
     local startPos = MyHitbox.Position
     local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
     local duration = dist / getgenv().WalkSpeed
@@ -240,7 +234,6 @@ local function SmoothWalkTo(targetPos)
             if PlayerMovement then pcall(function() PlayerMovement.Position = startPos:Lerp(targetPos, alpha) end) end
         end
     end
-    
     MyHitbox.CFrame = CFrame.new(targetPos)
     if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
     task.wait(0.02) 
@@ -329,7 +322,7 @@ local function BackupAIBelajarWaktu(sapling)
 end
 
 -- ========================================== --
--- [[ LOGIKA GHOST COLLECT DARI KK.TXT ]]
+-- [[ GHOST COLLECT & UTILS ]]
 -- ========================================== --
 local function CheckDropsType(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
@@ -342,14 +335,12 @@ local function CheckDropsType(TargetGridX, TargetGridY)
                 if obj:IsA("BasePart") then pos = obj.Position
                 elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
                 elseif obj:IsA("Model") then
-                    local firstPart = obj:FindFirstChildWhichIsA("BasePart")
-                    if firstPart then pos = firstPart.Position end
+                    local firstPart = obj:FindFirstChildWhichIsA("BasePart"); if firstPart then pos = firstPart.Position end
                 end
                 
                 if pos then
                     local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
                     local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
-                    
                     if dX == TargetGridX and dY == TargetGridY then
                         hasAny = true
                         local isSapling = false
@@ -374,7 +365,6 @@ local function CheckDropsType(TargetGridX, TargetGridY)
     return hasAny, hasSapling
 end
 
--- TRUE GHOST COLLECT MURNI ADAPTASI DARI KK.TXT
 local function TrueGhostCollect(targetX, targetY, collectSaplingOnly)
     local char = LP.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -387,9 +377,7 @@ local function TrueGhostCollect(targetX, targetY, collectSaplingOnly)
     local ExactPMPos = nil
     if PlayerMovement then pcall(function() ExactPMPos = PlayerMovement.Position end) end
 
-    if hrp then 
-        getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true 
-    end
+    if hrp then getgenv().HoldCFrame = ExactHrpCF; hrp.Anchored = true; getgenv().IsGhosting = true end
     if hum then
         local animator = hum:FindFirstChildOfClass("Animator")
         local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
@@ -401,11 +389,7 @@ local function TrueGhostCollect(targetX, targetY, collectSaplingOnly)
     local waitTimeout = 0
     while waitTimeout < 15 and getgenv().EnablePabrik do
         local anyDrop, sapDrop = CheckDropsType(targetX, targetY)
-        if collectSaplingOnly then
-            if not sapDrop then break end 
-        else
-            if not anyDrop then break end 
-        end
+        if collectSaplingOnly then if not sapDrop then break end else if not anyDrop then break end end
         task.wait(0.1); waitTimeout = waitTimeout + 1
     end
     
@@ -496,11 +480,11 @@ local function CreateDropdown(Parent, Text, DefaultOptions, Var)
     RefreshOptions(DefaultOptions); return RefreshOptions 
 end
 
-CreateToggle(PagePabrik, "🚀 START SMART PABRIK", "EnablePabrik")
+CreateToggle(PagePabrik, "START SMART PABRIK", "EnablePabrik")
 CreateToggle(PagePabrik, "Auto Collect Sapling (Pas Break)", "OnlyCollectSapling")
 local RefreshSeedDropdown = CreateDropdown(PagePabrik, "Pilih Seed", ScanAvailableItems(), "SelectedSeed")
 local RefreshBlockDropdown = CreateDropdown(PagePabrik, "Pilih Block", ScanAvailableItems(), "SelectedBlock")
-CreateButton(PagePabrik, "🔄 Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
+CreateButton(PagePabrik, "Refresh Tas Item", function() local newItems = ScanAvailableItems(); RefreshSeedDropdown(newItems); RefreshBlockDropdown(newItems) end)
 
 local d1 = Instance.new("Frame", PagePabrik); d1.Size=UDim2.new(1,0,0,2); d1.BackgroundColor3=Theme.Purple; d1.BorderSizePixel=0
 CreateTextBox(PagePabrik, "Area Start X", getgenv().PabrikStartX, "PabrikStartX")
@@ -565,11 +549,9 @@ task.spawn(function()
                     for x = loopStartX, loopEndX, step do
                         local yCol = RawWorldTiles[x]
                         if type(yCol) == "table" then
-                            -- Cek Tanam
                             if IsTileSolid(x, y - 1) and IsTileEmptyForPlant(x, y) then
                                 table.insert(targetTanam, {x = x, y = y})
                             end
-                            -- Cek Panen
                             if type(yCol[y]) == "table" then
                                 for layer, data in pairs(yCol[y]) do
                                     local rawId = type(data) == "table" and data[1] or data
@@ -602,13 +584,17 @@ task.spawn(function()
                     end
                 end
 
-                -- 2. EKSEKUSI PANEN + SWEEP (+1 Langkah Ekstra)
-                if #targetPanen > 0 then
-                    local lastX, lastY = nil, nil
-                    local stepDir = 1
-                    
-                    for _, panen in ipairs(targetPanen) do
+                -- FLAG ANTI BENGONG
+                local didHarvest = (#targetPanen > 0)
+                local canPlant = (#targetTanam > 0)
+                local seedSlot = GetSlotByItemName(getgenv().SelectedSeed)
+                local didPlant = (canPlant and seedSlot ~= nil)
+
+                -- 2. EKSEKUSI PANEN + SWEEP (+1 Langkah Ekstra PER-BARIS Y)
+                if didHarvest then
+                    for i, panen in ipairs(targetPanen) do
                         if not getgenv().EnablePabrik then break end
+                        
                         if MoveSmartlyTo(panen.x, panen.y) then
                             task.wait(0.1)
                             pcall(function() 
@@ -616,57 +602,60 @@ task.spawn(function()
                                 if RemoteBreak:IsA("RemoteEvent") then RemoteBreak:FireServer(targetVec) else RemoteBreak:InvokeServer(targetVec) end
                             end)
                             task.wait(getgenv().BreakDelay)
-                            
-                            lastX = panen.x
-                            lastY = panen.y
-                            stepDir = (panen.y % 2 == 0) and 1 or -1
                         end
-                    end
-                    
-                    -- Sweep +1 kotak kedepan
-                    if lastX and lastY and getgenv().EnablePabrik then
-                        MoveSmartlyTo(lastX + stepDir, lastY)
-                        task.wait(0.3) 
+                        
+                        -- CEK APAKAH INI AKHIR DARI BARIS Y INI?
+                        local nextPanen = targetPanen[i + 1]
+                        if not nextPanen or nextPanen.y ~= panen.y then
+                            -- Sweep 1 kotak kedepan
+                            local stepDir = (panen.y % 2 == 0) and 1 or -1
+                            MoveSmartlyTo(panen.x + stepDir, panen.y)
+                            task.wait(0.3) 
+                        end
                     end
                 end
 
                 -- 3. EKSEKUSI TANAM
-                if #targetTanam > 0 and getgenv().EnablePabrik then
-                    local seedSlot = GetSlotByItemName(getgenv().SelectedSeed)
-                    if seedSlot then
-                        for _, spot in ipairs(targetTanam) do
-                            if not getgenv().EnablePabrik then break end
-                            if MoveSmartlyTo(spot.x, spot.y) then
-                                task.wait(0.1)
-                                pcall(function() 
-                                    local targetVec = Vector2.new(spot.x, spot.y); local targetStr = spot.x .. ", " .. spot.y
-                                    if RemotePlace:IsA("RemoteEvent") then 
-                                        RemotePlace:FireServer(targetVec, seedSlot); RemotePlace:FireServer(targetStr, seedSlot) 
-                                    else RemotePlace:InvokeServer(targetVec, seedSlot) end
-                                end)
-                                task.wait(getgenv().PlaceDelay)
-                            end
+                if didPlant then
+                    for _, spot in ipairs(targetTanam) do
+                        if not getgenv().EnablePabrik then break end
+                        
+                        -- Cek lagi buat jaga-jaga kalau bibit habis di tengah jalan pas nanam
+                        seedSlot = GetSlotByItemName(getgenv().SelectedSeed)
+                        if not seedSlot then break end 
+                        
+                        if MoveSmartlyTo(spot.x, spot.y) then
+                            task.wait(0.1)
+                            pcall(function() 
+                                local targetVec = Vector2.new(spot.x, spot.y); local targetStr = spot.x .. ", " .. spot.y
+                                if RemotePlace:IsA("RemoteEvent") then 
+                                    RemotePlace:FireServer(targetVec, seedSlot); RemotePlace:FireServer(targetStr, seedSlot) 
+                                else RemotePlace:InvokeServer(targetVec, seedSlot) end
+                            end)
+                            task.wait(getgenv().PlaceDelay)
                         end
                     end
                 end
 
-                -- 4. JIKA KOSONG -> PABRIK BLOCK (SMART COLLECT)
-                if #targetPanen == 0 and #targetTanam == 0 and getgenv().EnablePabrik then
+                -- 4. PABRIK BLOCK (ANTI BENGONG FIX)
+                -- Kalau udah gaada panenan, DAN (gaada spot tanah KOSONG ATAU bibitnya HABIS), barulah dia farming blok.
+                if not didHarvest and not didPlant and getgenv().EnablePabrik then
                     local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                     
                     if blockSlot then
                         if MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY) then
                             local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
+                            local hitLoopCount = 0
                             
                             while getgenv().EnablePabrik do
                                 local currentBlockAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
                                 blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
                                 
-                                -- KONDISI A: Blok di tas sentuh threshold -> Sedot SEMUA item
-                                if currentBlockAmt <= getgenv().BlockThreshold or not blockSlot then
+                                -- KONDISI A: Blok di tas sentuh threshold -> Sedot SEMUA item (True Ghost Collect)
+                                if currentBlockAmt <= getgenv().BlockThreshold or hitLoopCount >= 40 or not blockSlot then
                                     local hasAny, _ = CheckDropsType(BreakTarget.X, BreakTarget.Y)
                                     if hasAny then
-                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, false) -- false = pungut semua
+                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, false) -- Pungut Semua!
                                     end
                                     break 
                                 end
@@ -680,19 +669,20 @@ task.spawn(function()
                                     RemoteBreak:FireServer(BreakTarget)
                                     task.wait(getgenv().BreakDelay)
                                 end
+                                hitLoopCount = hitLoopCount + 1
                                 
-                                -- KONDISI B: Deteksi Sapling langsung disedot (Cek toggle dari UI)
+                                -- KONDISI B: Deteksi Sapling langsung disedot pakai Ghost (Cek toggle)
                                 if getgenv().OnlyCollectSapling then
                                     local _, hasSapling = CheckDropsType(BreakTarget.X, BreakTarget.Y)
                                     if hasSapling then
-                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, true) -- true = pungut sapling doang
+                                        TrueGhostCollect(BreakTarget.X, BreakTarget.Y, true) -- Pungut Sapling Doang!
                                     end
                                 end
                             end
                         end
                     end
 
-                    -- 5. AUTO DROP SEED (Sesuai Limit)
+                    -- 5. AUTO DROP SEED
                     if getgenv().EnablePabrik then
                         local currentSeedAmt = GetItemAmountByItemName(getgenv().SelectedSeed)
                         if currentSeedAmt > getgenv().KeepSeedAmt then
