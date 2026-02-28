@@ -11,7 +11,7 @@ if listLayout then
     end)
 end
 
-getgenv().ScriptVersion = "Auto Farm V57 (BRUTE FORCE + SWEEP X)"
+getgenv().ScriptVersion = "Auto Farm V59 (BRUTE FORCE + SWEEP BACK 100-0)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -199,7 +199,7 @@ end
 
 CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
 CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
-CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
+CreateDropdown(TargetPage, " CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
 CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
 CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
 CreateInput(TargetPage, "🌿 Plant Delay", "PlantDelay", 0.15)
@@ -358,7 +358,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ AUTO HARVEST LOGIC (BRUTE FORCE ZIGZAG + SWEEP X) ]]
+-- [[ AUTO HARVEST LOGIC (TYPEWRITER + SWEEP BACK) ]]
 -- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
@@ -377,7 +377,6 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                                     tileString = WorldManager.NumberToStringMap[rawId] or rawId
                                 end
                                 
-                                -- Deteksi semua tanaman di map
                                 if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
                                     table.insert(SaplingsData, {x = x, y = y})
                                 end
@@ -387,16 +386,16 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 end
             end
             
-            -- Sortir biar jalannya rapi (ZigZag)
+            -- SORTIR UBAH TOTAL: Selalu dari X = 0 sampai ke X = 100 buat tiap baris
             table.sort(SaplingsData, function(a, b)
                 if a.y == b.y then
-                    if a.y % 2 == 0 then return a.x < b.x else return a.x > b.x end
+                    return a.x < b.x -- Ga pake zigzag, selalu kiri ke kanan!
                 end
                 return a.y < b.y 
             end)
 
-            -- Langsung samperin dan gebuk satu-satu!
-            for _, sapling in ipairs(SaplingsData) do
+            -- Langsung samperin dan gebuk satu-satu
+            for i, sapling in ipairs(SaplingsData) do
                 if not getgenv().EnableSmartHarvest then break end
                 local bisaJalan = MoveSmartlyTo(sapling.x, sapling.y)
                 
@@ -409,12 +408,17 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                     end)
                     task.wait(getgenv().BreakDelay)
                     
-                    -- LOGIC AUTO COLLECT (Geser X +1 / -1 tergantung arah)
-                    local arahX = (sapling.y % 2 == 0) and 1 or -1 
-                    
-                    -- Jalan satu blok ekstra buat mungut
-                    MoveSmartlyTo(sapling.x + arahX, sapling.y)
-                    task.wait(0.1)
+                    -- CEK APAKAH INI TANAMAN TERAKHIR DI BARIS (Y) INI
+                    local nextSapling = SaplingsData[i + 1]
+                    if not nextSapling or nextSapling.y ~= sapling.y then
+                        -- TAHAP 1: Maju +1 ke depan buat ambil rontokan terakhir
+                        MoveSmartlyTo(sapling.x + 1, sapling.y)
+                        task.wait(0.1)
+                        
+                        -- TAHAP 2: Lari lurus balik ke X=0 buat SWEEP BERSIH sisa dropan!
+                        MoveSmartlyTo(0, sapling.y)
+                        task.wait(0.1)
+                    end
                 end
             end
         end
