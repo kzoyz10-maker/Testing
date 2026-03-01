@@ -37,8 +37,7 @@ LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickBu
 
 getgenv().AutoCollect = false
 getgenv().AutoDrop = false
-getgenv().AutoTrash = false
-getgenv().AutoBan = false
+getgenv().AutoTrash = false 
 getgenv().DropAmount = 50
 getgenv().TrashAmount = 50
 getgenv().TargetPosX = 0
@@ -208,8 +207,6 @@ CreateToggle(AccTrash, "▶ Enable Auto Trash", "AutoTrash", function(state) if 
 CreateTextBox(AccTrash, "Trash Amount", 50, "TrashAmount")
 CreateTextBox(AccTrash, "Trash Delay (Detik)", 2, "TrashDelay") 
 
--- 6. AUTO BAN 
-CreateToggle(PageManager, "🔨 Auto Ban Players (World)", "AutoBan", function(state) if not state then ForceRestoreUI() end end)
 
 -- 7. ACCORDION STREAMER MODE
 local AccStreamer = CreateAccordion(PageManager, "👁️ Streamer Mode (Spoof Name)", false)
@@ -341,30 +338,7 @@ task.spawn(function()
     end
 end)
 
--- [[ FUNGSI EKSEKUSI BAN ]]
-local function ExecuteBan(targetPlayer)
-    if targetPlayer == LP then return end
-    pcall(function() RemoteInspect:FireServer(targetPlayer) end)
-    task.wait(0.1) 
-    pcall(function() ManagerRemote:FireServer({ButtonAction = "ban", Inputs = {}}) end)
-    pcall(function()
-        if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
-        for _, gui in pairs(LP.PlayerGui:GetDescendants()) do
-            if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end
-        end
-    end)
-end
 
-task.spawn(function()
-    while true do
-        if getgenv().AutoBan then
-            for _, targetPlayer in ipairs(Players:GetPlayers()) do
-                if targetPlayer ~= LP then ExecuteBan(targetPlayer); task.wait(0.2) end
-            end
-        end
-        task.wait(0.5) 
-    end
-end)
 
 -- [[ LOGIKA AUTO DROP ]]
 task.spawn(function() 
