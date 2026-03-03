@@ -20,7 +20,7 @@ getgenv().ActionDelay = getgenv().ActionDelay or 0.15
 getgenv().GridSize = getgenv().GridSize or 4.5 
 
 getgenv().MasterAutoFarm = getgenv().MasterAutoFarm or false
-getgenv().EnableAutoCollect = getgenv().EnableAutoCollect or true -- [!] Opsi baru: Matikan / Nyalakan Collect
+getgenv().EnableAutoCollect = getgenv().EnableAutoCollect or false -- [!] Opsi baru: Matikan / Nyalakan Collect
 getgenv().AutoSaplingMode = getgenv().AutoSaplingMode or false
 
 getgenv().HitCount = getgenv().HitCount or 25 
