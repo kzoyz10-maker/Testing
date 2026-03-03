@@ -23,8 +23,8 @@ getgenv().MasterAutoFarm = getgenv().MasterAutoFarm or false
 getgenv().EnableAutoCollect = getgenv().EnableAutoCollect or false -- [!] Opsi baru: Matikan / Nyalakan Collect
 getgenv().AutoSaplingMode = getgenv().AutoSaplingMode or false
 
-getgenv().HitCount = getgenv().HitCount or 25 
-getgenv().WaitDropMs = getgenv().WaitDropMs or 250  
+getgenv().HitCount = getgenv().HitCount or 3 
+getgenv().WaitDropMs = getgenv().WaitDropMs or 350  
 getgenv().WalkSpeed = getgenv().WalkSpeed or 25 
 
 getgenv().TargetFarmBlock = getgenv().TargetFarmBlock or "Auto (Equipped)"
@@ -172,7 +172,7 @@ end
 local SecFarm = Tab:Section({ Title = "Auto Farm", Box = true, Opened = true })
 
 SecFarm:Toggle({ 
-    Title = "START AUTO FARM", 
+    Title = "Start Auto Farm", 
     Flag = "AF_Toggle_Start", 
     Default = getgenv().MasterAutoFarm, 
     Callback = function(v) 
