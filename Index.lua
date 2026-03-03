@@ -29,27 +29,8 @@ local Window = WindUI:CreateWindow({
     Theme = "Dark",
     SideBarWidth = 170,
     HasOutline = true,
-    Keybind = Enum.KeyCode.F24 -- [!] DI AKALI: Set ke tombol F24 biar keyboard gak bisa nutup paksa UI-nya
+    Keybind = Enum.KeyCode.RightControl -- [!] Keybind aman (CTRL Kanan)
 })
-
--- ========================================== --
--- [[ HACK: HAPUS TOMBOL CLOSE [ X ] ]]
--- ========================================== --
-task.spawn(function()
-    task.wait(1.5) -- Tunggu UI ke-render 100%
-    pcall(function()
-        for _, gui in ipairs(game:GetService("CoreGui"):GetDescendants()) do
-            -- Cari tombol bawaan WindUI yang fungsinya untuk "Close"
-            if (gui:IsA("ImageButton") or gui:IsA("TextButton")) then
-                local objName = string.lower(gui.Name)
-                if objName:match("close") or objName == "x" then
-                    gui.Visible = false
-                    gui:Destroy() -- Hapus tombolnya!
-                end
-            end
-        end
-    end)
-end)
 
 -- Fungsi buat Bikin Tab + Langsung Auto-Load Script dari Github
 local function AutoLoadTabFromGithub(TabName, IconName, DescText, LoadLink)
@@ -106,6 +87,6 @@ AutoLoadTabFromGithub("Configs", "settings-2", "Save / Load Settings", "https://
 task.wait(2)
 WindUI:Notify({ 
     Title = "Panduan UI", 
-    Content = "Klik tombol [-] di kanan atas untuk mengecilkan menu menjadi Oval.", 
-    Duration = 5 
+    Content = "Klik tombol [-] untuk mengecilkan menu. Jika tertutup, tekan CTRL Kanan (RightControl) untuk membuka kembali.", 
+    Duration = 8 
 })
