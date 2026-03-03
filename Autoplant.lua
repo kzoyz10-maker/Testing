@@ -1,29 +1,19 @@
-local TargetPage = ...
-if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
+local Tab = ...
+if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-TargetPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
-TargetPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-local listLayout = TargetPage:FindFirstChildWhichIsA("UIListLayout")
-if listLayout then
-    TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
-    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
-    end)
-end
-
-getgenv().ScriptVersion = "Auto Farm V61 (HARVEST TYPEWRITER + TRUE ZIGZAG PLANT)"
+getgenv().ScriptVersion = "Auto Farm V63 (HARVEST FAST SWEEP + SMART GLIDE)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
 -- ========================================== --
 getgenv().GridSize = 4.5
-getgenv().WalkSpeed = 16     
-getgenv().BreakDelay = 0.15  
-getgenv().PlantDelay = 0.15
+getgenv().WalkSpeed = getgenv().WalkSpeed or 16     
+getgenv().BreakDelay = getgenv().BreakDelay or 0.15  
+getgenv().PlantDelay = getgenv().PlantDelay or 0.15
 
-getgenv().EnableSmartHarvest = false
-getgenv().EnableAutoPlant = false
-getgenv().SelectedSeed = "Kosong"
+getgenv().EnableSmartHarvest = getgenv().EnableSmartHarvest or false
+getgenv().EnableAutoPlant = getgenv().EnableAutoPlant or false
+getgenv().SelectedSeed = getgenv().SelectedSeed or "Kosong"
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -31,8 +21,9 @@ local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 -- REMOTES
-local RemoteFist = RS:WaitForChild("Remotes"):WaitForChild("PlayerFist")
-local RemotePlace = RS:WaitForChild("Remotes"):WaitForChild("PlayerPlaceItem") 
+local Remotes = RS:WaitForChild("Remotes")
+local RemoteFist = Remotes:WaitForChild("PlayerFist")
+local RemotePlace = Remotes:WaitForChild("PlayerPlaceItem") 
 
 -- MANAGERS
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
@@ -66,8 +57,7 @@ local function GetItemName(rawId)
 end
 
 local function ScanAvailableItems()
-    local items = {}
-    local dict = {}
+    local items = {}; local dict = {}
     getgenv().InventoryCacheNameMap = {} 
     
     pcall(function()
@@ -107,132 +97,77 @@ local function GetSlotByItemName(targetName)
 end
 
 -- ========================================== --
--- [[ BIKIN UI MENU ]]
+-- [[ BIKIN UI MENU (WIND UI) DENGAN FLAG ]]
 -- ========================================== --
-function CreateToggle(Parent, Text, Var) 
-    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
-    local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 40, 0, 20); IndBg.Position = UDim2.new(1, -50, 0.5, -10); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
-    local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 16, 0, 16); Dot.Position = getgenv()[Var] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); 
+local SecFarm = Tab:Section({ Title = "Plant & Harvest", Box = true, Opened = true })
 
-    Btn.MouseButton1Click:Connect(function() 
-        getgenv()[Var] = not getgenv()[Var]; 
-        if getgenv()[Var] then 
-            Dot:TweenPosition(UDim2.new(1, -18, 0.5, -8), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Color3.fromRGB(255, 80, 80) 
-        else 
-            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -8), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
-        end 
-    end) 
-end
+SecFarm:Toggle({ 
+    Title = "Start Harvest", 
+    Flag = "PTHT_Toggle_Harvest", 
+    Default = getgenv().EnableSmartHarvest, 
+    Callback = function(v) getgenv().EnableSmartHarvest = v end 
+})
+SecFarm:Toggle({ 
+    Title = "Start Plant", 
+    Flag = "PTHT_Toggle_Plant", 
+    Default = getgenv().EnableAutoPlant, 
+    Callback = function(v) getgenv().EnableAutoPlant = v end 
+})
 
-function CreateInput(Parent, Text, Var, DefaultValue)
-    local Frame = Instance.new("Frame", Parent)
-    Frame.Size = UDim2.new(1, -10, 0, 40)
-    Frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    
-    local Label = Instance.new("TextLabel", Frame)
-    Label.Size = UDim2.new(0.6, 0, 1, 0)
-    Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = Text; Label.TextColor3 = Color3.fromRGB(255, 255, 255); Label.Font = Enum.Font.GothamBold; Label.TextSize = 13; Label.TextXAlignment = Enum.TextXAlignment.Left
+local DropSeed = SecFarm:Dropdown({ 
+    Title = "Choose Sapling", 
+    Flag = "PTHT_Drop_Seed", 
+    Options = ScanAvailableItems(), 
+    Default = getgenv().SelectedSeed, 
+    Callback = function(v) getgenv().SelectedSeed = v end 
+})
+SecFarm:Button({ Title = "Refresh Inventory", Callback = function() pcall(function() DropSeed:Refresh(ScanAvailableItems()) end) end })
 
-    local TextBox = Instance.new("TextBox", Frame)
-    TextBox.Size = UDim2.new(0.3, 0, 0.7, 0)
-    TextBox.Position = UDim2.new(0.65, 0, 0.15, 0)
-    TextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); TextBox.TextColor3 = Color3.fromRGB(255, 255, 255); TextBox.Font = Enum.Font.Gotham; TextBox.TextSize = 13; TextBox.Text = tostring(DefaultValue); TextBox.ClearTextOnFocus = false
+local SecSpeed = Tab:Section({ Title = "Speeds & Delays", Box = true, Opened = false })
 
-    getgenv()[Var] = DefaultValue
-    TextBox.FocusLost:Connect(function()
-        local num = tonumber(TextBox.Text)
-        if num then getgenv()[Var] = num else TextBox.Text = tostring(getgenv()[Var]) end
-    end)
-end
-
-function CreateDropdown(Parent, Text, Var, GetOptionsFunc)
-    local Container = Instance.new("Frame", Parent)
-    Container.Size = UDim2.new(1, -10, 0, 40)
-    Container.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    Container.ClipsDescendants = true
-    
-    local MainBtn = Instance.new("TextButton", Container)
-    MainBtn.Size = UDim2.new(1, 0, 0, 40)
-    MainBtn.BackgroundTransparency = 1
-    MainBtn.Text = "  " .. Text .. ": " .. tostring(getgenv()[Var])
-    MainBtn.TextColor3 = Color3.fromRGB(255, 215, 0) 
-    MainBtn.Font = Enum.Font.GothamBold; MainBtn.TextSize = 13; MainBtn.TextXAlignment = Enum.TextXAlignment.Left
-
-    local Scroll = Instance.new("ScrollingFrame", Container)
-    Scroll.Size = UDim2.new(1, 0, 1, -40); Scroll.Position = UDim2.new(0, 0, 0, 40)
-    Scroll.BackgroundColor3 = Color3.fromRGB(35, 35, 35); Scroll.ScrollBarThickness = 4
-    local UIList = Instance.new("UIListLayout", Scroll)
-    
-    local isOpen = false
-    MainBtn.MouseButton1Click:Connect(function()
-        isOpen = not isOpen
-        if isOpen then
-            local options = GetOptionsFunc()
-            for _, child in ipairs(Scroll:GetChildren()) do
-                if child:IsA("TextButton") then child:Destroy() end
-            end
-            
-            local ySize = 0
-            for _, opt in ipairs(options) do
-                local btn = Instance.new("TextButton", Scroll)
-                btn.Size = UDim2.new(1, 0, 0, 30); btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-                btn.Text = "  " .. tostring(opt); btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-                btn.Font = Enum.Font.Gotham; btn.TextSize = 12; btn.TextXAlignment = Enum.TextXAlignment.Left
-                ySize = ySize + 30
-                
-                btn.MouseButton1Click:Connect(function()
-                    getgenv()[Var] = opt
-                    MainBtn.Text = "  " .. Text .. ": " .. tostring(opt)
-                    Container.Size = UDim2.new(1, -10, 0, 40)
-                    isOpen = false
-                end)
-            end
-            Scroll.CanvasSize = UDim2.new(0, 0, 0, ySize)
-            Container.Size = UDim2.new(1, -10, 0, 140) 
-        else
-            Container.Size = UDim2.new(1, -10, 0, 40) 
-        end
-    end)
-end
-
-CreateToggle(TargetPage, "🌾 START AUTO HARVEST", "EnableSmartHarvest")
-CreateToggle(TargetPage, "🌱 START AUTO PLANT", "EnableAutoPlant")
-CreateDropdown(TargetPage, "🎒 CHOOSE SAPLING", "SelectedSeed", ScanAvailableItems)
-CreateInput(TargetPage, "⚡ Walk Speed", "WalkSpeed", 16)
-CreateInput(TargetPage, "🔨 Harvest Delay", "BreakDelay", 0.15)
-CreateInput(TargetPage, "🌿 Plant Delay", "PlantDelay", 0.15)
+SecSpeed:Input({ 
+    Title = "Walk Speed", 
+    Flag = "PTHT_Input_WalkSpeed", 
+    Value = tostring(getgenv().WalkSpeed), 
+    Placeholder = tostring(getgenv().WalkSpeed), 
+    Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
+})
+SecSpeed:Input({ 
+    Title = "Harvest Break Delay (ms)", 
+    Flag = "PTHT_Input_BreakDelay", 
+    Value = tostring(getgenv().BreakDelay), 
+    Placeholder = tostring(getgenv().BreakDelay), 
+    Callback = function(v) getgenv().BreakDelay = tonumber(v) or getgenv().BreakDelay end 
+})
+SecSpeed:Input({ 
+    Title = "Plant Delay (ms)", 
+    Flag = "PTHT_Input_PlantDelay", 
+    Value = tostring(getgenv().PlantDelay), 
+    Placeholder = tostring(getgenv().PlantDelay), 
+    Callback = function(v) getgenv().PlantDelay = tonumber(v) or getgenv().PlantDelay end 
+})
 
 -- ========================================== --
--- [[ RADAR INVERTED (ANTI MENTOK) ]]
+-- [[ RADAR INVERTED & 99999 A-STAR (SMART GLIDE) ]]
 -- ========================================== --
 local BlockSolidityCache = {}
-
 local function IsTileSolid(gridX, gridY)
     if gridX < 0 or gridX > 100 then return true end
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
-    
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = rawId
-        if type(rawId) == "number" and WorldManager.NumberToStringMap then
-            tileString = WorldManager.NumberToStringMap[rawId] or rawId
-        end
+        if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
         local nameStr = tostring(tileString):lower()
-        
         if BlockSolidityCache[nameStr] ~= nil then 
             if BlockSolidityCache[nameStr] == true then return true end
-            continue 
+        else
+            if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "door") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
+                BlockSolidityCache[nameStr] = false
+            else
+                BlockSolidityCache[nameStr] = true; return true
+            end
         end
-
-        if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "door") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
-            BlockSolidityCache[nameStr] = false
-            continue 
-        end
-        
-        BlockSolidityCache[nameStr] = true
-        return true
     end
     return false
 end
@@ -242,119 +177,144 @@ local function IsTileEmptyForPlant(gridX, gridY)
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = rawId
-        if type(rawId) == "number" and WorldManager.NumberToStringMap then
-            tileString = WorldManager.NumberToStringMap[rawId] or rawId
-        end
+        if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
         local nameStr = tostring(tileString):lower()
         if not string.find(nameStr, "bg") and not string.find(nameStr, "background") and not string.find(nameStr, "air") and not string.find(nameStr, "water") then 
-            return false
+            return false 
         end
     end
     return true
 end
 
--- ========================================== --
--- [[ A-STAR & MOVEMENT ]]
--- ========================================== --
 local function FindPathAStar(startX, startY, targetX, targetY)
     if startX == targetX and startY == targetY then return {} end
     local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
     local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
-
     local startKey = startX .. "," .. startY
     table.insert(openSet, {x = startX, y = startY, key = startKey})
     gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
-
-    local maxIterations, iterations = 3000, 0
+    
+    local maxIterations, iterations = 99999, 0 
     local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
     while #openSet > 0 do
         iterations = iterations + 1; if iterations > maxIterations then break end
-
         local current, currentIndex = openSet[1], 1
-        for i = 2, #openSet do
-            if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end
-        end
+        for i = 2, #openSet do if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end end
 
         if current.x == targetX and current.y == targetY then
             local path, currKey = {}, current.key
             while cameFrom[currKey] do
-                local node = cameFrom[currKey]
-                table.insert(path, 1, {x = current.x, y = current.y})
-                current = node; currKey = node.x .. "," .. node.y
+                local node = cameFrom[currKey]; table.insert(path, 1, {x = current.x, y = current.y}); current = node; currKey = node.x .. "," .. node.y
             end
             return path
         end
-
         table.remove(openSet, currentIndex); closedSet[current.key] = true
-
         for _, dir in ipairs(directions) do
             local nextX, nextY = current.x + dir[1], current.y + dir[2]
             local nextKey = nextX .. "," .. nextY
-            if nextX < 0 or nextX > 100 or closedSet[nextKey] then continue end
-
-            local isTarget = (nextX == targetX and nextY == targetY)
-            if not isTarget and IsTileSolid(nextX, nextY) then closedSet[nextKey] = true; continue end
-
-            local tentative_gScore = gScore[current.key] + 1
-            if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
-                cameFrom[nextKey] = current; gScore[nextKey] = tentative_gScore; fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
-                local inOpenSet = false
-                for _, node in ipairs(openSet) do if node.key == nextKey then inOpenSet = true; break end end
-                if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
+            if nextX >= 0 and nextX <= 100 and not closedSet[nextKey] then
+                local isTarget = (nextX == targetX and nextY == targetY)
+                if isTarget or not IsTileSolid(nextX, nextY) then
+                    local tentative_gScore = gScore[current.key] + 1
+                    if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
+                        cameFrom[nextKey] = current; gScore[nextKey] = tentative_gScore; fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
+                        local inOpenSet = false
+                        for _, node in ipairs(openSet) do if node.key == nextKey then inOpenSet = true; break end end
+                        if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
+                    end
+                else closedSet[nextKey] = true end
             end
         end
     end
     return nil 
 end
 
-local function SmoothWalkTo(targetPos)
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+local function SmoothWalkPath(pathTable, currZ)
+    if #pathTable == 0 then return end
+    
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    
     if not MyHitbox then return false end
-    
+    if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
+
+    local oldGravity = workspace.Gravity
+    workspace.Gravity = 0
+
     local startPos = MyHitbox.Position
-    local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
-    local duration = dist / getgenv().WalkSpeed
-    
-    if duration > 0 then 
+    if PlayerMovement and PlayerMovement.Position then startPos = PlayerMovement.Position end
+
+    for _, targetPos in ipairs(pathTable) do
+        if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then break end
+        
+        local targetVec3 = Vector3.new(targetPos.X, targetPos.Y, currZ)
+        local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetVec3.X, targetVec3.Y)).Magnitude 
+        local duration = dist / getgenv().WalkSpeed
+        if duration < 0.05 then duration = 0.05 end
+
         local t = 0
-        while t < duration do
-            if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then return false end
+        while t < duration and (getgenv().EnableSmartHarvest or getgenv().EnableAutoPlant) do
             local dt = RunService.Heartbeat:Wait()
             t = t + dt
             local alpha = math.clamp(t / duration, 0, 1)
-            local currentPos = startPos:Lerp(targetPos, alpha)
+            local currentPos = startPos:Lerp(targetVec3, alpha)
             
-            MyHitbox.CFrame = CFrame.new(currentPos)
-            if PlayerMovement then pcall(function() PlayerMovement.Position = currentPos end) end
+            if PlayerMovement then 
+                pcall(function() 
+                    PlayerMovement.Position = currentPos
+                    PlayerMovement.VelocityX = 0 
+                    PlayerMovement.VelocityY = 0 
+                    PlayerMovement.VelocityZ = 0 
+                end)
+            else
+                local fixedRot = MyHitbox.CFrame - MyHitbox.CFrame.Position
+                local newCFrame = fixedRot + currentPos
+                MyHitbox.CFrame = newCFrame
+                if hrp and MyHitbox ~= hrp then hrp.CFrame = newCFrame end
+            end
         end
+        startPos = targetVec3
     end
     
-    MyHitbox.CFrame = CFrame.new(targetPos)
-    if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
-    task.wait(0.01) 
+    if PlayerMovement then 
+        pcall(function() 
+            PlayerMovement.VelocityX = 0 
+            PlayerMovement.VelocityY = 0 
+            PlayerMovement.VelocityZ = 0 
+            PlayerMovement.InputActive = true 
+        end)
+    end
+    workspace.Gravity = oldGravity
     return true
 end
 
 local function MoveSmartlyTo(targetX, targetY)
     local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     if not MyHitbox then return false end
-    
-    local myZ = MyHitbox.Position.Z
-    local myGridX = math.round(MyHitbox.Position.X / getgenv().GridSize)
-    local myGridY = math.round(MyHitbox.Position.Y / getgenv().GridSize)
+    local currZ = MyHitbox.Position.Z
+    local myGridX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+    local myGridY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
 
     if myGridX == targetX and myGridY == targetY then return true end
     
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
-    if not route then return false end
-
-    for _, stepPos in ipairs(route) do
-        if not getgenv().EnableSmartHarvest and not getgenv().EnableAutoPlant then break end
-        local pos = Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, myZ)
-        if not SmoothWalkTo(pos) then return false end
+    
+    if route and #route > 0 then
+        local pathTable = {}
+        for _, step in ipairs(route) do table.insert(pathTable, Vector3.new(step.x * getgenv().GridSize, step.y * getgenv().GridSize, currZ)) end
+        table.insert(pathTable, Vector3.new(targetX * getgenv().GridSize, targetY * getgenv().GridSize, currZ))
+        return SmoothWalkPath(pathTable, currZ)
+    else
+        warn("⚠️ Map belum ter-render atau jalan buntu! Menggunakan Fast-Travel...")
+        if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
+        local targetVec3 = Vector3.new(targetX * getgenv().GridSize, targetY * getgenv().GridSize, currZ)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = targetVec3 end) else MyHitbox.CFrame = CFrame.new(targetVec3) end
+        task.wait(0.2)
+        if PlayerMovement then pcall(function() PlayerMovement.InputActive = true end) end
+        return true
     end
-    return true
 end
 
 -- ========================================== --
@@ -388,9 +348,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
             
             -- Harvest: Selalu dari X = 0 sampai ke X = 100 buat tiap baris
             table.sort(SaplingsData, function(a, b)
-                if a.y == b.y then
-                    return a.x < b.x 
-                end
+                if a.y == b.y then return a.x < b.x end
                 return a.y < b.y 
             end)
 
@@ -405,8 +363,11 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                         if RemoteFist:IsA("RemoteEvent") then RemoteFist:FireServer(targetVec) 
                         else RemoteFist:InvokeServer(targetVec) end
                     end)
+                    
+                    -- Tidak ada jeda tambahan nunggu jatuh, langsung lanjut
                     task.wait(getgenv().BreakDelay)
                     
+                    -- SWEEP END-OF-ROW: Kalau udah mau pindah baris, nyapu dulu ke awal
                     local nextSapling = SaplingsData[i + 1]
                     if not nextSapling or nextSapling.y ~= sapling.y then
                         MoveSmartlyTo(sapling.x + 1, sapling.y)
@@ -462,11 +423,8 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
 
             table.sort(tempList, function(a, b)
                 if a.y == b.y then
-                    if yDirectionMap[a.y] then 
-                        return a.x < b.x -- Kiri ke Kanan
-                    else 
-                        return a.x > b.x -- Kanan ke Kiri
-                    end
+                    if yDirectionMap[a.y] then return a.x < b.x -- Kiri ke Kanan
+                    else return a.x > b.x end -- Kanan ke Kiri
                 end
                 return a.y < b.y 
             end)
