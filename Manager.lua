@@ -1,28 +1,37 @@
--- [[ KZOYZ HUB - MANAGER MODULE (INJECTED) ]] --
-local TargetPage = ...
-if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
+local Tab = ...
+if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
--- [[ FIX SCROLL MENTOK ]] --
-TargetPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
-TargetPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-local listLayout = TargetPage:FindFirstChildWhichIsA("UIListLayout")
-if listLayout then
-    TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
-    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
-    end)
-end
-------------------------------
-
-getgenv().ScriptVersion = "Manager v2.3-AutoStaffDetect+Zoom" 
+getgenv().ScriptVersion = "Manager v3.2 - GLOBAL SMART LOOT + CONFIG SUPPORT" 
 
 -- ========================================== --
-getgenv().DropDelay = 2     
-getgenv().TrashDelay = 2    
-getgenv().StepDelay = 0.1   
-getgenv().GridSize = 4.5 
+-- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
 -- ========================================== --
+getgenv().DropDelay = getgenv().DropDelay or 2     
+getgenv().TrashDelay = getgenv().TrashDelay or 2    
+getgenv().GridSize = getgenv().GridSize or 4.5 
+getgenv().WalkSpeed = getgenv().WalkSpeed or 45 -- Kecepatan Loot
 
+getgenv().AutoCollect = getgenv().AutoCollect or false
+getgenv().AutoDrop = getgenv().AutoDrop or false
+getgenv().AutoTrash = getgenv().AutoTrash or false
+getgenv().AutoBan = getgenv().AutoBan or false
+getgenv().AutoPull = getgenv().AutoPull or false
+getgenv().DropAmount = getgenv().DropAmount or 50
+getgenv().TrashAmount = getgenv().TrashAmount or 50
+
+getgenv().AutoChat = getgenv().AutoChat or false
+getgenv().ChatText = getgenv().ChatText or "Halo Semuanya"
+getgenv().ChatDelay = getgenv().ChatDelay or 3
+getgenv().ChatRandomLetter = getgenv().ChatRandomLetter or true
+
+getgenv().HideName = getgenv().HideName or false
+getgenv().FakeNameText = getgenv().FakeNameText or "KzoyzPlayer"
+getgenv().AntiStaff = getgenv().AntiStaff or false
+getgenv().CustomZoom = getgenv().CustomZoom or 1000
+
+-- ========================================== --
+-- [[ SERVICES & MODULES ]]
+-- ========================================== --
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
@@ -30,32 +39,12 @@ local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser") 
 
+local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
+local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
+
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
 
-LP.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
-
-getgenv().AutoCollect = false
-getgenv().AutoDrop = false
-getgenv().AutoTrash = false 
-getgenv().DropAmount = 50
-getgenv().TrashAmount = 50
-getgenv().TargetPosX = 0
-getgenv().TargetPosY = 0
-
--- Variabel Auto Chat 
-getgenv().AutoChat = false
-getgenv().ChatText = "Halo Semuanya"
-getgenv().ChatDelay = 3
-getgenv().ChatRandomLetter = true
-
--- Variabel Streamer Mode, Security & Zoom
-getgenv().HideName = false
-getgenv().FakeNameText = "KzoyzPlayer"
-getgenv().AntiStaff = false
-getgenv().CustomZoom = 1000
-
--- Ambil UIManager
 local UIManager
 pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
@@ -103,127 +92,8 @@ local function FindInventoryModule()
 end
 getgenv().GameInventoryModule = FindInventoryModule()
 
-local Theme = { Item = Color3.fromRGB(45, 45, 45), Text = Color3.fromRGB(255, 255, 255), Purple = Color3.fromRGB(140, 80, 255) }
-
--- [[ UI COMPONENT BUILDERS (COMPACTED) ]]
-function CreateAccordion(Parent, Title, DefaultState)
-    local Frame = Instance.new("Frame", Parent); Frame.BackgroundTransparency = 1; Frame.Size = UDim2.new(1, -10, 0, 0); Frame.AutomaticSize = Enum.AutomaticSize.Y
-    local Layout = Instance.new("UIListLayout", Frame); Layout.SortOrder = Enum.SortOrder.LayoutOrder; Layout.Padding = UDim.new(0, 5)
-    local Btn = Instance.new("TextButton", Frame); Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35); Btn.Size = UDim2.new(1, 0, 0, 35); Btn.Text = "  " .. Title; Btn.TextColor3 = Color3.fromRGB(255, 215, 0); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    local Icon = Instance.new("TextLabel", Btn); Icon.BackgroundTransparency = 1; Icon.Size = UDim2.new(0, 30, 1, 0); Icon.Position = UDim2.new(1, -30, 0, 0); Icon.Text = DefaultState and "v" or ">"; Icon.TextColor3 = Color3.new(1,1,1); Icon.Font = Enum.Font.GothamBold; Icon.TextSize = 14
-    local Content = Instance.new("Frame", Frame); Content.BackgroundTransparency = 1; Content.Size = UDim2.new(1, 0, 0, 0); Content.AutomaticSize = Enum.AutomaticSize.Y; Content.Visible = DefaultState; local CLayout = Instance.new("UIListLayout", Content); CLayout.SortOrder = Enum.SortOrder.LayoutOrder; CLayout.Padding = UDim.new(0, 5)
-    local isOpen = DefaultState
-    Btn.MouseButton1Click:Connect(function() isOpen = not isOpen; Content.Visible = isOpen; Icon.Text = isOpen and "v" or ">" end)
-    return Content
-end
-
-function CreateToggle(Parent, Text, Var, OnToggle) 
-    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Item; Btn.Size = UDim2.new(1, 0, 0, 35); Btn.Text = ""; Btn.AutoButtonColor = false; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    local T = Instance.new("TextLabel", Btn); T.Text = Text; T.TextColor3 = Theme.Text; T.Font = Enum.Font.GothamSemibold; T.TextSize = 12; T.Size = UDim2.new(1, -40, 1, 0); T.Position = UDim2.new(0, 10, 0, 0); T.BackgroundTransparency = 1; T.TextXAlignment = Enum.TextXAlignment.Left
-    local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 36, 0, 18); IndBg.Position = UDim2.new(1, -45, 0.5, -9); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); Instance.new("UICorner", IndBg).CornerRadius = UDim.new(1,0)
-    local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 14, 0, 14); Dot.Position = getgenv()[Var] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); Instance.new("UICorner", Dot).CornerRadius = UDim.new(1,0)
-    IndBg.BackgroundColor3 = getgenv()[Var] and Theme.Purple or Color3.fromRGB(30,30,30)
-    Btn.MouseButton1Click:Connect(function() 
-        getgenv()[Var] = not getgenv()[Var]
-        if getgenv()[Var] then Dot:TweenPosition(UDim2.new(1, -16, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Theme.Purple 
-        else Dot:TweenPosition(UDim2.new(0, 2, 0.5, -7), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) end 
-        if OnToggle then OnToggle(getgenv()[Var]) end 
-    end) 
-end
-
-function CreateTextBox(Parent, Text, Default, Var) 
-    local Frame = Instance.new("Frame", Parent); Frame.BackgroundColor3 = Theme.Item; Frame.Size = UDim2.new(1, 0, 0, 35); Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
-    local Label = Instance.new("TextLabel", Frame); Label.Text = Text; Label.TextColor3 = Theme.Text; Label.BackgroundTransparency = 1; Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Font = Enum.Font.GothamSemibold; Label.TextSize = 12; Label.TextXAlignment = Enum.TextXAlignment.Left
-    local InputBox = Instance.new("TextBox", Frame); InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); InputBox.Position = UDim2.new(0.6, 0, 0.15, 0); InputBox.Size = UDim2.new(0.35, 0, 0.7, 0); InputBox.Font = Enum.Font.GothamSemibold; InputBox.TextSize = 12; InputBox.TextColor3 = Theme.Text; InputBox.Text = tostring(Default); Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 4)
-    getgenv()[Var] = Default
-    InputBox.FocusLost:Connect(function() 
-        if type(Default) == "number" then local val = tonumber(InputBox.Text); if val then getgenv()[Var] = val else InputBox.Text = tostring(getgenv()[Var]) end 
-        else getgenv()[Var] = InputBox.Text end
-    end)
-    return InputBox 
-end
-
-function CreateButton(Parent, Text, Callback) 
-    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Theme.Purple; Btn.Size = UDim2.new(1, 0, 0, 35); Btn.Text = Text; Btn.TextColor3 = Color3.new(1,1,1); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 12; Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6); Btn.MouseButton1Click:Connect(Callback) 
-end
-
 -- ========================================== --
--- [[ SISTEM DUAL TAB ]]
--- ========================================== --
-local TabNav = Instance.new("Frame", TargetPage); TabNav.Size = UDim2.new(1, -10, 0, 35); TabNav.BackgroundTransparency = 1
-local TabMgrBtn = Instance.new("TextButton", TabNav); TabMgrBtn.Size = UDim2.new(0.48, 0, 1, 0); TabMgrBtn.BackgroundColor3 = Theme.Purple; TabMgrBtn.Text = "Menu Manager"; TabMgrBtn.TextColor3 = Theme.Text; TabMgrBtn.Font = Enum.Font.GothamBold; TabMgrBtn.TextSize = 12; Instance.new("UICorner", TabMgrBtn).CornerRadius = UDim.new(0, 6)
-local TabChatBtn = Instance.new("TextButton", TabNav); TabChatBtn.Size = UDim2.new(0.48, 0, 1, 0); TabChatBtn.Position = UDim2.new(0.52, 0, 0, 0); TabChatBtn.BackgroundColor3 = Theme.Item; TabChatBtn.Text = "Spam Chat"; TabChatBtn.TextColor3 = Theme.Text; TabChatBtn.Font = Enum.Font.GothamBold; TabChatBtn.TextSize = 12; Instance.new("UICorner", TabChatBtn).CornerRadius = UDim.new(0, 6)
-
-local PageManager = Instance.new("Frame", TargetPage); PageManager.Size = UDim2.new(1, 0, 0, 0); PageManager.BackgroundTransparency = 1; PageManager.AutomaticSize = Enum.AutomaticSize.Y; local UIListManager = Instance.new("UIListLayout", PageManager); UIListManager.Padding = UDim.new(0, 5)
-local PageChat = Instance.new("Frame", TargetPage); PageChat.Size = UDim2.new(1, 0, 0, 0); PageChat.BackgroundTransparency = 1; PageChat.AutomaticSize = Enum.AutomaticSize.Y; PageChat.Visible = false; local UIListChat = Instance.new("UIListLayout", PageChat); UIListChat.Padding = UDim.new(0, 5)
-
-TabMgrBtn.MouseButton1Click:Connect(function() PageManager.Visible = true; PageChat.Visible = false; TabMgrBtn.BackgroundColor3 = Theme.Purple; TabChatBtn.BackgroundColor3 = Theme.Item end)
-TabChatBtn.MouseButton1Click:Connect(function() PageManager.Visible = false; PageChat.Visible = true; TabMgrBtn.BackgroundColor3 = Theme.Item; TabChatBtn.BackgroundColor3 = Theme.Purple end)
-
--- ========================================== --
--- [[ ISI UI PAGE MANAGER (DROPDOWNS) ]]
--- ========================================== --
-
--- 1. ACCORDION SECURITY (AUTO DETECT STAFF)
-local AccSec = CreateAccordion(PageManager, "🛡️ Security (Auto Detect Staff)", true)
-CreateToggle(AccSec, "▶ Enable Anti-Staff Auto Disconnect", "AntiStaff")
-
--- 2. ACCORDION CAMERA ZOOM
-local AccCam = CreateAccordion(PageManager, "🎥 Camera Custom Zoom", false)
-CreateTextBox(AccCam, "Max Zoom Distance", 1000, "CustomZoom")
-CreateButton(AccCam, "Apply Camera Zoom", function()
-    pcall(function()
-        LP.CameraMaxZoomDistance = tonumber(getgenv().CustomZoom) or 1000
-        LP.CameraMinZoomDistance = 0.5 
-    end)
-end)
-
--- 3. ACCORDION AUTO COLLECT
-local AccCollect = CreateAccordion(PageManager, "⚙️ Auto Collect Settings", false)
-CreateToggle(AccCollect, "▶ Enable Auto Collect", "AutoCollect")
-local BoxX = CreateTextBox(AccCollect, "Target Grid X", 0, "TargetPosX")
-local BoxY = CreateTextBox(AccCollect, "Target Grid Y", 0, "TargetPosY")
-CreateButton(AccCollect, "📍 Save Pos (Current Loc)", function()
-    local HitboxFolder = workspace:FindFirstChild("Hitbox")
-    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
-    local RefPart = MyHitbox or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    if RefPart then
-        local currX = math.floor(RefPart.Position.X / getgenv().GridSize + 0.5)
-        local currY = math.floor(RefPart.Position.Y / getgenv().GridSize + 0.5)
-        getgenv().TargetPosX = currX; getgenv().TargetPosY = currY
-        BoxX.Text = tostring(currX); BoxY.Text = tostring(currY)
-    end
-end)
-
--- 4. ACCORDION AUTO DROP
-local AccDrop = CreateAccordion(PageManager, "📦 Auto Drop Settings", false)
-CreateToggle(AccDrop, "▶ Enable Auto Drop", "AutoDrop", function(state) if not state then ForceRestoreUI() end end)
-CreateTextBox(AccDrop, "Drop Amount", 50, "DropAmount")
-CreateTextBox(AccDrop, "Drop Delay (Detik)", 2, "DropDelay") 
-
--- 5. ACCORDION AUTO TRASH
-local AccTrash = CreateAccordion(PageManager, "🚮 Auto Trash Settings", false)
-CreateToggle(AccTrash, "▶ Enable Auto Trash", "AutoTrash", function(state) if not state then ForceRestoreUI() end end)
-CreateTextBox(AccTrash, "Trash Amount", 50, "TrashAmount")
-CreateTextBox(AccTrash, "Trash Delay (Detik)", 2, "TrashDelay") 
-
-
--- 7. ACCORDION STREAMER MODE
-local AccStreamer = CreateAccordion(PageManager, "👁️ Streamer Mode (Spoof Name)", false)
-CreateToggle(AccStreamer, "▶ Enable Spoof Name", "HideName")
-CreateTextBox(AccStreamer, "Custom Fake Name", "KzoyzPlayer", "FakeNameText")
-
--- ========================================== --
--- [[ ISI UI PAGE AUTO CHAT ]]
--- ========================================== --
-local AccChat = CreateAccordion(PageChat, "💬 Auto Spam Chat Settings", true)
-CreateToggle(AccChat, "▶ Enable Auto Chat", "AutoChat")
-CreateTextBox(AccChat, "Pesan Chat", "Jual barang di world sini", "ChatText")
-CreateTextBox(AccChat, "Delay (Detik)", 3, "ChatDelay")
-CreateToggle(AccChat, "Anti Spam (Huruf Random)", "ChatRandomLetter")
-
--- ========================================== --
--- [[ REMOTES & EVENTS ]]
+-- [[ REMOTES ]]
 -- ========================================== --
 local Remotes = RS:WaitForChild("Remotes")
 local RemoteDropSafe = Remotes:WaitForChild("PlayerDrop") 
@@ -232,39 +102,354 @@ local RemoteInspect = Remotes:WaitForChild("PlayerInspectPlayer")
 local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent") 
 local ChatRemote = RS:WaitForChild("CB")
 
+-- ========================================== --
+-- [[ WIND UI SETUP DENGAN FLAG ]]
+-- ========================================== --
+
+-- SECTION: PLAYER CONTROL & SECURITY
+local SecPlayer = Tab:Section({ Title = "Misc", Box = true, Opened = true })
+SecPlayer:Toggle({ 
+    Title = "Auto Pull Players", 
+    Flag = "Mgr_Toggle_AutoPull",
+    Default = getgenv().AutoPull, 
+    Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end 
+})
+SecPlayer:Toggle({ 
+    Title = "Auto Ban Players", 
+    Flag = "Mgr_Toggle_AutoBan",
+    Default = getgenv().AutoBan, 
+    Callback = function(v) getgenv().AutoBan = v; if not v then ForceRestoreUI() end end 
+})
+SecPlayer:Toggle({ 
+    Title = "Enable Anti-Staff (Auto Disconnect)", 
+    Flag = "Mgr_Toggle_AntiStaff",
+    Default = getgenv().AntiStaff, 
+    Callback = function(v) getgenv().AntiStaff = v end 
+})
+
+-- SECTION: CAMERA
+local SecCam = Tab:Section({ Title = "Camera Custom Zoom", Box = true, Opened = false })
+SecCam:Input({ 
+    Title = "Max Zoom Distance", 
+    Flag = "Mgr_Input_Zoom",
+    Value = tostring(getgenv().CustomZoom), 
+    Placeholder = tostring(getgenv().CustomZoom), 
+    Callback = function(v) getgenv().CustomZoom = tonumber(v) or getgenv().CustomZoom end 
+})
+SecCam:Button({
+    Title = "Apply Camera Zoom",
+    Callback = function() pcall(function() LP.CameraMaxZoomDistance = tonumber(getgenv().CustomZoom) or 1000; LP.CameraMinZoomDistance = 0.5 end) end
+})
+
+-- SECTION: AUTO COLLECT (GLOBAL SMART LOOT)
+local SecCollect = Tab:Section({ Title = "Auto Collect", Box = true, Opened = false })
+SecCollect:Toggle({ 
+    Title = "Auto Collect", 
+    Flag = "Mgr_Toggle_AutoLoot",
+    Default = getgenv().AutoCollect, 
+    Callback = function(v) getgenv().AutoCollect = v end 
+})
+SecCollect:Input({ 
+    Title = "Loot Speed", 
+    Flag = "Mgr_Input_LootSpeed",
+    Value = tostring(getgenv().WalkSpeed), 
+    Placeholder = tostring(getgenv().WalkSpeed), 
+    Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
+})
+SecCollect:Button({ Title = "Clear Blacklisted Drops", Callback = function() getgenv().BlacklistedLoot = {} warn("✅ Blacklist Drops Dibersihkan!") end })
+
+-- SECTION: AUTO DROP
+local SecDrop = Tab:Section({ Title = "Auto Drop", Box = true, Opened = false })
+SecDrop:Toggle({ 
+    Title = "Auto Drop", 
+    Flag = "Mgr_Toggle_AutoDrop",
+    Default = getgenv().AutoDrop, 
+    Callback = function(v) getgenv().AutoDrop = v; if not v then ForceRestoreUI() end end 
+})
+SecDrop:Input({ 
+    Title = "Drop Amount", 
+    Flag = "Mgr_Input_DropAmt",
+    Value = tostring(getgenv().DropAmount), 
+    Placeholder = tostring(getgenv().DropAmount), 
+    Callback = function(v) getgenv().DropAmount = tonumber(v) or getgenv().DropAmount end 
+})
+SecDrop:Input({ 
+    Title = "Drop Delay (sec)", 
+    Flag = "Mgr_Input_DropDelay",
+    Value = tostring(getgenv().DropDelay), 
+    Placeholder = tostring(getgenv().DropDelay), 
+    Callback = function(v) getgenv().DropDelay = tonumber(v) or getgenv().DropDelay end 
+})
+
+-- SECTION: AUTO TRASH
+local SecTrash = Tab:Section({ Title = "Auto Trash", Box = true, Opened = false })
+SecTrash:Toggle({ 
+    Title = "Auto Trash", 
+    Flag = "Mgr_Toggle_AutoTrash",
+    Default = getgenv().AutoTrash, 
+    Callback = function(v) getgenv().AutoTrash = v; if not v then ForceRestoreUI() end end 
+})
+SecTrash:Input({ 
+    Title = "Trash Amount", 
+    Flag = "Mgr_Input_TrashAmt",
+    Value = tostring(getgenv().TrashAmount), 
+    Placeholder = tostring(getgenv().TrashAmount), 
+    Callback = function(v) getgenv().TrashAmount = tonumber(v) or getgenv().TrashAmount end 
+})
+SecTrash:Input({ 
+    Title = "Trash Delay (sec)", 
+    Flag = "Mgr_Input_TrashDelay",
+    Value = tostring(getgenv().TrashDelay), 
+    Placeholder = tostring(getgenv().TrashDelay), 
+    Callback = function(v) getgenv().TrashDelay = tonumber(v) or getgenv().TrashDelay end 
+})
+
+-- SECTION: STREAMER MODE
+local SecStreamer = Tab:Section({ Title = "Custom Username", Box = true, Opened = false })
+SecStreamer:Toggle({ 
+    Title = "Spoof Name", 
+    Flag = "Mgr_Toggle_SpoofName",
+    Default = getgenv().HideName, 
+    Callback = function(v) getgenv().HideName = v end 
+})
+SecStreamer:Input({ 
+    Title = "Custom Fake Name", 
+    Flag = "Mgr_Input_FakeName",
+    Value = tostring(getgenv().FakeNameText), 
+    Placeholder = tostring(getgenv().FakeNameText), 
+    Callback = function(v) getgenv().FakeNameText = v end 
+})
+
+-- SECTION: SPAM CHAT
+local SecChat = Tab:Section({ Title = "Auto Spam Chat Settings", Box = true, Opened = false })
+SecChat:Toggle({ 
+    Title = "Auto Chat", 
+    Flag = "Mgr_Toggle_AutoChat",
+    Default = getgenv().AutoChat, 
+    Callback = function(v) getgenv().AutoChat = v end 
+})
+SecChat:Input({ 
+    Title = "Message", 
+    Flag = "Mgr_Input_ChatText",
+    Value = tostring(getgenv().ChatText), 
+    Placeholder = tostring(getgenv().ChatText), 
+    Callback = function(v) getgenv().ChatText = v end 
+})
+SecChat:Input({ 
+    Title = "Delay (sec)", 
+    Flag = "Mgr_Input_ChatDelay",
+    Value = tostring(getgenv().ChatDelay), 
+    Placeholder = tostring(getgenv().ChatDelay), 
+    Callback = function(v) getgenv().ChatDelay = tonumber(v) or getgenv().ChatDelay end 
+})
+SecChat:Toggle({ 
+    Title = "Anti Spam (Random Alfabet)", 
+    Flag = "Mgr_Toggle_AntiSpamChat",
+    Default = getgenv().ChatRandomLetter, 
+    Callback = function(v) getgenv().ChatRandomLetter = v end 
+})
+
+-- ========================================== --
+-- [[ PATHFINDING & SMART GLIDE SYSTEM ]]
+-- ========================================== --
+local BlockSolidityCache = {}
+local function IsTileSolid(gridX, gridY)
+    if gridX < 0 or gridX > 100 then return true end
+    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
+    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
+        local rawId = type(data) == "table" and data[1] or data
+        local tileString = rawId
+        if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
+        local nameStr = tostring(tileString):lower()
+        if BlockSolidityCache[nameStr] ~= nil then 
+            if BlockSolidityCache[nameStr] == true then return true end
+        else
+            if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "door") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
+                BlockSolidityCache[nameStr] = false
+            else
+                BlockSolidityCache[nameStr] = true; return true
+            end
+        end
+    end
+    return false
+end
+
+local function FindPathAStar(startX, startY, targetX, targetY)
+    if startX == targetX and startY == targetY then return {} end
+    local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
+    local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
+    local startKey = startX .. "," .. startY
+    table.insert(openSet, {x = startX, y = startY, key = startKey})
+    gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
+    local maxIterations, iterations = 99999, 0 
+    local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+
+    while #openSet > 0 do
+        iterations = iterations + 1; if iterations > maxIterations then break end
+        local current, currentIndex = openSet[1], 1
+        for i = 2, #openSet do if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end end
+
+        if current.x == targetX and current.y == targetY then
+            local path, currKey = {}, current.key
+            while cameFrom[currKey] do
+                local node = cameFrom[currKey]; table.insert(path, 1, {x = current.x, y = current.y}); current = node; currKey = node.x .. "," .. node.y
+            end
+            return path
+        end
+        table.remove(openSet, currentIndex); closedSet[current.key] = true
+        for _, dir in ipairs(directions) do
+            local nextX, nextY = current.x + dir[1], current.y + dir[2]
+            local nextKey = nextX .. "," .. nextY
+            if nextX >= 0 and nextX <= 100 and not closedSet[nextKey] then
+                local isTarget = (nextX == targetX and nextY == targetY)
+                if isTarget or not IsTileSolid(nextX, nextY) then
+                    local tentative_gScore = gScore[current.key] + 1
+                    if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
+                        cameFrom[nextKey] = current; gScore[nextKey] = tentative_gScore; fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
+                        local inOpenSet = false
+                        for _, node in ipairs(openSet) do if node.key == nextKey then inOpenSet = true; break end end
+                        if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
+                    end
+                else closedSet[nextKey] = true end
+            end
+        end
+    end
+    return nil 
+end
+
+local function SmoothWalkPath(pathTable, currZ)
+    if #pathTable == 0 then return end
+    local HitboxFolder = workspace:FindFirstChild("Hitbox")
+    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    
+    if not MyHitbox then return false end
+    if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
+
+    local oldGravity = workspace.Gravity
+    workspace.Gravity = 0
+
+    local startPos = MyHitbox.Position
+    if PlayerMovement and PlayerMovement.Position then startPos = PlayerMovement.Position end
+
+    for _, targetPos in ipairs(pathTable) do
+        if not getgenv().AutoCollect then break end
+        
+        local targetVec3 = Vector3.new(targetPos.X, targetPos.Y, currZ)
+        local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetVec3.X, targetVec3.Y)).Magnitude 
+        local duration = dist / getgenv().WalkSpeed
+        if duration < 0.05 then duration = 0.05 end
+
+        local t = 0
+        while t < duration and getgenv().AutoCollect do
+            local dt = RunService.Heartbeat:Wait()
+            t = t + dt
+            local alpha = math.clamp(t / duration, 0, 1)
+            local currentPos = startPos:Lerp(targetVec3, alpha)
+            
+            if PlayerMovement then 
+                pcall(function() 
+                    PlayerMovement.Position = currentPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0 
+                end)
+            else
+                local fixedRot = MyHitbox.CFrame - MyHitbox.CFrame.Position
+                local newCFrame = fixedRot + currentPos
+                MyHitbox.CFrame = newCFrame
+                if hrp and MyHitbox ~= hrp then hrp.CFrame = newCFrame end
+            end
+        end
+        startPos = targetVec3
+    end
+    
+    if PlayerMovement then 
+        pcall(function() PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.InputActive = true end) 
+    end
+    workspace.Gravity = oldGravity
+    return true
+end
+
+local function SmartMoveToExact(targetVec3)
+    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+    if not MyHitbox then return false end
+    local currZ = MyHitbox.Position.Z
+    local myGridX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
+    local myGridY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
+
+    local targetX = math.floor(targetVec3.X / getgenv().GridSize + 0.5)
+    local targetY = math.floor(targetVec3.Y / getgenv().GridSize + 0.5)
+
+    if myGridX == targetX and myGridY == targetY then 
+        return SmoothWalkPath({ Vector3.new(targetVec3.X, targetVec3.Y, currZ) }, currZ)
+    end
+    
+    local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
+    
+    if route and #route > 0 then
+        local pathTable = {}
+        for _, step in ipairs(route) do table.insert(pathTable, Vector3.new(step.x * getgenv().GridSize, step.y * getgenv().GridSize, currZ)) end
+        table.insert(pathTable, Vector3.new(targetVec3.X, targetVec3.Y, currZ))
+        return SmoothWalkPath(pathTable, currZ)
+    else
+        warn("⚠️ Drops terlalu jauh/buntu! Teleporting...")
+        if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
+        local targetFallback = Vector3.new(targetVec3.X, targetVec3.Y, currZ)
+        if PlayerMovement then pcall(function() PlayerMovement.Position = targetFallback end) else MyHitbox.CFrame = CFrame.new(targetFallback) end
+        task.wait(0.2)
+        if PlayerMovement then pcall(function() PlayerMovement.InputActive = true end) end
+        return true
+    end
+end
+
+-- ========================================== --
+-- [[ LOGIKA SISTEM UTAMA ]]
+-- ========================================== --
+
 RunService.RenderStepped:Connect(function() if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end end)
 
--- [[ LOGIKA ANTI-STAFF (SMART AUTO DETECT) ]]
+-- [[ LOGIKA AUTO BAN & AUTO PULL ]]
+local function ExecuteBan(targetPlayer)
+    if targetPlayer == LP then return end
+    pcall(function() RemoteInspect:FireServer(targetPlayer) end); task.wait(0.1) 
+    pcall(function() ManagerRemote:FireServer({ButtonAction = "ban", Inputs = {}}) end)
+    pcall(function() if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end; for _, gui in pairs(LP.PlayerGui:GetDescendants()) do if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end end end)
+end
+
+local function ExecutePull(targetPlayer)
+    if targetPlayer == LP then return end
+    pcall(function() RemoteInspect:FireServer(targetPlayer) end); task.wait(0.1) 
+    pcall(function() ManagerRemote:FireServer({ButtonAction = "pull", Inputs = {}}) end)
+    pcall(function() if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end; for _, gui in pairs(LP.PlayerGui:GetDescendants()) do if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end end end)
+end
+
+task.spawn(function()
+    while true do
+        if getgenv().AutoBan or getgenv().AutoPull then
+            for _, targetPlayer in ipairs(Players:GetPlayers()) do
+                if targetPlayer ~= LP then 
+                    if getgenv().AutoBan then ExecuteBan(targetPlayer) end
+                    if getgenv().AutoPull then ExecutePull(targetPlayer) end
+                    task.wait(0.2) 
+                end
+            end
+        end
+        task.wait(0.5) 
+    end
+end)
+
+-- [[ LOGIKA ANTI-STAFF ]]
 local function CheckIfStaff(player)
     if not getgenv().AntiStaff then return end
     if player == LP then return end
-    
     task.spawn(function()
         pcall(function()
             local isStaff = false
-            
-            -- 1. Deteksi Jika Creator Asli Game Masuk
-            if game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId then
-                isStaff = true
-            end
-            
-            -- 2. Deteksi Jika Game Dibikin Oleh Grup & Pangkat Player Tersebut Tinggi (Mod/Admin/Dev)
+            if game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId then isStaff = true end
             if game.CreatorType == Enum.CreatorType.Group then
                 local playerRank = player:GetRankInGroup(game.CreatorId)
-                if playerRank >= 100 then -- Rank 100+ biasanya Moderator ke atas
-                    isStaff = true
-                end
+                if playerRank >= 100 then isStaff = true end
             end
-            
-            -- 3. Deteksi Jika Player Punya Role Official Roblox Admin (Grup ID 1200769)
-            if player:GetRankInGroup(1200769) > 0 then
-                isStaff = true
-            end
-            
-            -- EKSEKUSI AUTO KICK
-            if isStaff then
-                LP:Kick("🛡️ Kzoyz Security: Auto Disconnect!\n\nModerator/Developer (" .. player.Name .. ") terdeteksi memasuki server.")
-            end
+            if player:GetRankInGroup(1200769) > 0 then isStaff = true end
+            if isStaff then LP:Kick("🛡️ Kzoyz Security: Auto Disconnect!\n\nModerator/Developer (" .. player.Name .. ") terdeteksi memasuki server.") end
         end)
     end)
 end
@@ -272,37 +457,29 @@ end
 Players.PlayerAdded:Connect(function(newPlayer) 
     CheckIfStaff(newPlayer)
     if getgenv().AutoBan then ExecuteBan(newPlayer) end 
+    if getgenv().AutoPull then ExecutePull(newPlayer) end
 end)
 
 task.spawn(function()
     while true do
-        if getgenv().AntiStaff then
-            for _, p in ipairs(Players:GetPlayers()) do CheckIfStaff(p) end
-        end
+        if getgenv().AntiStaff then for _, p in ipairs(Players:GetPlayers()) do CheckIfStaff(p) end end
         task.wait(2)
     end
 end)
 
-
 -- [[ LOGIKA STREAMER MODE / SPOOF NAME ]]
 task.spawn(function()
-    local realName = LP.Name
-    local realDisplay = LP.DisplayName
-    local activeFake = realName
-    
+    local realName = LP.Name; local realDisplay = LP.DisplayName; local activeFake = realName
     while true do
-        local targetName = realName
-        local targetDisplay = realDisplay
+        local targetName = realName; local targetDisplay = realDisplay
         if getgenv().HideName then
             local f = getgenv().FakeNameText
             targetName = (f == "" or f == " ") and "HiddenPlayer" or f
             targetDisplay = targetName
         end
-        
         local function ReplaceSafe(obj)
             if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-                local txt = obj.Text
-                local changed = false
+                local txt = obj.Text; local changed = false
                 if targetName ~= realName and txt:find(realName) then txt = string.gsub(txt, realName, targetName); changed = true end
                 if targetDisplay ~= realDisplay and txt:find(realDisplay) then txt = string.gsub(txt, realDisplay, targetDisplay); changed = true end
                 if activeFake ~= targetName and activeFake ~= realName and activeFake ~= realDisplay then
@@ -311,7 +488,6 @@ task.spawn(function()
                 if changed and obj.Text ~= txt then obj.Text = txt end
             end
         end
-        
         if LP.Character then for _, v in pairs(LP.Character:GetDescendants()) do ReplaceSafe(v) end end
         if LP:FindFirstChild("PlayerGui") then for _, v in pairs(LP.PlayerGui:GetDescendants()) do ReplaceSafe(v) end end
         activeFake = targetName
@@ -327,8 +503,7 @@ task.spawn(function()
             local currentMsg = getgenv().ChatText
             if getgenv().ChatRandomLetter then
                 local rand = math.random(1, #charset)
-                local rChar = string.sub(charset, rand, rand)
-                currentMsg = currentMsg .. " [" .. rChar .. "]"
+                currentMsg = currentMsg .. " [" .. string.sub(charset, rand, rand) .. "]"
             end
             pcall(function() ChatRemote:FireServer(currentMsg) end)
             task.wait(getgenv().ChatDelay) 
@@ -337,8 +512,6 @@ task.spawn(function()
         end
     end
 end)
-
-
 
 -- [[ LOGIKA AUTO DROP ]]
 task.spawn(function() 
@@ -350,11 +523,8 @@ task.spawn(function()
             pcall(function() 
                 if getgenv().GameInventoryModule then 
                     local _, slot; 
-                    if getgenv().GameInventoryModule.GetSelectedHotbarItem then 
-                        _, slot = getgenv().GameInventoryModule.GetSelectedHotbarItem() 
-                    elseif getgenv().GameInventoryModule.GetSelectedItem then 
-                        _, slot = getgenv().GameInventoryModule.GetSelectedItem() 
-                    end; 
+                    if getgenv().GameInventoryModule.GetSelectedHotbarItem then _, slot = getgenv().GameInventoryModule.GetSelectedHotbarItem() 
+                    elseif getgenv().GameInventoryModule.GetSelectedItem then _, slot = getgenv().GameInventoryModule.GetSelectedItem() end; 
                     if slot then RemoteDropSafe:FireServer(slot, Amt) end 
                 end 
             end); 
@@ -379,11 +549,8 @@ task.spawn(function()
             pcall(function() 
                 if getgenv().GameInventoryModule then 
                     local _, slot; 
-                    if getgenv().GameInventoryModule.GetSelectedHotbarItem then 
-                        _, slot = getgenv().GameInventoryModule.GetSelectedHotbarItem() 
-                    elseif getgenv().GameInventoryModule.GetSelectedItem then 
-                        _, slot = getgenv().GameInventoryModule.GetSelectedItem() 
-                    end; 
+                    if getgenv().GameInventoryModule.GetSelectedHotbarItem then _, slot = getgenv().GameInventoryModule.GetSelectedHotbarItem() 
+                    elseif getgenv().GameInventoryModule.GetSelectedItem then _, slot = getgenv().GameInventoryModule.GetSelectedItem() end; 
                     if slot then RemoteTrashSafe:FireServer(slot) end 
                 end 
             end); 
@@ -398,40 +565,55 @@ task.spawn(function()
     end 
 end)
 
--- [[ LOGIKA AUTO COLLECT GRID (ANTI-POTONG) ]]
+-- [[ 🧲 LOGIKA GLOBAL AUTO LOOT (SMART GLIDE) ]]
+getgenv().BlacklistedLoot = getgenv().BlacklistedLoot or {}
 task.spawn(function() 
     while true do 
         if getgenv().AutoCollect then 
             local HitboxFolder = workspace:FindFirstChild("Hitbox")
-            local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name)
+            local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
+            
             if MyHitbox then 
-                local startZ = MyHitbox.Position.Z
-                local currentX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
-                local currentY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
-                local homeX = currentX
-                local homeY = currentY
-                local targetX = getgenv().TargetPosX
-                local targetY = getgenv().TargetPosY
-                if currentX ~= targetX or currentY ~= targetY then 
-                    local function WalkGrid(tX, tY) 
-                        while (currentX ~= tX or currentY ~= tY) and getgenv().AutoCollect do 
-                            if currentX ~= tX then 
-                                currentX = currentX + (tX > currentX and 1 or -1) 
-                            elseif currentY ~= tY then 
-                                currentY = currentY + (tY > currentY and 1 or -1) 
+                local pPos = MyHitbox.Position
+                local itemsToLoot = {}
+                local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
+                
+                -- 1. Mengumpulkan semua drop di Map
+                for _, folder in ipairs(TargetFolders) do
+                    if folder then
+                        for _, obj in ipairs(folder:GetChildren()) do
+                            if not getgenv().BlacklistedLoot[obj] then
+                                local pos = obj:IsA("BasePart") and obj.Position or (obj:IsA("Model") and obj.PrimaryPart and obj.PrimaryPart.Position)
+                                if pos then table.insert(itemsToLoot, { instance = obj, position = pos, dist = (Vector2.new(pPos.X, pPos.Y) - Vector2.new(pos.X, pos.Y)).Magnitude }) end
                             end
-                            local newWorldPos = Vector3.new(currentX * getgenv().GridSize, currentY * getgenv().GridSize, startZ)
-                            MyHitbox.CFrame = CFrame.new(newWorldPos)
-                            if PlayerMovement then pcall(function() PlayerMovement.Position = newWorldPos end) end
-                            task.wait(getgenv().StepDelay) 
-                        end 
+                        end
                     end
-                    WalkGrid(targetX, targetY)
-                    task.wait(0.6)
-                    WalkGrid(homeX, homeY) 
-                end 
+                end
+                
+                -- 2. Sortir dari yang terdekat
+                if #itemsToLoot > 0 then
+                    table.sort(itemsToLoot, function(a, b) return a.dist < b.dist end)
+                    
+                    -- 3. Eksekusi Looting dengan meluncur
+                    for _, itemData in ipairs(itemsToLoot) do
+                        if not getgenv().AutoCollect then break end
+                        
+                        -- Pengecekan apakah barang ada di dalam tembok
+                        local endX = math.floor(itemData.position.X / getgenv().GridSize + 0.5)
+                        local endY = math.floor(itemData.position.Y / getgenv().GridSize + 0.5)
+                        
+                        if IsTileSolid(endX, endY) then
+                            getgenv().BlacklistedLoot[itemData.instance] = true
+                        else
+                            SmartMoveToExact(itemData.position)
+                            task.wait(0.05) -- Beri waktu sistem mendeteksi barang terambil
+                        end
+                    end
+                else
+                    task.wait(0.5) -- Kalau nggak ada drop, nunggu sebentar biar nggak lag
+                end
             end 
         end
-        task.wait(2) 
+        task.wait(0.1) 
     end 
 end)
