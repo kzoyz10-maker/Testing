@@ -29,7 +29,27 @@ local Window = WindUI:CreateWindow({
     Theme = "Dark",
     SideBarWidth = 170,
     HasOutline = true,
+    Keybind = Enum.KeyCode.F24 -- [!] DI AKALI: Set ke tombol F24 biar keyboard gak bisa nutup paksa UI-nya
 })
+
+-- ========================================== --
+-- [[ HACK: HAPUS TOMBOL CLOSE [ X ] ]]
+-- ========================================== --
+task.spawn(function()
+    task.wait(1.5) -- Tunggu UI ke-render 100%
+    pcall(function()
+        for _, gui in ipairs(game:GetService("CoreGui"):GetDescendants()) do
+            -- Cari tombol bawaan WindUI yang fungsinya untuk "Close"
+            if (gui:IsA("ImageButton") or gui:IsA("TextButton")) then
+                local objName = string.lower(gui.Name)
+                if objName:match("close") or objName == "x" then
+                    gui.Visible = false
+                    gui:Destroy() -- Hapus tombolnya!
+                end
+            end
+        end
+    end)
+end)
 
 -- Fungsi buat Bikin Tab + Langsung Auto-Load Script dari Github
 local function AutoLoadTabFromGithub(TabName, IconName, DescText, LoadLink)
@@ -69,15 +89,23 @@ end
 -- [[ LIST TAB & AUTO LOAD MUNCUL SEMUA ]]
 -- ========================================== --
 
-AutoLoadTabFromGithub("Pabrik", "factory", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Pabrik.lua")
-AutoLoadTabFromGithub("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autofarm.lua")
-AutoLoadTabFromGithub("Manager", "briefcase", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Manager.lua")
-AutoLoadTabFromGithub("Auto PTHT", "tractor", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoplant.lua")
-AutoLoadTabFromGithub("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autocollect.lua")
+AutoLoadTabFromGithub("Pabrik", "factory", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Pabrik.lua")
+AutoLoadTabFromGithub("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autofarm.lua")
+AutoLoadTabFromGithub("Manager", "briefcase", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Manager.lua")
+AutoLoadTabFromGithub("Auto PTHT", "tractor", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autoplant.lua")
+AutoLoadTabFromGithub("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autocollect.lua")
 
 -- ========================================== --
 -- [[ TAB TAMBAHAN: DISCORD & CONFIG ]]
 -- ========================================== --
 -- GANTI LINK DI BAWAH DENGAN LINK RAW GITHUB KAMU SENDIRI
-AutoLoadTabFromGithub("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Discord.lua")
-AutoLoadTabFromGithub("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Config.lua")
+AutoLoadTabFromGithub("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Discord.lua")
+AutoLoadTabFromGithub("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Config.lua")
+
+-- Notifikasi Edukasi Awal
+task.wait(2)
+WindUI:Notify({ 
+    Title = "Panduan UI", 
+    Content = "Klik tombol [-] di kanan atas untuk mengecilkan menu menjadi Oval.", 
+    Duration = 5 
+})
