@@ -1,25 +1,9 @@
--- ========================================== --
--- [[ KZOYZ AUTO COLLECT + PRO ESP + GROWSCAN ]]
--- ========================================== --
-local TargetPage = ...
-if not TargetPage then warn("Module harus di-load dari Kzoyz Index!") return end
+local Tab = ...
+if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-TargetPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
-TargetPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-local listLayout = TargetPage:FindFirstChildWhichIsA("UIListLayout")
-if listLayout then
-    TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
-    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        TargetPage.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
-    end)
-end
-
-getgenv().ScriptVersion = "Collect V12 + Tab UI + Stack Counter"
-getgenv().EnableAutoCollect = false
-getgenv().EnableDropESP = false
-getgenv().GridSize = 4.5
-getgenv().WalkSpeed = 16
-getgenv().AIDictionary = getgenv().AIDictionary or {}
+getgenv().ScriptVersion = "Growscan V15 (WINDUI + BULLETPROOF ESP)"
+getgenv().EnableDropESP = getgenv().EnableDropESP or false
+getgenv().GridSize = getgenv().GridSize or 4.5
 
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
@@ -32,52 +16,13 @@ local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
 local ItemsManager = require(RS:WaitForChild("Managers"):WaitForChild("ItemsManager"))
 
-local PlayerMovement
-pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
-
 -- ========================================== --
--- [[ BIKIN UI MENU ]]
--- ========================================== --
-function CreateToggle(Parent, Text, Var) 
-    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); Btn.Size = UDim2.new(1, -10, 0, 45); Btn.Text = "  " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13; Btn.TextXAlignment = Enum.TextXAlignment.Left; 
-    local IndBg = Instance.new("Frame", Btn); IndBg.Size = UDim2.new(0, 40, 0, 20); IndBg.Position = UDim2.new(1, -50, 0.5, -10); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30); 
-    local Dot = Instance.new("Frame", IndBg); Dot.Size = UDim2.new(0, 16, 0, 16); Dot.Position = getgenv()[Var] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8); Dot.BackgroundColor3 = getgenv()[Var] and Color3.new(1,1,1) or Color3.fromRGB(100,100,100); 
-
-    Btn.MouseButton1Click:Connect(function() 
-        getgenv()[Var] = not getgenv()[Var]; 
-        if getgenv()[Var] then 
-            Dot:TweenPosition(UDim2.new(1, -18, 0.5, -8), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.new(1,1,1); IndBg.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-        else 
-            Dot:TweenPosition(UDim2.new(0, 2, 0.5, -8), "Out", "Quad", 0.2, true); Dot.BackgroundColor3 = Color3.fromRGB(100,100,100); IndBg.BackgroundColor3 = Color3.fromRGB(30,30,30) 
-        end 
-    end) 
-end
-
-function CreateInput(Parent, Text, Var, DefaultValue)
-    local Frame = Instance.new("Frame", Parent); Frame.Size = UDim2.new(1, -10, 0, 40); Frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    local Label = Instance.new("TextLabel", Frame); Label.Size = UDim2.new(0.6, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.BackgroundTransparency = 1; Label.Text = Text; Label.TextColor3 = Color3.fromRGB(255, 255, 255); Label.Font = Enum.Font.GothamBold; Label.TextSize = 13; Label.TextXAlignment = Enum.TextXAlignment.Left
-    local TextBox = Instance.new("TextBox", Frame); TextBox.Size = UDim2.new(0.3, 0, 0.7, 0); TextBox.Position = UDim2.new(0.65, 0, 0.15, 0); TextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30); TextBox.TextColor3 = Color3.fromRGB(255, 255, 255); TextBox.Font = Enum.Font.Gotham; TextBox.TextSize = 13; TextBox.Text = tostring(DefaultValue); TextBox.ClearTextOnFocus = false
-    getgenv()[Var] = DefaultValue
-    TextBox.FocusLost:Connect(function() local num = tonumber(TextBox.Text); if num then getgenv()[Var] = num else TextBox.Text = tostring(getgenv()[Var]) end end)
-end
-
-function CreateButton(Parent, Text, Callback)
-    local Btn = Instance.new("TextButton", Parent); Btn.BackgroundColor3 = Color3.fromRGB(60, 120, 200); Btn.Size = UDim2.new(1, -10, 0, 40); Btn.Text = "🔍 " .. Text; Btn.TextColor3 = Color3.fromRGB(255, 255, 255); Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13;
-    Btn.MouseButton1Click:Connect(Callback)
-end
-
-CreateToggle(TargetPage, "START AUTO COLLECT", "EnableAutoCollect")
-CreateToggle(TargetPage, "ESP ITEMS", "EnableDropESP")
-CreateInput(TargetPage, "WALK SPEED", "WalkSpeed", 16)
-
--- ========================================== --
--- [[ HELPER: NAMA & STACK SIZE (JUMLAH ISI) ]]
+-- [[ HELPER: FUNGSI-FUNGSI LOGIKA (DITARUH ATAS BIAR AMAN) ]]
 -- ========================================== --
 local function GetItemDetails(item)
     local realName = nil
-    local stackAmount = 1 -- Default isi 1
+    local stackAmount = 1
     
-    -- 1. Cari jumlah tumpukan (Stack Size)
     for attrName, attrValue in pairs(item:GetAttributes()) do
         local lowerKey = string.lower(attrName)
         if lowerKey == "amount" or lowerKey == "count" or lowerKey == "quantity" then stackAmount = tonumber(attrValue) or 1 end
@@ -89,7 +34,6 @@ local function GetItemDetails(item)
         end
     end
 
-    -- 2. Cari Nama Item Asli
     for attrName, attrValue in pairs(item:GetAttributes()) do
         local lowerKey = string.lower(attrName)
         if lowerKey ~= "amount" and lowerKey ~= "count" and lowerKey ~= "quantity" then
@@ -111,9 +55,6 @@ local function GetItemDetails(item)
     return realName, stackAmount
 end
 
--- ========================================== --
--- [[ GROWSCAN MODAL (TAB SYSTEM) ]]
--- ========================================== --
 local function FormatCoords(coordsTable)
     if #coordsTable == 0 then return "-" end
     if #coordsTable > 8 then
@@ -125,11 +66,9 @@ local function FormatCoords(coordsTable)
 end
 
 local function RenderGrowscanContent(scrollTanaman, scrollDrops)
-    -- Bersihkan isi sebelumnya
     for _, child in ipairs(scrollTanaman:GetChildren()) do if not child:IsA("UIListLayout") then child:Destroy() end end
     for _, child in ipairs(scrollDrops:GetChildren()) do if not child:IsA("UIListLayout") then child:Destroy() end end
 
-    -- =================== BAGIAN TANAMAN ===================
     local plantStats = {}
     for x, yCol in pairs(RawWorldTiles) do
         if type(yCol) == "table" then
@@ -170,14 +109,13 @@ local function RenderGrowscanContent(scrollTanaman, scrollDrops)
     local totalY_Tanaman = 0
     for plantName, stat in pairs(plantStats) do
         local frame = Instance.new("Frame", scrollTanaman); frame.Size = UDim2.new(1, 0, 0, 85); frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        local lblName = Instance.new("TextLabel", frame); lblName.Size = UDim2.new(1, -10, 0, 20); lblName.Position = UDim2.new(0, 10, 0, 5); lblName.BackgroundTransparency = 1; lblName.Text = "🌱 " .. string.upper(string.gsub(plantName, "_sapling", "")); lblName.TextColor3 = Color3.fromRGB(150, 255, 150); lblName.Font = Enum.Font.GothamBold; lblName.TextXAlignment = Enum.TextXAlignment.Left; lblName.TextSize = 14
-        local lblStat = Instance.new("TextLabel", frame); lblStat.Size = UDim2.new(1, -10, 0, 20); lblStat.Position = UDim2.new(0, 10, 0, 25); lblStat.BackgroundTransparency = 1; lblStat.Text = "Pohon: " .. stat.total .. " | ✅ Ready: " .. stat.ready .. " | ⏳ Grow: " .. stat.growing; lblStat.TextColor3 = Color3.fromRGB(200, 200, 200); lblStat.Font = Enum.Font.Gotham; lblStat.TextXAlignment = Enum.TextXAlignment.Left; lblStat.TextSize = 12
-        local lblCoords = Instance.new("TextLabel", frame); lblCoords.Size = UDim2.new(1, -20, 0, 35); lblCoords.Position = UDim2.new(0, 10, 0, 45); lblCoords.BackgroundTransparency = 1; lblCoords.Text = "📍 XY Ready: " .. FormatCoords(stat.readyCoords); lblCoords.TextColor3 = Color3.fromRGB(180, 220, 255); lblCoords.Font = Enum.Font.Gotham; lblCoords.TextXAlignment = Enum.TextXAlignment.Left; lblCoords.TextYAlignment = Enum.TextYAlignment.Top; lblCoords.TextSize = 11; lblCoords.TextWrapped = true
+        local lblName = Instance.new("TextLabel", frame); lblName.Size = UDim2.new(1, -10, 0, 20); lblName.Position = UDim2.new(0, 10, 0, 5); lblName.BackgroundTransparency = 1; lblName.Text = "🌱 " .. string.upper(string.gsub(plantName, "_sapling", "")); lblName.TextColor3 = Color3.fromRGB(150, 255, 150); lblName.Font = Enum.Font.GothamBold; lblName.TextXAlignment = Enum.TextXAlignment.Left; lblName.TextSize = 13
+        local lblStat = Instance.new("TextLabel", frame); lblStat.Size = UDim2.new(1, -10, 0, 20); lblStat.Position = UDim2.new(0, 10, 0, 25); lblStat.BackgroundTransparency = 1; lblStat.Text = "Total: " .. stat.total .. " | ✅ Ready: " .. stat.ready .. " | ⏳ Grow: " .. stat.growing; lblStat.TextColor3 = Color3.fromRGB(200, 200, 200); lblStat.Font = Enum.Font.Gotham; lblStat.TextXAlignment = Enum.TextXAlignment.Left; lblStat.TextSize = 11
+        local lblCoords = Instance.new("TextLabel", frame); lblCoords.Size = UDim2.new(1, -20, 0, 35); lblCoords.Position = UDim2.new(0, 10, 0, 45); lblCoords.BackgroundTransparency = 1; lblCoords.Text = "📍 XY Ready: " .. FormatCoords(stat.readyCoords); lblCoords.TextColor3 = Color3.fromRGB(180, 220, 255); lblCoords.Font = Enum.Font.Gotham; lblCoords.TextXAlignment = Enum.TextXAlignment.Left; lblCoords.TextYAlignment = Enum.TextYAlignment.Top; lblCoords.TextSize = 10; lblCoords.TextWrapped = true
         totalY_Tanaman = totalY_Tanaman + 90
     end
     scrollTanaman.CanvasSize = UDim2.new(0, 0, 0, totalY_Tanaman)
 
-    -- =================== BAGIAN DROPS & GEMS ===================
     local dropStats = {}
     local dropsFolder = workspace:FindFirstChild("Drops")
     local gemsFolder = workspace:FindFirstChild("Gems")
@@ -203,15 +141,14 @@ local function RenderGrowscanContent(scrollTanaman, scrollDrops)
 
     local totalY_Drops = 0
 
-    -- Banner Gems
     local gemFrame = Instance.new("Frame", scrollDrops); gemFrame.Size = UDim2.new(1, 0, 0, 40); gemFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 60)
-    local gemLbl = Instance.new("TextLabel", gemFrame); gemLbl.Size = UDim2.new(1, -10, 1, 0); gemLbl.Position = UDim2.new(0, 10, 0, 0); gemLbl.BackgroundTransparency = 1; gemLbl.Text = "💎 TOTAL GEMS IN WORLD: " .. totalGems; gemLbl.TextColor3 = Color3.fromRGB(100, 200, 255); gemLbl.Font = Enum.Font.GothamBold; gemLbl.TextXAlignment = Enum.TextXAlignment.Left; gemLbl.TextSize = 14
+    local gemLbl = Instance.new("TextLabel", gemFrame); gemLbl.Size = UDim2.new(1, -10, 1, 0); gemLbl.Position = UDim2.new(0, 10, 0, 0); gemLbl.BackgroundTransparency = 1; gemLbl.Text = "💎 TOTAL GEMS: " .. totalGems; gemLbl.TextColor3 = Color3.fromRGB(100, 200, 255); gemLbl.Font = Enum.Font.GothamBold; gemLbl.TextXAlignment = Enum.TextXAlignment.Left; gemLbl.TextSize = 13
     totalY_Drops = totalY_Drops + 45
 
     for dName, dData in pairs(dropStats) do
         local dFrame = Instance.new("Frame", scrollDrops); dFrame.Size = UDim2.new(1, 0, 0, 55); dFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        local dLbl = Instance.new("TextLabel", dFrame); dLbl.Size = UDim2.new(1, -10, 0, 20); dLbl.Position = UDim2.new(0, 10, 0, 5); dLbl.BackgroundTransparency = 1; dLbl.Text = "📦 " .. string.upper(tostring(dName)) .. " | Amount: " .. dData.totalItems .. " (" .. dData.stacks .. " Stack)"; dLbl.TextColor3 = Color3.fromRGB(255, 215, 0); dLbl.Font = Enum.Font.GothamBold; dLbl.TextXAlignment = Enum.TextXAlignment.Left; dLbl.TextSize = 12
-        local dCoords = Instance.new("TextLabel", dFrame); dCoords.Size = UDim2.new(1, -10, 0, 20); dCoords.Position = UDim2.new(0, 10, 0, 25); dCoords.BackgroundTransparency = 1; dCoords.Text = "📍 XY: " .. FormatCoords(dData.coords); dCoords.TextColor3 = Color3.fromRGB(180, 220, 255); dCoords.Font = Enum.Font.Gotham; dCoords.TextXAlignment = Enum.TextXAlignment.Left; dCoords.TextSize = 11; dCoords.TextWrapped = true
+        local dLbl = Instance.new("TextLabel", dFrame); dLbl.Size = UDim2.new(1, -10, 0, 20); dLbl.Position = UDim2.new(0, 10, 0, 5); dLbl.BackgroundTransparency = 1; dLbl.Text = "📦 " .. string.upper(tostring(dName)) .. " | Amnt: " .. dData.totalItems .. " (" .. dData.stacks .. " Stk)"; dLbl.TextColor3 = Color3.fromRGB(255, 215, 0); dLbl.Font = Enum.Font.GothamBold; dLbl.TextXAlignment = Enum.TextXAlignment.Left; dLbl.TextSize = 11
+        local dCoords = Instance.new("TextLabel", dFrame); dCoords.Size = UDim2.new(1, -10, 0, 20); dCoords.Position = UDim2.new(0, 10, 0, 25); dCoords.BackgroundTransparency = 1; dCoords.Text = "📍 XY: " .. FormatCoords(dData.coords); dCoords.TextColor3 = Color3.fromRGB(180, 220, 255); dCoords.Font = Enum.Font.Gotham; dCoords.TextXAlignment = Enum.TextXAlignment.Left; dCoords.TextSize = 10; dCoords.TextWrapped = true
         totalY_Drops = totalY_Drops + 60
     end
     scrollDrops.CanvasSize = UDim2.new(0, 0, 0, totalY_Drops)
@@ -221,25 +158,22 @@ local function OpenGrowscanModal()
     if CoreGui:FindFirstChild("KzoyzGrowscan") then CoreGui.KzoyzGrowscan:Destroy() end
 
     local gui = Instance.new("ScreenGui", CoreGui); gui.Name = "KzoyzGrowscan"
-    local mainFrame = Instance.new("Frame", gui); mainFrame.Size = UDim2.new(0, 420, 0, 500); mainFrame.Position = UDim2.new(0.5, -210, 0.5, -250); mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
+    local mainFrame = Instance.new("Frame", gui); mainFrame.Size = UDim2.new(0, 350, 0, 420); mainFrame.Position = UDim2.new(0.5, -175, 0.5, -210); mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
     
-    local title = Instance.new("TextLabel", mainFrame); title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(20, 20, 20); title.Text = "📊 GROWSCAN"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 15
+    local title = Instance.new("TextLabel", mainFrame); title.Size = UDim2.new(1, 0, 0, 35); title.BackgroundColor3 = Color3.fromRGB(20, 20, 20); title.Text = "GROWSCAN"; title.TextColor3 = Color3.fromRGB(255, 215, 0); title.Font = Enum.Font.GothamBold; title.TextSize = 14
 
-    local closeBtn = Instance.new("TextButton", title); closeBtn.Size = UDim2.new(0, 40, 1, 0); closeBtn.Position = UDim2.new(1, -40, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80); closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 16
+    local closeBtn = Instance.new("TextButton", title); closeBtn.Size = UDim2.new(0, 35, 1, 0); closeBtn.Position = UDim2.new(1, -35, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80); closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 15
     
-    -- TAB BUTTONS
-    local tabFrame = Instance.new("Frame", mainFrame); tabFrame.Size = UDim2.new(1, 0, 0, 35); tabFrame.Position = UDim2.new(0, 0, 0, 40); tabFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    local btnTanaman = Instance.new("TextButton", tabFrame); btnTanaman.Size = UDim2.new(0.5, 0, 1, 0); btnTanaman.Position = UDim2.new(0, 0, 0, 0); btnTanaman.BackgroundColor3 = Color3.fromRGB(45, 45, 45); btnTanaman.Text = "🌱 TREE"; btnTanaman.TextColor3 = Color3.fromRGB(255, 255, 255); btnTanaman.Font = Enum.Font.GothamBold; btnTanaman.TextSize = 13
-    local btnDrops = Instance.new("TextButton", tabFrame); btnDrops.Size = UDim2.new(0.5, 0, 1, 0); btnDrops.Position = UDim2.new(0.5, 0, 0, 0); btnDrops.BackgroundColor3 = Color3.fromRGB(25, 25, 25); btnDrops.Text = "📦 ITEMS & GEMS"; btnDrops.TextColor3 = Color3.fromRGB(150, 150, 150); btnDrops.Font = Enum.Font.GothamBold; btnDrops.TextSize = 13
+    local tabFrame = Instance.new("Frame", mainFrame); tabFrame.Size = UDim2.new(1, 0, 0, 30); tabFrame.Position = UDim2.new(0, 0, 0, 35); tabFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    local btnTanaman = Instance.new("TextButton", tabFrame); btnTanaman.Size = UDim2.new(0.5, 0, 1, 0); btnTanaman.Position = UDim2.new(0, 0, 0, 0); btnTanaman.BackgroundColor3 = Color3.fromRGB(45, 45, 45); btnTanaman.Text = "🌱 TREE"; btnTanaman.TextColor3 = Color3.fromRGB(255, 255, 255); btnTanaman.Font = Enum.Font.GothamBold; btnTanaman.TextSize = 12
+    local btnDrops = Instance.new("TextButton", tabFrame); btnDrops.Size = UDim2.new(0.5, 0, 1, 0); btnDrops.Position = UDim2.new(0.5, 0, 0, 0); btnDrops.BackgroundColor3 = Color3.fromRGB(25, 25, 25); btnDrops.Text = "📦 ITEMS & GEMS"; btnDrops.TextColor3 = Color3.fromRGB(150, 150, 150); btnDrops.Font = Enum.Font.GothamBold; btnDrops.TextSize = 12
 
-    -- SCROLL FRAMES
-    local scrollTanaman = Instance.new("ScrollingFrame", mainFrame); scrollTanaman.Size = UDim2.new(1, -20, 1, -85); scrollTanaman.Position = UDim2.new(0, 10, 0, 80); scrollTanaman.BackgroundColor3 = Color3.fromRGB(40, 40, 40); scrollTanaman.ScrollBarThickness = 4
+    local scrollTanaman = Instance.new("ScrollingFrame", mainFrame); scrollTanaman.Size = UDim2.new(1, -20, 1, -75); scrollTanaman.Position = UDim2.new(0, 10, 0, 70); scrollTanaman.BackgroundColor3 = Color3.fromRGB(40, 40, 40); scrollTanaman.ScrollBarThickness = 4
     local uiList1 = Instance.new("UIListLayout", scrollTanaman); uiList1.Padding = UDim.new(0, 5)
     
-    local scrollDrops = Instance.new("ScrollingFrame", mainFrame); scrollDrops.Size = UDim2.new(1, -20, 1, -85); scrollDrops.Position = UDim2.new(0, 10, 0, 80); scrollDrops.BackgroundColor3 = Color3.fromRGB(40, 40, 40); scrollDrops.ScrollBarThickness = 4; scrollDrops.Visible = false
+    local scrollDrops = Instance.new("ScrollingFrame", mainFrame); scrollDrops.Size = UDim2.new(1, -20, 1, -75); scrollDrops.Position = UDim2.new(0, 10, 0, 70); scrollDrops.BackgroundColor3 = Color3.fromRGB(40, 40, 40); scrollDrops.ScrollBarThickness = 4; scrollDrops.Visible = false
     local uiList2 = Instance.new("UIListLayout", scrollDrops); uiList2.Padding = UDim.new(0, 5)
 
-    -- TAB LOGIC
     btnTanaman.MouseButton1Click:Connect(function()
         scrollTanaman.Visible = true; scrollDrops.Visible = false
         btnTanaman.BackgroundColor3 = Color3.fromRGB(45, 45, 45); btnTanaman.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -262,122 +196,22 @@ local function OpenGrowscanModal()
     end)
 end
 
-CreateButton(TargetPage, "Growscan", OpenGrowscanModal)
-
 -- ========================================== --
--- [[ PATHFINDING (A-STAR) SMART COLLECT ]]
+-- [[ BIKIN UI MENU (WINDUI TABS) ]]
 -- ========================================== --
-local BlockSolidityCache = {}
-local function IsTileSolid(gridX, gridY)
-    if gridX < 0 or gridX > 100 then return true end
-    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
-    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
-        local rawId = type(data) == "table" and data[1] or data
-        local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap[rawId] or rawId) or rawId
-        local nameStr = tostring(tileString):lower()
-        if BlockSolidityCache[nameStr] ~= nil then return BlockSolidityCache[nameStr] end
-        if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
-            BlockSolidityCache[nameStr] = false; continue 
-        end
-        BlockSolidityCache[nameStr] = true; return true
-    end
-    return false
-end
+local SecScan = Tab:Section({ Title = "Scanner & ESP", Box = true, Opened = true })
 
-local function FindPathAStar(startX, startY, targetX, targetY)
-    if startX == targetX and startY == targetY then return {} end
-    local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
-    local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
-    local startKey = startX .. "," .. startY
-    table.insert(openSet, {x = startX, y = startY, key = startKey})
-    gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
-    local maxIterations, iterations = 2000, 0
-    local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+SecScan:Toggle({ 
+    Title = "SHOW ESP ITEMS & GEMS", 
+    Flag = "Growscan_Toggle_ESP", 
+    Default = getgenv().EnableDropESP, 
+    Callback = function(v) getgenv().EnableDropESP = v end 
+})
 
-    while #openSet > 0 do
-        iterations = iterations + 1; if iterations > maxIterations then break end
-        local current, currentIndex = openSet[1], 1
-        for i = 2, #openSet do if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end end
-        if current.x == targetX and current.y == targetY then
-            local path, currKey = {}, current.key
-            while cameFrom[currKey] do local node = cameFrom[currKey]; table.insert(path, 1, {x = current.x, y = current.y}); current = node; currKey = node.x .. "," .. node.y end
-            return path
-        end
-        table.remove(openSet, currentIndex); closedSet[current.key] = true
-        for _, dir in ipairs(directions) do
-            local nextX, nextY = current.x + dir[1], current.y + dir[2]
-            local nextKey = nextX .. "," .. nextY
-            if nextX < 0 or nextX > 100 or closedSet[nextKey] then continue end
-            if not (nextX == targetX and nextY == targetY) and IsTileSolid(nextX, nextY) then closedSet[nextKey] = true; continue end
-            local tentative_gScore = gScore[current.key] + 1
-            if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
-                cameFrom[nextKey] = current; gScore[nextKey] = tentative_gScore; fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
-                local inOpenSet = false
-                for _, node in ipairs(openSet) do if node.key == nextKey then inOpenSet = true; break end end
-                if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
-            end
-        end
-    end
-    return nil 
-end
-
-local function SmoothWalkTo(targetPos)
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    if not MyHitbox then return false end
-    local startPos = MyHitbox.Position
-    local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetPos.X, targetPos.Y)).Magnitude 
-    local duration = dist / getgenv().WalkSpeed
-    if duration > 0 then 
-        local t = 0
-        while t < duration do
-            if not getgenv().EnableAutoCollect then return false end
-            local dt = RunService.Heartbeat:Wait()
-            t = t + dt
-            MyHitbox.CFrame = CFrame.new(startPos:Lerp(targetPos, math.clamp(t / duration, 0, 1)))
-            if PlayerMovement then pcall(function() PlayerMovement.Position = startPos:Lerp(targetPos, math.clamp(t / duration, 0, 1)) end) end
-        end
-    end
-    MyHitbox.CFrame = CFrame.new(targetPos)
-    if PlayerMovement then pcall(function() PlayerMovement.Position = targetPos end) end
-    task.wait(0.02) 
-    return true
-end
-
-local function MoveSmartlyToDrop(targetPos)
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    if not MyHitbox then return false end
-    local route = FindPathAStar(math.round(MyHitbox.Position.X / getgenv().GridSize), math.round(MyHitbox.Position.Y / getgenv().GridSize), math.round(targetPos.X / getgenv().GridSize), math.round(targetPos.Y / getgenv().GridSize))
-    if route then
-        for _, stepPos in ipairs(route) do
-            if not getgenv().EnableAutoCollect then break end
-            if not SmoothWalkTo(Vector3.new(stepPos.x * getgenv().GridSize, stepPos.y * getgenv().GridSize, MyHitbox.Position.Z)) then return false end
-        end
-    end
-    return SmoothWalkTo(targetPos)
-end
-
-if getgenv().KzoyzAutoCollectLoop then task.cancel(getgenv().KzoyzAutoCollectLoop) end
-getgenv().KzoyzAutoCollectLoop = task.spawn(function()
-    while true do
-        if getgenv().EnableAutoCollect then
-            local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-            if MyHitbox then
-                local drops = {}
-                for _, container in ipairs({workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems")}) do
-                    if container then
-                        for _, item in ipairs(container:GetChildren()) do
-                            local pos = item:IsA("Model") and item.PrimaryPart and item.PrimaryPart.Position or (item:IsA("BasePart") and item.Position)
-                            if pos then table.insert(drops, {instance = item, position = pos, dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(MyHitbox.Position.X, MyHitbox.Position.Y)).Magnitude}) end
-                        end
-                    end
-                end
-                table.sort(drops, function(a, b) return a.dist < b.dist end)
-                if #drops > 0 and drops[1].instance.Parent then MoveSmartlyToDrop(drops[1].position); task.wait(0.1) end
-            end
-        end
-        task.wait(0.2) 
-    end
-end)
+SecScan:Button({ 
+    Title = "Growscan (Scanner)", 
+    Callback = function() pcall(function() OpenGrowscanModal() end) end 
+})
 
 -- ========================================== --
 -- [[ TRACER ESP LOGIC ]]
