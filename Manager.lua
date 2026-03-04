@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v3.9 - V3.3 MODFLY & FIXED BOUNCE" 
+getgenv().ScriptVersion = "Manager v4.0 - UNLI JUMP, SPEED & ANTI-KB" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -32,6 +32,9 @@ getgenv().CustomZoom = getgenv().CustomZoom or 1000
 getgenv().AntiHit = getgenv().AntiHit or false
 getgenv().AntiBounce = getgenv().AntiBounce or false
 getgenv().ModflyEnabled = getgenv().ModflyEnabled or false
+getgenv().InfJump = getgenv().InfJump or false
+getgenv().SuperSpeed = getgenv().SuperSpeed or false
+getgenv().LockedX = nil -- Variable untuk ngunci posisi Anti-KB
 
 -- ========================================== --
 -- [[ SERVICES & MODULES ]]
@@ -121,13 +124,17 @@ end)
 -- ========================================== --
 
 local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
-SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Lava/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
-SecPlayer:Toggle({ Title = "⛔ Anti Bounce (Bisa Lompat Normal)", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
-SecPlayer:Toggle({ Title = "✈️ Modfly jj", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
-SecPlayer:Input({ Title = "Kecepatan Walk/Loot/Modfly", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
-SecPlayer:Toggle({ Title = "Auto Pull Players", Default = getgenv().AutoPull, Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end })
-SecPlayer:Toggle({ Title = "Auto Ban Players", Default = getgenv().AutoBan, Callback = function(v) getgenv().AutoBan = v; if not v then ForceRestoreUI() end end })
-SecPlayer:Toggle({ Title = "Enable Anti-Staff (Auto Disconnect)", Default = getgenv().AntiStaff, Callback = function(v) getgenv().AntiStaff = v end })
+SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
+SecPlayer:Toggle({ Title = "⛔ Anti Knockback & Bounce", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
+SecPlayer:Toggle({ Title = "✈️ Modfly (V3.3 Mulus)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
+SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) getgenv().InfJump = v end })
+SecPlayer:Toggle({ Title = "⚡ Super Speed", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
+SecPlayer:Input({ Title = "Speed / WalkSpeed Modifier", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
+
+local SecMisc = Tab:Section({ Title = "Server & Player Tools", Box = true, Opened = false })
+SecMisc:Toggle({ Title = "Auto Pull Players", Default = getgenv().AutoPull, Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end })
+SecMisc:Toggle({ Title = "Auto Ban Players", Default = getgenv().AutoBan, Callback = function(v) getgenv().AutoBan = v; if not v then ForceRestoreUI() end end })
+SecMisc:Toggle({ Title = "Enable Anti-Staff (Disconnect)", Default = getgenv().AntiStaff, Callback = function(v) getgenv().AntiStaff = v end })
 
 local SecCam = Tab:Section({ Title = "Camera Custom Zoom", Box = true, Opened = false })
 SecCam:Input({ Title = "Max Zoom Distance", Value = tostring(getgenv().CustomZoom), Placeholder = tostring(getgenv().CustomZoom), Callback = function(v) getgenv().CustomZoom = tonumber(v) or getgenv().CustomZoom end })
@@ -298,47 +305,41 @@ local function SmartMoveToExact(targetVec3)
 end
 
 -- ========================================== --
--- [[ ⚙️ HEARTBEAT: CORE MODFLY & ANTI-BOUNCE ]]
+-- [[ ⚙️ HEARTBEAT: MOVEMENT & COMBAT LOGIC ]]
 -- ========================================== --
 
 RunService.Heartbeat:Connect(function(dt)
     local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     local hum = LP.Character and LP.Character:FindFirstChild("Humanoid")
     
-    -- [1] MODFLY (PERSIS KAYAK V3.3 + DEADZONE BIAR GAK JALAN SENDIRI)
+    -- Sensor Jalan Mobile/Keyboard
+    local moveX, moveY = 0, 0
+    if hum then
+        if hum.MoveDirection.X > 0.2 then moveX = 1 elseif hum.MoveDirection.X < -0.2 then moveX = -1 end
+        if hum.MoveDirection.Z < -0.2 then moveY = 1 elseif hum.MoveDirection.Z > 0.2 then moveY = -1 end
+        if hum.Jump then moveY = 1 end
+    end
+    if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveY = 1 end
+    if UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then moveY = -1 end
+    if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveX = -1 end
+    if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveX = 1 end
+    
+    moveX = math.clamp(moveX, -1, 1)
+    moveY = math.clamp(moveY, -1, 1)
+
+    -- [1] MODFLY (V3.3 STYLE + DEADZONE)
     if getgenv().ModflyEnabled then
-        local moveX, moveY = 0, 0
-        
-        -- Baca Analog Layar HP (Pake Deadzone 0.2 biar gak drifting)
-        if hum then
-            if hum.MoveDirection.X > 0.2 then moveX = 1 elseif hum.MoveDirection.X < -0.2 then moveX = -1 end
-            if hum.MoveDirection.Z < -0.2 then moveY = 1 elseif hum.MoveDirection.Z > 0.2 then moveY = -1 end
-            if hum.Jump then moveY = 1 end
-        end
-
-        -- Baca Keyboard (Kalau pasang keyboard di HP/PC)
-        if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveY = 1 end
-        if UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then moveY = -1 end
-        if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveX = -1 end
-        if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveX = 1 end
-        
-        moveX = math.clamp(moveX, -1, 1)
-        moveY = math.clamp(moveY, -1, 1)
-
         if hrp then
             if moveX == 0 and moveY == 0 then
-                -- Kalau joystick dilepas, karakter DIAM SEMPURNA melayang
                 hrp.Velocity = Vector3.zero
                 if PlayerMovement then pcall(function() PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0 end) end
             else
-                -- Bergerak pakai CFrame mulus (kayak v3.3)
                 local speed = getgenv().WalkSpeed or 45
                 local newCFrame = hrp.CFrame + Vector3.new(moveX * speed * dt, moveY * speed * dt, 0)
                 hrp.CFrame = newCFrame
                 hrp.Velocity = Vector3.zero 
             end
 
-            -- Matikan script gravitasi bawaan game biar gak ditarik ke bawah
             if PlayerMovement then
                 pcall(function()
                     PlayerMovement.InputActive = false 
@@ -347,36 +348,76 @@ RunService.Heartbeat:Connect(function(dt)
             end
         end
     else
-        -- Kembalikan normal pas dimatikan
+        -- Restore control pas dimatiin
         if PlayerMovement and PlayerMovement.InputActive == false and not (getgenv().AutoDrop or getgenv().AutoTrash or getgenv().AutoCollect) then
             pcall(function() PlayerMovement.InputActive = true end)
         end
     end
 
-    -- [2] ANTI-BOUNCE (BISA LOMPAT NORMAL, BLOKIR PANTULAN EKSTREM MAGMA/BUMPER)
-    if getgenv().AntiBounce and not getgenv().ModflyEnabled then
-        if hrp then
-            -- Lompat normal biasanya speed 30-40. Magma/Bumper biasanya nendang > 60.
-            -- Kita cuma "potong" kecepatannya kalau dia nendang terlalu tinggi.
-            -- Jadi kamu 100% BEBAS lompat normal!
-            if hrp.Velocity.Y > 38 then
-                hrp.Velocity = Vector3.new(hrp.Velocity.X, 38, hrp.Velocity.Z) 
-            end
-        end
-        
-        if PlayerMovement then
+    -- [2] INFINITE JUMP
+    if getgenv().InfJump and PlayerMovement then
+        pcall(function()
+            PlayerMovement.RemainingJumps = 999
+            PlayerMovement.MaxJump = 999
+        end)
+    end
+
+    -- [3] SUPER SPEED (Buat lari darat)
+    if getgenv().SuperSpeed and not getgenv().ModflyEnabled then
+        if moveX ~= 0 and PlayerMovement then
             pcall(function()
-                if (PlayerMovement.VelocityY or 0) > 38 then 
-                    PlayerMovement.VelocityY = 38 
-                end
+                PlayerMovement.VelocityX = moveX * (getgenv().WalkSpeed or 45)
             end)
         end
     end
 
+    -- [4] AGGRESSIVE ANTI-KNOCKBACK & BOUNCE
+    if getgenv().AntiBounce and not getgenv().ModflyEnabled then
+        if PlayerMovement and PlayerMovement.Position then
+            -- Kunci Kordinat X kalau lagi nggak jalan (Anti Punch / Pindah Paksa)
+            if moveX == 0 then
+                if not getgenv().LockedX then
+                    getgenv().LockedX = PlayerMovement.Position.X
+                else
+                    local currentX = PlayerMovement.Position.X
+                    local diff = math.abs(currentX - getgenv().LockedX)
+                    
+                    if diff > 0 and diff < 15 then
+                        -- GAME NYOBA NDORONG KITA! Tarik balik paksa.
+                        pcall(function()
+                            PlayerMovement.Position = Vector3.new(getgenv().LockedX, PlayerMovement.Position.Y, PlayerMovement.Position.Z)
+                            PlayerMovement.OldPosition = PlayerMovement.Position
+                            PlayerMovement.VelocityX = 0
+                        end)
+                    elseif diff >= 15 then
+                        -- Kalau teleport / respawn jauh, reset kunci
+                        getgenv().LockedX = currentX
+                    end
+                end
+            else
+                -- Lepas kunci kalau player murni jalan pakai analog/keyboard
+                getgenv().LockedX = nil
+            end
+        end
+
+        -- Anti Bounce untuk Magma/Bumper (Kunci sumbu Y)
+        if hrp and hrp.Velocity.Y > 38 then
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, 38, hrp.Velocity.Z) 
+        end
+        if PlayerMovement then
+            pcall(function()
+                if (PlayerMovement.VelocityY or 0) > 38 then PlayerMovement.VelocityY = 38 end
+            end)
+        end
+    else
+        getgenv().LockedX = nil -- Reset kalau dimatiin
+    end
+
+    -- Status UI Drop/Trash
     if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end 
 end)
 
--- [[ LOGIKA AUTO BAN & AUTO PULL ]]
+-- [[ SISA LOGIKA: BAN, PULL, STAFF, CHAT, TRASH, DROP, AUTOLOOT ]]
 local function ExecuteBan(targetPlayer)
     if targetPlayer == LP then return end
     pcall(function() RemoteInspect:FireServer(targetPlayer) end); task.wait(0.1) 
@@ -406,7 +447,6 @@ task.spawn(function()
     end
 end)
 
--- [[ LOGIKA ANTI-STAFF ]]
 local function CheckIfStaff(player)
     if not getgenv().AntiStaff then return end
     if player == LP then return end
@@ -437,7 +477,6 @@ task.spawn(function()
     end
 end)
 
--- [[ LOGIKA STREAMER MODE / SPOOF NAME ]]
 task.spawn(function()
     local realName = LP.Name; local realDisplay = LP.DisplayName; local activeFake = realName
     while true do
@@ -465,7 +504,6 @@ task.spawn(function()
     end
 end)
 
--- [[ LOGIKA AUTO CHAT SPAM ]]
 task.spawn(function()
     local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
     while true do
@@ -483,7 +521,6 @@ task.spawn(function()
     end
 end)
 
--- [[ LOGIKA AUTO DROP ]]
 task.spawn(function() 
     local WasAutoDropOn = false
     while true do 
@@ -509,7 +546,6 @@ task.spawn(function()
     end 
 end)
 
--- [[ LOGIKA AUTO TRASH ]]
 task.spawn(function() 
     local WasAutoTrashOn = false
     while true do 
@@ -535,7 +571,6 @@ task.spawn(function()
     end 
 end)
 
--- [[ 🧲 LOGIKA GLOBAL AUTO LOOT ]]
 getgenv().BlacklistedLoot = getgenv().BlacklistedLoot or {}
 task.spawn(function() 
     while true do 
