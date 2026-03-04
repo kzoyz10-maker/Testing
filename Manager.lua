@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v4.2 - FULL SCRIPT & STRONG ANTI-KB" 
+getgenv().ScriptVersion = "Manager v4.3 - SENSOR BYPASS (NO KNOCKBACK)" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -34,7 +34,6 @@ getgenv().AntiBounce = getgenv().AntiBounce or false
 getgenv().ModflyEnabled = getgenv().ModflyEnabled or false
 getgenv().InfJump = getgenv().InfJump or false
 getgenv().SuperSpeed = getgenv().SuperSpeed or false
-getgenv().LockedX = nil 
 getgenv().IsHoldingSpace = false
 
 -- ========================================== --
@@ -137,10 +136,10 @@ end)
 local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
 SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
 SecPlayer:Toggle({ Title = "⛔ Anti Punch / No Knockback", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
-SecPlayer:Toggle({ Title = "✈️ Anti-Gravity", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
+SecPlayer:Toggle({ Title = "✈️ Anti-Gravity (Modfly)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
 SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) getgenv().InfJump = v end })
 SecPlayer:Toggle({ Title = "⚡ Super Speed", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
-SecPlayer:Input({ Title = "Speed Modifier (Isi Angka)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
+SecPlayer:Input({ Title = "Speed Modifier (2 Recomended)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
 
 local SecMisc = Tab:Section({ Title = "Server Tools", Box = true, Opened = false })
 SecMisc:Toggle({ Title = "Auto Pull Players", Default = getgenv().AutoPull, Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end })
@@ -325,46 +324,15 @@ RunService.RenderStepped:Connect(function(dt)
     
     local char = LP.Character
     local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
-    
-    -- Ambil MoveX murni dari sistem game (Gak bakal drifting!)
     local pMoveX = PlayerMovement.MoveX or 0
 
     pcall(function()
-        -- [1] ANTI PUNCH / NO KNOCKBACK (DIPERKUAT)
-        if getgenv().AntiBounce then
-            -- Kunci Sumbu X
-            if pMoveX == 0 then
-                if not getgenv().LockedX then
-                    getgenv().LockedX = PlayerMovement.Position.X
-                else
-                    local currentX = PlayerMovement.Position.X
-                    local diff = math.abs(currentX - getgenv().LockedX)
-                    
-                    -- Batas diperlebar jadi 40 biar gak gampang lepas kalau kena pukul keras/beruntun
-                    if diff > 0 and diff < 40 then
-                        PlayerMovement.Position = Vector3.new(getgenv().LockedX, PlayerMovement.Position.Y, PlayerMovement.Position.Z)
-                        PlayerMovement.OldPosition = PlayerMovement.Position
-                        PlayerMovement.VelocityX = 0
-                    elseif diff >= 40 then
-                        getgenv().LockedX = currentX
-                    end
-                end
-            else
-                getgenv().LockedX = nil
-            end
-
-            -- Kunci Sumbu Y (Tahan mental dari magma biar gak bounce)
-            if PlayerMovement.VelocityY and PlayerMovement.VelocityY > 20 and not getgenv().IsHoldingSpace then
-                PlayerMovement.VelocityY = 0
-            end
-
-            -- Matikan fisika rotasi bawaan Roblox
-            if hrp then
-                hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
-                hrp.RotVelocity = Vector3.zero
-            end
+        -- [1] SENSOR BYPASS (THE NATIVE FIX!)
+        -- Ini matikan total fungsi mental (Deflect) dan hit (Hurt) langsung dari engine game!
+        if getgenv().AntiBounce or getgenv().AntiHit then
+            PlayerMovement.Sensor = false
         else
-            getgenv().LockedX = nil
+            PlayerMovement.Sensor = true
         end
 
         -- [2] SUPER SPEED
@@ -384,15 +352,12 @@ RunService.RenderStepped:Connect(function(dt)
             
             local flySpeed = (getgenv().WalkSpeed or 45) * dt
             
-            -- PC (Spasi / W / Up)
             if getgenv().IsHoldingSpace or UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Up) then
                 PlayerMovement.Position = PlayerMovement.Position + Vector3.new(0, flySpeed, 0)
-            -- PC (S / Down)
             elseif UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then
                 PlayerMovement.Position = PlayerMovement.Position - Vector3.new(0, flySpeed, 0)
             end
             
-            -- Mobile Fallback (Joystick Analog)
             local hum = char and char:FindFirstChild("Humanoid")
             if hum and not getgenv().IsHoldingSpace then
                 if hum.MoveDirection.Z < -0.2 then
