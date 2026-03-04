@@ -1,7 +1,7 @@
 local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Auto Clear v6.0 - U-SHAPE WALK & SMART OFFSET" 
+getgenv().ScriptVersion = "Auto Clear v7.0 - DYNAMIC PATHING & BUG FIX" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -36,7 +36,6 @@ local ModflyConnection = nil
 local function SetModflyState(state)
     if state then
         if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
-        
         if not ModflyConnection then
             ModflyConnection = RunService.Heartbeat:Connect(function()
                 if PlayerMovement then
@@ -68,12 +67,23 @@ local function IsTileEmpty(gridX, gridY)
         local rawId = type(data) == "table" and data[1] or data
         local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
         local nameStr = tostring(tileString):lower()
-        
         if not nameStr:find("bg") and not nameStr:find("background") and not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") then
             return false
         end
     end
     return true
+end
+
+local function IsBedrockInGrid(gridX, gridY)
+    if gridX < 0 or gridX > 100 or gridY < 0 then return false end
+    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
+    
+    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
+        local rawId = type(data) == "table" and data[1] or data
+        local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
+        if tostring(tileString):lower():find("bedrock") then return true end
+    end
+    return false
 end
 
 local function IsTileBreakable(gridX, gridY)
@@ -89,7 +99,6 @@ local function IsTileBreakable(gridX, gridY)
         local nameStr = tostring(tileString):lower()
         
         if nameStr:find("bedrock") then isBedrockTile = true end
-        
         if not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") and not nameStr:find("bedrock") and nameStr ~= "0" then
             hasBreakable = true
         end
@@ -108,7 +117,6 @@ local function GetNextExposedBlock()
         
         for x = startX, endX, step do
             if IsTileBreakable(x, y) then
-                -- [!] SMART OFFSET: Kasih tau dari sisi mana blok ini bisa didekati
                 if IsTileEmpty(x, y + 1) then return x, y, "top" end
                 if IsTileEmpty(x - 1, y) then return x, y, "left" end
                 if IsTileEmpty(x + 1, y) then return x, y, "right" end
@@ -119,7 +127,28 @@ local function GetNextExposedBlock()
 end
 
 -- ========================================== --
--- [[ FUNGSI MOVEMENT (U-SHAPE SAFE PATH) ]]
+-- [[ PATHFINDING: CEK JALUR BEDROCK ]]
+-- ========================================== --
+local function IsPathBlockedByBedrock(startPos, endPos)
+    local distance = (startPos - endPos).Magnitude
+    if distance < getgenv().GridSize then return false end
+    
+    -- Cek setiap setengah grid (biar gak ada yg kelewatan)
+    local steps = math.ceil(distance / (getgenv().GridSize * 0.5)) 
+    for i = 0, steps do
+        local currentCheck = startPos:Lerp(endPos, i / steps)
+        local gridX = math.floor((currentCheck.X / getgenv().GridSize) + 0.5)
+        local gridY = math.floor((currentCheck.Y / getgenv().GridSize) + 0.5)
+        
+        if IsBedrockInGrid(gridX, gridY) then
+            return true -- Ada bedrock ngehalangin!
+        end
+    end
+    return false -- Jalur aman
+end
+
+-- ========================================== --
+-- [[ FUNGSI MOVEMENT (DINAMIS) ]]
 -- ========================================== --
 local function MoveToPoint(startP, endP)
     local char = LP.Character
@@ -145,36 +174,22 @@ local function MoveToPoint(startP, endP)
     end
 end
 
-local function U_ShapeSmartWalk(targetPos)
-    local char = LP.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local startPos = (PlayerMovement and PlayerMovement.Position) or hrp.Position
-    if (startPos - targetPos).Magnitude < 1 then return end
-
-    -- [!] RUTE AMAN: Naik ke ruang udara kosong -> Geser -> Turun
+local function U_ShapeSmartWalk(startPos, targetPos)
     local safeHeight = math.max(startPos.Y, targetPos.Y) + (2 * getgenv().GridSize)
     local waypoint1 = Vector3.new(startPos.X, safeHeight, startPos.Z)
     local waypoint2 = Vector3.new(targetPos.X, safeHeight, targetPos.Z)
     
-    -- Jalan lewat rute L/U-Shape
-    MoveToPoint(startPos, waypoint1) -- Terbang ke atas area aman
+    MoveToPoint(startPos, waypoint1)
     if not getgenv().EnableAutoClear then return end
-    MoveToPoint(waypoint1, waypoint2) -- Geser horizontal ngelewatin semua halangan
+    MoveToPoint(waypoint1, waypoint2)
     if not getgenv().EnableAutoClear then return end
-    MoveToPoint(waypoint2, targetPos) -- Turun ke target
-    
-    if getgenv().EnableAutoClear and PlayerMovement then 
-        PlayerMovement.Position = targetPos 
-    end
+    MoveToPoint(waypoint2, targetPos)
 end
 
 -- ========================================== --
 -- [[ UI SECTION ]]
 -- ========================================== --
-local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V6 Safe Path)", Box = true, Opened = true })
+local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V7 Dynamic Path)", Box = true, Opened = true })
 
 SecClear:Toggle({ 
     Title = "▶ START AUTO CLEAR", 
@@ -203,26 +218,31 @@ task.spawn(function()
                 local targetX, targetY, safeSide = GetNextExposedBlock()
                 
                 if targetX and targetY then
-                    -- [!] TENTUKAN POSISI BERDIRI BERDASARKAN SISI YANG KOSONG
+                    -- Tentukan posisi berdiri
                     local standX, standY = targetX, targetY
-                    if safeSide == "top" then
-                        standY = targetY + 1
-                    elseif safeSide == "left" then
-                        standX = targetX - 1
-                    elseif safeSide == "right" then
-                        standX = targetX + 1
+                    if safeSide == "top" then standY = targetY + 1
+                    elseif safeSide == "left" then standX = targetX - 1
+                    elseif safeSide == "right" then standX = targetX + 1
                     end
                     
                     local standPos = Vector3.new(standX * getgenv().GridSize, standY * getgenv().GridSize, currZ)
+                    local startPos = (PlayerMovement and PlayerMovement.Position) or hrp.Position
                     
-                    -- Jalan lewat rute aman menghindari Bedrock
-                    U_ShapeSmartWalk(standPos)
+                    -- [!] DINAMIS: Cek ada bedrock di tengah jalan atau nggak?
+                    if IsPathBlockedByBedrock(startPos, standPos) then
+                        U_ShapeSmartWalk(startPos, standPos) -- Lewat atas
+                    else
+                        MoveToPoint(startPos, standPos) -- Lurus ngebut!
+                    end
                     
-                    if not getgenv().EnableAutoClear then break end
+                    -- Pastikan berhenti kalau toggle dimatiin di tengah jalan (pakai 'continue' BUKAN 'break')
+                    if not getgenv().EnableAutoClear then continue end
+                    
+                    if PlayerMovement then PlayerMovement.Position = standPos end
                     
                     -- Pukul
                     for i = 1, getgenv().HitCount do
-                        if not getgenv().EnableAutoClear then break end
+                        if not getgenv().EnableAutoClear then break end -- Break ini aman karena cuma memutus loop pukulan
                         local breakTarget = Vector2.new(targetX, targetY)
                         pcall(function()
                             if RemoteBreak:IsA("RemoteEvent") then 
@@ -236,7 +256,7 @@ task.spawn(function()
                 else
                     getgenv().EnableAutoClear = false
                     SetModflyState(false) 
-                    WindUI:Notify({ Title = "Selesai", Content = "World sudah bersih! (Bedrock di-bypass)", Duration = 5 })
+                    WindUI:Notify({ Title = "Selesai", Content = "World sudah bersih! (Bedrock aman)", Duration = 5 })
                 end
             end
         end
