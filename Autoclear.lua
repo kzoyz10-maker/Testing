@@ -1,7 +1,7 @@
 local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Auto Clear v5.0 - PERSISTENT MODFLY & ANTI-FREEZE" 
+getgenv().ScriptVersion = "Auto Clear v5.1 - ANTI-BEDROCK & MODFLY" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -89,15 +89,29 @@ local function IsTileBreakable(gridX, gridY)
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
     
     local hasBreakable = false
+    local isBedrockTile = false -- [!] KUNCI HAK VETO BEDROCK
+    
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
         local nameStr = tostring(tileString):lower()
         
+        -- Kalau ketemu bedrock di layer manapun, tandai!
+        if nameStr:find("bedrock") then
+            isBedrockTile = true
+        end
+        
+        -- Cek apakah ada barang yang bisa dihancurin
         if not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") and not nameStr:find("bedrock") and nameStr ~= "0" then
             hasBreakable = true
         end
     end
+    
+    -- [!] HAK VETO: Kalau ada bedrock, langsung tolak mentah-mentah!
+    if isBedrockTile then 
+        return false 
+    end
+    
     return hasBreakable
 end
 
@@ -160,7 +174,7 @@ end
 -- ========================================== --
 -- [[ UI SECTION ]]
 -- ========================================== --
-local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V5 Anti-Freeze)", Box = true, Opened = true })
+local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V5.1 Ultimate)", Box = true, Opened = true })
 
 SecClear:Toggle({ 
     Title = "▶ START AUTO CLEAR", 
@@ -233,7 +247,7 @@ task.spawn(function()
                     -- Map rata, matikan fitur otomatis
                     getgenv().EnableAutoClear = false
                     SetModflyState(false) -- Lepas modfly secara otomatis
-                    WindUI:Notify({ Title = "Selesai", Content = "World sudah bersih!", Duration = 5 })
+                    WindUI:Notify({ Title = "Selesai", Content = "World sudah bersih! (Bedrock aman)", Duration = 5 })
                 end
             end
         end
@@ -241,7 +255,7 @@ task.spawn(function()
     end
 end)
 
--- Antisipasi kalau script dimatikan paksa, kembalikan karakter ke normal
+-- Antisipasi kalau script dimatikan paksa atau UI di-close, kembalikan karakter ke normal
 Window:OnClose(function()
     if getgenv().EnableAutoClear then
         getgenv().EnableAutoClear = false
