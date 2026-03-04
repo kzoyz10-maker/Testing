@@ -38,7 +38,7 @@ local Window = WindUI:CreateWindow({
         Enabled = true, -- Mengaktifkan tombol ngambang
         Draggable = true, -- Bisa digeser-geser di layar
         OnlyMobile = false, -- [PENTING] Set ke false biar di PC / Emulator juga muncul!
-        Scale = 0.5,
+        Scale = 2,
         Color = ColorSequence.new(
             Color3.fromHex("#FFD700"), -- Warna gradasi awal (Gold)
             Color3.fromHex("#FFA500")  -- Warna gradasi akhir (Orange)
