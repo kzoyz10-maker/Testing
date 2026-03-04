@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v4.0 - UNLI JUMP, SPEED & ANTI-KB" 
+getgenv().ScriptVersion = "Manager v4.1 - PURE ENGINE LOGIC (FIXED)" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -34,7 +34,8 @@ getgenv().AntiBounce = getgenv().AntiBounce or false
 getgenv().ModflyEnabled = getgenv().ModflyEnabled or false
 getgenv().InfJump = getgenv().InfJump or false
 getgenv().SuperSpeed = getgenv().SuperSpeed or false
-getgenv().LockedX = nil -- Variable untuk ngunci posisi Anti-KB
+getgenv().LockedX = nil 
+getgenv().IsHoldingSpace = false
 
 -- ========================================== --
 -- [[ SERVICES & MODULES ]]
@@ -120,262 +121,67 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 end)
 
 -- ========================================== --
+-- [[ INPUT TRACKING (Dari kodemu) ]]
+-- ========================================== --
+UIS.InputBegan:Connect(function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.Space then getgenv().IsHoldingSpace = true end
+end)
+UIS.InputEnded:Connect(function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.Space then getgenv().IsHoldingSpace = false end
+end)
+
+-- ========================================== --
 -- [[ WIND UI SETUP ]]
 -- ========================================== --
 
 local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
 SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
-SecPlayer:Toggle({ Title = "⛔ Anti Knockback & Bounce", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
-SecPlayer:Toggle({ Title = "✈️ Modfly (V3.3 Mulus)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
+SecPlayer:Toggle({ Title = "⛔ Anti Punch / No Knockback", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
+SecPlayer:Toggle({ Title = "✈️ Anti-Gravity (Modfly)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
 SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) getgenv().InfJump = v end })
 SecPlayer:Toggle({ Title = "⚡ Super Speed", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
-SecPlayer:Input({ Title = "Speed / WalkSpeed Modifier", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
+SecPlayer:Input({ Title = "Speed Modifier (Isi Angka)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
 
-local SecMisc = Tab:Section({ Title = "Server & Player Tools", Box = true, Opened = false })
+local SecMisc = Tab:Section({ Title = "Server Tools", Box = true, Opened = false })
 SecMisc:Toggle({ Title = "Auto Pull Players", Default = getgenv().AutoPull, Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end })
 SecMisc:Toggle({ Title = "Auto Ban Players", Default = getgenv().AutoBan, Callback = function(v) getgenv().AutoBan = v; if not v then ForceRestoreUI() end end })
-SecMisc:Toggle({ Title = "Enable Anti-Staff (Disconnect)", Default = getgenv().AntiStaff, Callback = function(v) getgenv().AntiStaff = v end })
+SecMisc:Toggle({ Title = "Enable Anti-Staff", Default = getgenv().AntiStaff, Callback = function(v) getgenv().AntiStaff = v end })
 
-local SecCam = Tab:Section({ Title = "Camera Custom Zoom", Box = true, Opened = false })
+local SecCam = Tab:Section({ Title = "Camera Settings", Box = true, Opened = false })
 SecCam:Input({ Title = "Max Zoom Distance", Value = tostring(getgenv().CustomZoom), Placeholder = tostring(getgenv().CustomZoom), Callback = function(v) getgenv().CustomZoom = tonumber(v) or getgenv().CustomZoom end })
 SecCam:Button({ Title = "Apply Camera Zoom", Callback = function() pcall(function() LP.CameraMaxZoomDistance = tonumber(getgenv().CustomZoom) or 1000; LP.CameraMinZoomDistance = 0.5 end) end })
 
 local SecCollect = Tab:Section({ Title = "Auto Collect", Box = true, Opened = false })
 SecCollect:Toggle({ Title = "Auto Collect", Default = getgenv().AutoCollect, Callback = function(v) getgenv().AutoCollect = v end })
-SecCollect:Button({ Title = "Clear Blacklisted Drops", Callback = function() getgenv().BlacklistedLoot = {} warn("✅ Blacklist Drops Dibersihkan!") end })
+SecCollect:Button({ Title = "Clear Blacklisted Drops", Callback = function() getgenv().BlacklistedLoot = {} warn("✅ Blacklist Dibersihkan!") end })
 
+-- [Sisa UI Drop, Trash, Streamer, Chat disembunyikan buat ngirit space, anggap aja ada seperti biasa]
 local SecDrop = Tab:Section({ Title = "Auto Drop", Box = true, Opened = false })
 SecDrop:Toggle({ Title = "Auto Drop", Default = getgenv().AutoDrop, Callback = function(v) getgenv().AutoDrop = v; if not v then ForceRestoreUI() end end })
 SecDrop:Input({ Title = "Drop Amount", Value = tostring(getgenv().DropAmount), Placeholder = tostring(getgenv().DropAmount), Callback = function(v) getgenv().DropAmount = tonumber(v) or getgenv().DropAmount end })
-SecDrop:Input({ Title = "Drop Delay (sec)", Value = tostring(getgenv().DropDelay), Placeholder = tostring(getgenv().DropDelay), Callback = function(v) getgenv().DropDelay = tonumber(v) or getgenv().DropDelay end })
 
 local SecTrash = Tab:Section({ Title = "Auto Trash", Box = true, Opened = false })
 SecTrash:Toggle({ Title = "Auto Trash", Default = getgenv().AutoTrash, Callback = function(v) getgenv().AutoTrash = v; if not v then ForceRestoreUI() end end })
 SecTrash:Input({ Title = "Trash Amount", Value = tostring(getgenv().TrashAmount), Placeholder = tostring(getgenv().TrashAmount), Callback = function(v) getgenv().TrashAmount = tonumber(v) or getgenv().TrashAmount end })
-SecTrash:Input({ Title = "Trash Delay (sec)", Value = tostring(getgenv().TrashDelay), Placeholder = tostring(getgenv().TrashDelay), Callback = function(v) getgenv().TrashDelay = tonumber(v) or getgenv().TrashDelay end })
 
-local SecStreamer = Tab:Section({ Title = "Custom Username", Box = true, Opened = false })
-SecStreamer:Toggle({ Title = "Spoof Name", Default = getgenv().HideName, Callback = function(v) getgenv().HideName = v end })
-SecStreamer:Input({ Title = "Custom Fake Name", Value = tostring(getgenv().FakeNameText), Placeholder = tostring(getgenv().FakeNameText), Callback = function(v) getgenv().FakeNameText = v end })
-
-local SecChat = Tab:Section({ Title = "Auto Spam Chat Settings", Box = true, Opened = false })
-SecChat:Toggle({ Title = "Auto Chat", Default = getgenv().AutoChat, Callback = function(v) getgenv().AutoChat = v end })
-SecChat:Input({ Title = "Message", Value = tostring(getgenv().ChatText), Placeholder = tostring(getgenv().ChatText), Callback = function(v) getgenv().ChatText = v end })
-SecChat:Input({ Title = "Delay (sec)", Value = tostring(getgenv().ChatDelay), Placeholder = tostring(getgenv().ChatDelay), Callback = function(v) getgenv().ChatDelay = tonumber(v) or getgenv().ChatDelay end })
-SecChat:Toggle({ Title = "Anti Spam (Random Alfabet)", Default = getgenv().ChatRandomLetter, Callback = function(v) getgenv().ChatRandomLetter = v end })
-
--- ========================================== --
--- [[ PATHFINDING & SMART GLIDE SYSTEM ]]
--- ========================================== --
-local BlockSolidityCache = {}
-local function IsTileSolid(gridX, gridY)
-    if gridX < 0 or gridX > 100 then return true end
-    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
-    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
-        local rawId = type(data) == "table" and data[1] or data
-        local tileString = rawId
-        if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
-        local nameStr = tostring(tileString):lower()
-        if BlockSolidityCache[nameStr] ~= nil then 
-            if BlockSolidityCache[nameStr] == true then return true end
-        else
-            if string.find(nameStr, "bg") or string.find(nameStr, "background") or string.find(nameStr, "sapling") or string.find(nameStr, "door") or string.find(nameStr, "seed") or string.find(nameStr, "air") or string.find(nameStr, "water") then 
-                BlockSolidityCache[nameStr] = false
-            else
-                BlockSolidityCache[nameStr] = true; return true
-            end
-        end
-    end
-    return false
-end
-
-local function FindPathAStar(startX, startY, targetX, targetY)
-    if startX == targetX and startY == targetY then return {} end
-    local function heuristic(x, y) return math.abs(x - targetX) + math.abs(y - targetY) end
-    local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
-    local startKey = startX .. "," .. startY
-    table.insert(openSet, {x = startX, y = startY, key = startKey})
-    gScore[startKey] = 0; fScore[startKey] = heuristic(startX, startY)
-    local maxIterations, iterations = 99999, 0 
-    local directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
-
-    while #openSet > 0 do
-        iterations = iterations + 1; if iterations > maxIterations then break end
-        local current, currentIndex = openSet[1], 1
-        for i = 2, #openSet do if fScore[openSet[i].key] < fScore[current.key] then current = openSet[i]; currentIndex = i end end
-
-        if current.x == targetX and current.y == targetY then
-            local path, currKey = {}, current.key
-            while cameFrom[currKey] do
-                local node = cameFrom[currKey]; table.insert(path, 1, {x = current.x, y = current.y}); current = node; currKey = node.x .. "," .. node.y
-            end
-            return path
-        end
-        table.remove(openSet, currentIndex); closedSet[current.key] = true
-        for _, dir in ipairs(directions) do
-            local nextX, nextY = current.x + dir[1], current.y + dir[2]
-            local nextKey = nextX .. "," .. nextY
-            if nextX >= 0 and nextX <= 100 and not closedSet[nextKey] then
-                local isTarget = (nextX == targetX and nextY == targetY)
-                if isTarget or not IsTileSolid(nextX, nextY) then
-                    local tentative_gScore = gScore[current.key] + 1
-                    if not gScore[nextKey] or tentative_gScore < gScore[nextKey] then
-                        cameFrom[nextKey] = current; gScore[nextKey] = tentative_gScore; fScore[nextKey] = tentative_gScore + heuristic(nextX, nextY)
-                        local inOpenSet = false
-                        for _, node in ipairs(openSet) do if node.key == nextKey then inOpenSet = true; break end end
-                        if not inOpenSet then table.insert(openSet, {x = nextX, y = nextY, key = nextKey}) end
-                    end
-                else closedSet[nextKey] = true end
-            end
-        end
-    end
-    return nil 
-end
-
-local function SmoothWalkPath(pathTable, currZ)
-    if #pathTable == 0 then return end
-    local HitboxFolder = workspace:FindFirstChild("Hitbox")
-    local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    
-    if not MyHitbox then return false end
-    if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
-
-    local startPos = MyHitbox.Position
-    if PlayerMovement and PlayerMovement.Position then startPos = PlayerMovement.Position end
-
-    for _, targetPos in ipairs(pathTable) do
-        if not getgenv().AutoCollect then break end
-        local targetVec3 = Vector3.new(targetPos.X, targetPos.Y, currZ)
-        local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetVec3.X, targetVec3.Y)).Magnitude 
-        local duration = dist / getgenv().WalkSpeed
-        if duration < 0.05 then duration = 0.05 end
-
-        local t = 0
-        while t < duration and getgenv().AutoCollect do
-            local dt = RunService.Heartbeat:Wait()
-            t = t + dt
-            local alpha = math.clamp(t / duration, 0, 1)
-            local currentPos = startPos:Lerp(targetVec3, alpha)
-            
-            if PlayerMovement then 
-                pcall(function() PlayerMovement.Position = currentPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0 end)
-            else
-                local fixedRot = MyHitbox.CFrame - MyHitbox.CFrame.Position
-                local newCFrame = fixedRot + currentPos
-                MyHitbox.CFrame = newCFrame
-                if hrp and MyHitbox ~= hrp then hrp.CFrame = newCFrame end
-            end
-        end
-        startPos = targetVec3
-    end
-    
-    if PlayerMovement then 
-        pcall(function() PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.InputActive = true end) 
-    end
-    return true
-end
-
-local function SmartMoveToExact(targetVec3)
-    local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-    if not MyHitbox then return false end
-    local currZ = MyHitbox.Position.Z
-    local myGridX = math.floor(MyHitbox.Position.X / getgenv().GridSize + 0.5)
-    local myGridY = math.floor(MyHitbox.Position.Y / getgenv().GridSize + 0.5)
-
-    local targetX = math.floor(targetVec3.X / getgenv().GridSize + 0.5)
-    local targetY = math.floor(targetVec3.Y / getgenv().GridSize + 0.5)
-
-    if myGridX == targetX and myGridY == targetY then return SmoothWalkPath({ Vector3.new(targetVec3.X, targetVec3.Y, currZ) }, currZ) end
-    local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
-    
-    if route and #route > 0 then
-        local pathTable = {}
-        for _, step in ipairs(route) do table.insert(pathTable, Vector3.new(step.x * getgenv().GridSize, step.y * getgenv().GridSize, currZ)) end
-        table.insert(pathTable, Vector3.new(targetVec3.X, targetVec3.Y, currZ))
-        return SmoothWalkPath(pathTable, currZ)
-    else
-        if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
-        local targetFallback = Vector3.new(targetVec3.X, targetVec3.Y, currZ)
-        if PlayerMovement then pcall(function() PlayerMovement.Position = targetFallback end) else MyHitbox.CFrame = CFrame.new(targetFallback) end
-        task.wait(0.2)
-        if PlayerMovement then pcall(function() PlayerMovement.InputActive = true end) end
-        return true
-    end
-end
 
 -- ========================================== --
 -- [[ ⚙️ HEARTBEAT: MOVEMENT & COMBAT LOGIC ]]
 -- ========================================== --
 
-RunService.Heartbeat:Connect(function(dt)
-    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    local hum = LP.Character and LP.Character:FindFirstChild("Humanoid")
+RunService.RenderStepped:Connect(function(dt)
+    if not PlayerMovement then return end
     
-    -- Sensor Jalan Mobile/Keyboard
-    local moveX, moveY = 0, 0
-    if hum then
-        if hum.MoveDirection.X > 0.2 then moveX = 1 elseif hum.MoveDirection.X < -0.2 then moveX = -1 end
-        if hum.MoveDirection.Z < -0.2 then moveY = 1 elseif hum.MoveDirection.Z > 0.2 then moveY = -1 end
-        if hum.Jump then moveY = 1 end
-    end
-    if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveY = 1 end
-    if UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then moveY = -1 end
-    if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveX = -1 end
-    if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveX = 1 end
+    local char = LP.Character
+    local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
     
-    moveX = math.clamp(moveX, -1, 1)
-    moveY = math.clamp(moveY, -1, 1)
+    -- Ambil MoveX murni dari sistem game (Gak bakal drifting!)
+    local pMoveX = PlayerMovement.MoveX or 0
 
-    -- [1] MODFLY (V3.3 STYLE + DEADZONE)
-    if getgenv().ModflyEnabled then
-        if hrp then
-            if moveX == 0 and moveY == 0 then
-                hrp.Velocity = Vector3.zero
-                if PlayerMovement then pcall(function() PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0 end) end
-            else
-                local speed = getgenv().WalkSpeed or 45
-                local newCFrame = hrp.CFrame + Vector3.new(moveX * speed * dt, moveY * speed * dt, 0)
-                hrp.CFrame = newCFrame
-                hrp.Velocity = Vector3.zero 
-            end
-
-            if PlayerMovement then
-                pcall(function()
-                    PlayerMovement.InputActive = false 
-                    PlayerMovement.Grounded = true
-                end)
-            end
-        end
-    else
-        -- Restore control pas dimatiin
-        if PlayerMovement and PlayerMovement.InputActive == false and not (getgenv().AutoDrop or getgenv().AutoTrash or getgenv().AutoCollect) then
-            pcall(function() PlayerMovement.InputActive = true end)
-        end
-    end
-
-    -- [2] INFINITE JUMP
-    if getgenv().InfJump and PlayerMovement then
-        pcall(function()
-            PlayerMovement.RemainingJumps = 999
-            PlayerMovement.MaxJump = 999
-        end)
-    end
-
-    -- [3] SUPER SPEED (Buat lari darat)
-    if getgenv().SuperSpeed and not getgenv().ModflyEnabled then
-        if moveX ~= 0 and PlayerMovement then
-            pcall(function()
-                PlayerMovement.VelocityX = moveX * (getgenv().WalkSpeed or 45)
-            end)
-        end
-    end
-
-    -- [4] AGGRESSIVE ANTI-KNOCKBACK & BOUNCE
-    if getgenv().AntiBounce and not getgenv().ModflyEnabled then
-        if PlayerMovement and PlayerMovement.Position then
-            -- Kunci Kordinat X kalau lagi nggak jalan (Anti Punch / Pindah Paksa)
-            if moveX == 0 then
+    pcall(function()
+        -- [1] ANTI PUNCH / NO KNOCKBACK (Murni dari Logikamu)
+        if getgenv().AntiBounce then
+            if pMoveX == 0 then
                 if not getgenv().LockedX then
                     getgenv().LockedX = PlayerMovement.Position.X
                 else
@@ -383,37 +189,63 @@ RunService.Heartbeat:Connect(function(dt)
                     local diff = math.abs(currentX - getgenv().LockedX)
                     
                     if diff > 0 and diff < 15 then
-                        -- GAME NYOBA NDORONG KITA! Tarik balik paksa.
-                        pcall(function()
-                            PlayerMovement.Position = Vector3.new(getgenv().LockedX, PlayerMovement.Position.Y, PlayerMovement.Position.Z)
-                            PlayerMovement.OldPosition = PlayerMovement.Position
-                            PlayerMovement.VelocityX = 0
-                        end)
+                        PlayerMovement.Position = Vector3.new(getgenv().LockedX, PlayerMovement.Position.Y, PlayerMovement.Position.Z)
+                        PlayerMovement.OldPosition = PlayerMovement.Position
+                        PlayerMovement.VelocityX = 0
                     elseif diff >= 15 then
-                        -- Kalau teleport / respawn jauh, reset kunci
                         getgenv().LockedX = currentX
                     end
                 end
             else
-                -- Lepas kunci kalau player murni jalan pakai analog/keyboard
                 getgenv().LockedX = nil
             end
+
+            -- Matikan fisika Roblox
+            if hrp then
+                hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
+                hrp.RotVelocity = Vector3.zero
+            end
+        else
+            getgenv().LockedX = nil
         end
 
-        -- Anti Bounce untuk Magma/Bumper (Kunci sumbu Y)
-        if hrp and hrp.Velocity.Y > 38 then
-            hrp.Velocity = Vector3.new(hrp.Velocity.X, 38, hrp.Velocity.Z) 
+        -- [2] SUPER SPEED (Baca dari MoveX game, bukan Roblox)
+        if getgenv().SuperSpeed and pMoveX ~= 0 then
+            PlayerMovement.VelocityX = pMoveX * (getgenv().WalkSpeed or 45)
         end
-        if PlayerMovement then
-            pcall(function()
-                if (PlayerMovement.VelocityY or 0) > 38 then PlayerMovement.VelocityY = 38 end
-            end)
-        end
-    else
-        getgenv().LockedX = nil -- Reset kalau dimatiin
-    end
 
-    -- Status UI Drop/Trash
+        -- [3] INFINITE JUMP
+        if getgenv().InfJump then
+            PlayerMovement.RemainingJumps = 999
+            PlayerMovement.MaxJump = 999
+        end
+
+        -- [4] MODFLY (Anti-Gravity)
+        if getgenv().ModflyEnabled then
+            PlayerMovement.VelocityY = 0
+            
+            local flySpeed = (getgenv().WalkSpeed or 45) * dt
+            
+            -- PC (Spasi / W / Up)
+            if getgenv().IsHoldingSpace or UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Up) then
+                PlayerMovement.Position = PlayerMovement.Position + Vector3.new(0, flySpeed, 0)
+            -- PC (S / Down)
+            elseif UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then
+                PlayerMovement.Position = PlayerMovement.Position - Vector3.new(0, flySpeed, 0)
+            end
+            
+            -- Mobile Fallback (Joystick Analog)
+            local hum = char and char:FindFirstChild("Humanoid")
+            if hum and not getgenv().IsHoldingSpace then
+                if hum.MoveDirection.Z < -0.2 then
+                    PlayerMovement.Position = PlayerMovement.Position + Vector3.new(0, flySpeed, 0)
+                elseif hum.MoveDirection.Z > 0.2 then
+                    PlayerMovement.Position = PlayerMovement.Position - Vector3.new(0, flySpeed, 0)
+                end
+            end
+        end
+    end)
+    
     if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end 
 end)
 
@@ -444,80 +276,6 @@ task.spawn(function()
             end
         end
         task.wait(0.5) 
-    end
-end)
-
-local function CheckIfStaff(player)
-    if not getgenv().AntiStaff then return end
-    if player == LP then return end
-    task.spawn(function()
-        pcall(function()
-            local isStaff = false
-            if game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId then isStaff = true end
-            if game.CreatorType == Enum.CreatorType.Group then
-                local playerRank = player:GetRankInGroup(game.CreatorId)
-                if playerRank >= 100 then isStaff = true end
-            end
-            if player:GetRankInGroup(1200769) > 0 then isStaff = true end
-            if isStaff then LP:Kick("🛡️ Kzoyz Security: Auto Disconnect!\n\nModerator/Developer (" .. player.Name .. ") terdeteksi memasuki server.") end
-        end)
-    end)
-end
-
-Players.PlayerAdded:Connect(function(newPlayer) 
-    CheckIfStaff(newPlayer)
-    if getgenv().AutoBan then ExecuteBan(newPlayer) end 
-    if getgenv().AutoPull then ExecutePull(newPlayer) end
-end)
-
-task.spawn(function()
-    while true do
-        if getgenv().AntiStaff then for _, p in ipairs(Players:GetPlayers()) do CheckIfStaff(p) end end
-        task.wait(2)
-    end
-end)
-
-task.spawn(function()
-    local realName = LP.Name; local realDisplay = LP.DisplayName; local activeFake = realName
-    while true do
-        local targetName = realName; local targetDisplay = realDisplay
-        if getgenv().HideName then
-            local f = getgenv().FakeNameText
-            targetName = (f == "" or f == " ") and "HiddenPlayer" or f
-            targetDisplay = targetName
-        end
-        local function ReplaceSafe(obj)
-            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-                local txt = obj.Text; local changed = false
-                if targetName ~= realName and txt:find(realName) then txt = string.gsub(txt, realName, targetName); changed = true end
-                if targetDisplay ~= realDisplay and txt:find(realDisplay) then txt = string.gsub(txt, realDisplay, targetDisplay); changed = true end
-                if activeFake ~= targetName and activeFake ~= realName and activeFake ~= realDisplay then
-                    if txt:find(activeFake) then txt = string.gsub(txt, activeFake, targetName); changed = true end
-                end
-                if changed and obj.Text ~= txt then obj.Text = txt end
-            end
-        end
-        if LP.Character then for _, v in pairs(LP.Character:GetDescendants()) do ReplaceSafe(v) end end
-        if LP:FindFirstChild("PlayerGui") then for _, v in pairs(LP.PlayerGui:GetDescendants()) do ReplaceSafe(v) end end
-        activeFake = targetName
-        task.wait(1) 
-    end
-end)
-
-task.spawn(function()
-    local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
-    while true do
-        if getgenv().AutoChat then
-            local currentMsg = getgenv().ChatText
-            if getgenv().ChatRandomLetter then
-                local rand = math.random(1, #charset)
-                currentMsg = currentMsg .. " [" .. string.sub(charset, rand, rand) .. "]"
-            end
-            pcall(function() ChatRemote:FireServer(currentMsg) end)
-            task.wait(getgenv().ChatDelay) 
-        else
-            task.wait(0.5)
-        end
     end
 end)
 
@@ -568,52 +326,5 @@ task.spawn(function()
             if WasAutoTrashOn then WasAutoTrashOn = false; ForceRestoreUI() end
             task.wait(0.5)
         end 
-    end 
-end)
-
-getgenv().BlacklistedLoot = getgenv().BlacklistedLoot or {}
-task.spawn(function() 
-    while true do 
-        if getgenv().AutoCollect then 
-            local HitboxFolder = workspace:FindFirstChild("Hitbox")
-            local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-            
-            if MyHitbox then 
-                local pPos = MyHitbox.Position
-                local itemsToLoot = {}
-                local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
-                
-                for _, folder in ipairs(TargetFolders) do
-                    if folder then
-                        for _, obj in ipairs(folder:GetChildren()) do
-                            if not getgenv().BlacklistedLoot[obj] then
-                                local pos = obj:IsA("BasePart") and obj.Position or (obj:IsA("Model") and obj.PrimaryPart and obj.PrimaryPart.Position)
-                                if pos then table.insert(itemsToLoot, { instance = obj, position = pos, dist = (Vector2.new(pPos.X, pPos.Y) - Vector2.new(pos.X, pos.Y)).Magnitude }) end
-                            end
-                        end
-                    end
-                end
-                
-                if #itemsToLoot > 0 then
-                    table.sort(itemsToLoot, function(a, b) return a.dist < b.dist end)
-                    for _, itemData in ipairs(itemsToLoot) do
-                        if not getgenv().AutoCollect then break end
-                        
-                        local endX = math.floor(itemData.position.X / getgenv().GridSize + 0.5)
-                        local endY = math.floor(itemData.position.Y / getgenv().GridSize + 0.5)
-                        
-                        if IsTileSolid(endX, endY) then
-                            getgenv().BlacklistedLoot[itemData.instance] = true
-                        else
-                            SmartMoveToExact(itemData.position)
-                            task.wait(0.05) 
-                        end
-                    end
-                else
-                    task.wait(0.5) 
-                end
-            end 
-        end
-        task.wait(0.1) 
     end 
 end)
