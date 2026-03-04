@@ -88,7 +88,8 @@ AutoLoadTabFromGithub("Pabrik", "factory", "Pabrik (Factory)", "https://raw.gith
 AutoLoadTabFromGithub("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autofarm.lua")
 AutoLoadTabFromGithub("Manager", "briefcase", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Manager.lua")
 AutoLoadTabFromGithub("Auto PTHT", "tractor", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autoplant.lua")
-AutoLoadTabFromGithub("Auto Clear World", "tree", "Clear All Blocks", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoclear.lua")
+AutoLoadTabFromGithub("Auto Clear World", "plant", "Clear All Blocks", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoclear.lua")
+AutoLoadTabFromGithub("Auto Build Farm", "home", "Build Your Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autobuild.lua")
 AutoLoadTabFromGithub("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autocollect.lua")
 
 -- ========================================== --
