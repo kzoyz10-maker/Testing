@@ -164,67 +164,67 @@ SecChat:Toggle({ Title = "Anti Spam (Random Alfabet)", Default = getgenv().ChatR
 -- ... [BAGIAN AUTO COLLECT TETAP SAMA] ...
 
 -- ========================================== --
--- [[ ⚙️ CORE LOOP (MOBILE MODFLY & ANTI-BOUNCE) ]]
+-- [[ ⚙️ CORE LOOP (NO GLITCH MODFLY & STRICT ANTI-BOUNCE) ]]
 -- ========================================== --
 
-RunService.RenderStepped:Connect(function(dt)
+RunService.Heartbeat:Connect(function(dt)
     local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     local hum = LP.Character and LP.Character:FindFirstChild("Humanoid")
+    
+    -- Cek apakah kamu lagi pencet tombol lompat di layar (atau spasi)
+    local isJumping = (hum and hum.Jump) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up)
 
-    -- [1] MODFLY (BACA JOYSTICK MOBILE & KEYBOARD)
+    -- [1] MODFLY (SMART MOBILE JOYSTICK, ANTI GLITCH)
     if getgenv().ModflyEnabled then
-        if hum and hrp then
-            -- MENGAMBIL ARAH DARI JOYSTICK / THUMBSTICK / WASD
+        if hum and hrp and PlayerMovement then
+            -- Ambil arah murni dari joystick mobile kamu
             local moveX = hum.MoveDirection.X
             local moveY = 0
             
-            -- Di Roblox 3D, arah atas joystick = Z negatif. Bawah joystick = Z positif.
+            -- Joystick ditarik ke depan (Z negatif) = Terbang ke Atas
             if hum.MoveDirection.Z < -0.1 then moveY = 1 
+            -- Joystick ditarik ke belakang (Z positif) = Turun ke Bawah
             elseif hum.MoveDirection.Z > 0.1 then moveY = -1 end
             
-            -- Baca Tombol Lompat di Layar (untuk naik lebih mulus)
-            if hum.Jump then moveY = 1 end
+            -- Kalau pencet tombol lompat, ikutan naik
+            if isJumping then moveY = 1 end
 
             local speed = getgenv().WalkSpeed or 45
 
-            -- Memaksa posisi / kecepatan secara absolut
-            if PlayerMovement then
-                pcall(function()
-                    PlayerMovement.VelocityX = moveX * speed
-                    PlayerMovement.VelocityY = moveY * speed
-                    PlayerMovement.Grounded = true -- Mencegah terjun bebas
-                end)
-            else
-                hrp.Velocity = Vector3.new(moveX * speed, moveY * speed, 0)
-            end
-            
-            -- Matikan gravitasi lokal biar ga ditarik ke bawah saat joystick dilepas
-            workspace.Gravity = 0
-        end
-    else
-        -- Kembalikan gravitasi normal kalau Modfly dimatikan
-        if workspace.Gravity == 0 then workspace.Gravity = 196.2 end
-    end
-
-    -- [2] ANTI-BOUNCE (BERDASARKAN LIMIT KECEPATAN)
-    if getgenv().AntiBounce and not getgenv().ModflyEnabled then
-        if PlayerMovement then
+            -- Murni pakai sistem gamenya! JANGAN paksa ubah CFrame/Velocity Roblox
+            -- Ini yang bikin Modfly kamu mulus dan nggak teleport-teleport lagi.
             pcall(function()
-                -- Lompat biasa mentok di sekitar 25-35. Kalau > 45, fix ditendang Magma!
-                if (PlayerMovement.VelocityY or 0) > 40 then 
-                    PlayerMovement.VelocityY = 0 
-                end
+                PlayerMovement.VelocityX = moveX * speed
+                PlayerMovement.VelocityY = moveY * speed
+                PlayerMovement.Grounded = true 
             end)
         end
-        
-        if hrp then
-            if hrp.Velocity.Y > 40 then
-                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+    end
+
+    -- [2] STRICT ANTI-BOUNCE (KUNCI Y, BEBAS JALAN)
+    if getgenv().AntiBounce and not getgenv().ModflyEnabled then
+        -- Kalau kamu lagi NGGAK pencet tombol lompat, KUNCI kecepatan naik!
+        if not isJumping then
+            if PlayerMovement then
+                pcall(function()
+                    -- Kalau magma nyoba dorong ke atas (VelocityY positif), langsung kunci ke bawah (-1)
+                    if (PlayerMovement.VelocityY or 0) > 0 then 
+                        PlayerMovement.VelocityY = -1 
+                    end
+                end)
+            end
+            
+            if hrp then
+                -- Backup: Paksa badan karakter tetap nempel di tanah
+                if hrp.Velocity.Y > 0 then
+                    hrp.Velocity = Vector3.new(hrp.Velocity.X, -1, hrp.Velocity.Z)
+                end
             end
         end
     end
 
-    if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end 
+    -- Manajemen UI untuk Drop/Trash
+    if getgenv().AutoDrop or getgenv().AutoTrash then 
+        ManageUIState("Dropping") 
+    end 
 end)
-
--- (Blok kode Remote Ban, Pull, Drop, dll tetap berjalan di bawahnya)
