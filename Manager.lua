@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v4.6 - MOBILE JUMP OVERHAUL & WARP" 
+getgenv().ScriptVersion = "Manager v4.7 - SMART WARP & MOBILE JUMP" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -107,7 +107,6 @@ local RemoteTrashSafe = Remotes:WaitForChild("PlayerItemTrash")
 local RemoteInspect = Remotes:WaitForChild("PlayerInspectPlayer") 
 local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent") 
 local ChatRemote = RS:WaitForChild("CB")
-local TpRemote = RS:WaitForChild("tp")
 
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -166,15 +165,57 @@ end })
 SecPlayer:Toggle({ Title = "⚡ Super Speed", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
 SecPlayer:Input({ Title = "Speed Modifier (Isi Angka)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
 
--- [NEW] WORLD WARP SECTION
+-- ========================================== --
+-- [[ NEW SMART WARP SYSTEM ]]
+-- ========================================== --
+local queue_on_tp = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or getgenv().queue_on_teleport
+
 local SecWarp = Tab:Section({ Title = "Teleport / Warp World", Box = true, Opened = true })
 SecWarp:Input({ Title = "Nama World", Value = getgenv().TargetWarpWorld, Placeholder = "buy", Callback = function(v) getgenv().TargetWarpWorld = v end })
 SecWarp:Button({ Title = "🚀 Warp Sekarang!", Callback = function() 
-    pcall(function()
-        if getgenv().TargetWarpWorld ~= "" then
-            TpRemote:FireServer(getgenv().TargetWarpWorld)
-        else
+    task.spawn(function()
+        local targetWorld = getgenv().TargetWarpWorld
+        if not targetWorld or targetWorld == "" then
             warn("Nama World masih kosong!")
+            return
+        end
+
+        local TpRemote = RS:FindFirstChild("tp")
+
+        if TpRemote then
+            -- Kondisi 1: Sedang di Lobby
+            print("Mencoba Warp ke: " .. targetWorld)
+            pcall(function() TpRemote:FireServer(targetWorld) end)
+        else
+            -- Kondisi 2: Sedang di World
+            print("Lagi di World! Menyiapkan Auto-Warp untuk di Lobby...")
+            
+            if queue_on_tp then
+                local autoWarpScript = string.format([[
+                    task.spawn(function()
+                        local target = "%s"
+                        print("Menunggu remote tp untuk auto-warp ke: " .. target)
+                        local RS = game:GetService("ReplicatedStorage")
+                        local tpRemote = RS:WaitForChild("tp", 15)
+                        
+                        if tpRemote then
+                            task.wait(0.5) 
+                            tpRemote:FireServer(target)
+                        else
+                            warn("Gagal Auto-Warp: Remote 'tp' tidak ditemukan di Lobby.")
+                        end
+                    end)
+                ]], targetWorld)
+                
+                queue_on_tp(autoWarpScript)
+            else
+                warn("Executor kamu nggak support 'queue_on_teleport'. Script Auto-Warp terpaksa dibatalkan.")
+            end
+
+            local exitRemote = RS:WaitForChild("Remotes"):FindFirstChild("RequestPlayerExitWorld")
+            if exitRemote then
+                pcall(function() exitRemote:InvokeServer() end)
+            end
         end
     end)
 end })
@@ -382,7 +423,7 @@ RunService.RenderStepped:Connect(function(dt)
             PlayerMovement.MaxJump = 999
         end
 
-        -- [4] MODFLY (Anti-Gravity) - UPDATED V4.6 (SUPPORT MOBILE UI HOOK)
+        -- [4] MODFLY (Anti-Gravity) 
         if getgenv().ModflyEnabled then
             local flySpeed = (getgenv().WalkSpeed or 45) / 10
             
