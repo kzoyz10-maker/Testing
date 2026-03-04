@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v3.5 - PERFECT FLIGHT & BOUNCE GUARD" 
+getgenv().ScriptVersion = "Manager v3.6 - GODSPEED & GROUNDED BYPASS" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -9,7 +9,7 @@ getgenv().ScriptVersion = "Manager v3.5 - PERFECT FLIGHT & BOUNCE GUARD"
 getgenv().DropDelay = getgenv().DropDelay or 2     
 getgenv().TrashDelay = getgenv().TrashDelay or 2    
 getgenv().GridSize = getgenv().GridSize or 4.5 
-getgenv().WalkSpeed = getgenv().WalkSpeed or 45 -- Berlaku untuk Loot dan Modfly
+getgenv().WalkSpeed = getgenv().WalkSpeed or 45 
 
 getgenv().AutoCollect = getgenv().AutoCollect or false
 getgenv().AutoDrop = getgenv().AutoDrop or false
@@ -41,7 +41,6 @@ local LP = Players.LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser") 
 
 local RawWorldTiles = require(RS:WaitForChild("WorldTiles"))
 local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldManager"))
@@ -106,7 +105,6 @@ local RemoteInspect = Remotes:WaitForChild("PlayerInspectPlayer")
 local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent") 
 local ChatRemote = RS:WaitForChild("CB")
 
--- [!] HOOK UNTUK ANTI-HIT (MAGMA/LAVA/SPIKES)
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
@@ -123,148 +121,41 @@ end)
 -- ========================================== --
 
 local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
+SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Lava/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
+SecPlayer:Toggle({ Title = "⛔ Anti Bounce (Bumper/Magma)", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
+SecPlayer:Toggle({ Title = "✈️ Modfly (W A S D)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
+SecPlayer:Input({ Title = "Kecepatan Walk/Loot/Modfly", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
+SecPlayer:Toggle({ Title = "Auto Pull Players", Default = getgenv().AutoPull, Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end })
+SecPlayer:Toggle({ Title = "Auto Ban Players", Default = getgenv().AutoBan, Callback = function(v) getgenv().AutoBan = v; if not v then ForceRestoreUI() end end })
+SecPlayer:Toggle({ Title = "Enable Anti-Staff (Auto Disconnect)", Default = getgenv().AntiStaff, Callback = function(v) getgenv().AntiStaff = v end })
 
-SecPlayer:Toggle({ 
-    Title = "🛡️ Anti Hit (Kebal Magma/Lava/Spike)", 
-    Default = getgenv().AntiHit, 
-    Callback = function(v) getgenv().AntiHit = v end 
-})
-
-SecPlayer:Toggle({ 
-    Title = "⛔ Anti Bounce (Bumper/Magma)", 
-    Default = getgenv().AntiBounce, 
-    Callback = function(v) getgenv().AntiBounce = v end 
-})
-
-SecPlayer:Toggle({ 
-    Title = "✈️ Modfly (W A S D)", 
-    Default = getgenv().ModflyEnabled, 
-    Callback = function(v) getgenv().ModflyEnabled = v end 
-})
-
-SecPlayer:Input({ 
-    Title = "Kecepatan Walk/Loot/Modfly", 
-    Value = tostring(getgenv().WalkSpeed), 
-    Placeholder = "45", 
-    Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
-})
-
-SecPlayer:Toggle({ 
-    Title = "Auto Pull Players", 
-    Default = getgenv().AutoPull, 
-    Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end 
-})
-SecPlayer:Toggle({ 
-    Title = "Auto Ban Players", 
-    Default = getgenv().AutoBan, 
-    Callback = function(v) getgenv().AutoBan = v; if not v then ForceRestoreUI() end end 
-})
-SecPlayer:Toggle({ 
-    Title = "Enable Anti-Staff (Auto Disconnect)", 
-    Default = getgenv().AntiStaff, 
-    Callback = function(v) getgenv().AntiStaff = v end 
-})
-
--- SECTION: CAMERA
 local SecCam = Tab:Section({ Title = "Camera Custom Zoom", Box = true, Opened = false })
-SecCam:Input({ 
-    Title = "Max Zoom Distance", 
-    Value = tostring(getgenv().CustomZoom), 
-    Placeholder = tostring(getgenv().CustomZoom), 
-    Callback = function(v) getgenv().CustomZoom = tonumber(v) or getgenv().CustomZoom end 
-})
-SecCam:Button({
-    Title = "Apply Camera Zoom",
-    Callback = function() pcall(function() LP.CameraMaxZoomDistance = tonumber(getgenv().CustomZoom) or 1000; LP.CameraMinZoomDistance = 0.5 end) end
-})
+SecCam:Input({ Title = "Max Zoom Distance", Value = tostring(getgenv().CustomZoom), Placeholder = tostring(getgenv().CustomZoom), Callback = function(v) getgenv().CustomZoom = tonumber(v) or getgenv().CustomZoom end })
+SecCam:Button({ Title = "Apply Camera Zoom", Callback = function() pcall(function() LP.CameraMaxZoomDistance = tonumber(getgenv().CustomZoom) or 1000; LP.CameraMinZoomDistance = 0.5 end) end })
 
--- SECTION: AUTO COLLECT (GLOBAL SMART LOOT)
 local SecCollect = Tab:Section({ Title = "Auto Collect", Box = true, Opened = false })
-SecCollect:Toggle({ 
-    Title = "Auto Collect", 
-    Default = getgenv().AutoCollect, 
-    Callback = function(v) getgenv().AutoCollect = v end 
-})
+SecCollect:Toggle({ Title = "Auto Collect", Default = getgenv().AutoCollect, Callback = function(v) getgenv().AutoCollect = v end })
 SecCollect:Button({ Title = "Clear Blacklisted Drops", Callback = function() getgenv().BlacklistedLoot = {} warn("✅ Blacklist Drops Dibersihkan!") end })
 
--- SECTION: AUTO DROP
 local SecDrop = Tab:Section({ Title = "Auto Drop", Box = true, Opened = false })
-SecDrop:Toggle({ 
-    Title = "Auto Drop", 
-    Default = getgenv().AutoDrop, 
-    Callback = function(v) getgenv().AutoDrop = v; if not v then ForceRestoreUI() end end 
-})
-SecDrop:Input({ 
-    Title = "Drop Amount", 
-    Value = tostring(getgenv().DropAmount), 
-    Placeholder = tostring(getgenv().DropAmount), 
-    Callback = function(v) getgenv().DropAmount = tonumber(v) or getgenv().DropAmount end 
-})
-SecDrop:Input({ 
-    Title = "Drop Delay (sec)", 
-    Value = tostring(getgenv().DropDelay), 
-    Placeholder = tostring(getgenv().DropDelay), 
-    Callback = function(v) getgenv().DropDelay = tonumber(v) or getgenv().DropDelay end 
-})
+SecDrop:Toggle({ Title = "Auto Drop", Default = getgenv().AutoDrop, Callback = function(v) getgenv().AutoDrop = v; if not v then ForceRestoreUI() end end })
+SecDrop:Input({ Title = "Drop Amount", Value = tostring(getgenv().DropAmount), Placeholder = tostring(getgenv().DropAmount), Callback = function(v) getgenv().DropAmount = tonumber(v) or getgenv().DropAmount end })
+SecDrop:Input({ Title = "Drop Delay (sec)", Value = tostring(getgenv().DropDelay), Placeholder = tostring(getgenv().DropDelay), Callback = function(v) getgenv().DropDelay = tonumber(v) or getgenv().DropDelay end })
 
--- SECTION: AUTO TRASH
 local SecTrash = Tab:Section({ Title = "Auto Trash", Box = true, Opened = false })
-SecTrash:Toggle({ 
-    Title = "Auto Trash", 
-    Default = getgenv().AutoTrash, 
-    Callback = function(v) getgenv().AutoTrash = v; if not v then ForceRestoreUI() end end 
-})
-SecTrash:Input({ 
-    Title = "Trash Amount", 
-    Value = tostring(getgenv().TrashAmount), 
-    Placeholder = tostring(getgenv().TrashAmount), 
-    Callback = function(v) getgenv().TrashAmount = tonumber(v) or getgenv().TrashAmount end 
-})
-SecTrash:Input({ 
-    Title = "Trash Delay (sec)", 
-    Value = tostring(getgenv().TrashDelay), 
-    Placeholder = tostring(getgenv().TrashDelay), 
-    Callback = function(v) getgenv().TrashDelay = tonumber(v) or getgenv().TrashDelay end 
-})
+SecTrash:Toggle({ Title = "Auto Trash", Default = getgenv().AutoTrash, Callback = function(v) getgenv().AutoTrash = v; if not v then ForceRestoreUI() end end })
+SecTrash:Input({ Title = "Trash Amount", Value = tostring(getgenv().TrashAmount), Placeholder = tostring(getgenv().TrashAmount), Callback = function(v) getgenv().TrashAmount = tonumber(v) or getgenv().TrashAmount end })
+SecTrash:Input({ Title = "Trash Delay (sec)", Value = tostring(getgenv().TrashDelay), Placeholder = tostring(getgenv().TrashDelay), Callback = function(v) getgenv().TrashDelay = tonumber(v) or getgenv().TrashDelay end })
 
--- SECTION: STREAMER MODE
 local SecStreamer = Tab:Section({ Title = "Custom Username", Box = true, Opened = false })
-SecStreamer:Toggle({ 
-    Title = "Spoof Name", 
-    Default = getgenv().HideName, 
-    Callback = function(v) getgenv().HideName = v end 
-})
-SecStreamer:Input({ 
-    Title = "Custom Fake Name", 
-    Value = tostring(getgenv().FakeNameText), 
-    Placeholder = tostring(getgenv().FakeNameText), 
-    Callback = function(v) getgenv().FakeNameText = v end 
-})
+SecStreamer:Toggle({ Title = "Spoof Name", Default = getgenv().HideName, Callback = function(v) getgenv().HideName = v end })
+SecStreamer:Input({ Title = "Custom Fake Name", Value = tostring(getgenv().FakeNameText), Placeholder = tostring(getgenv().FakeNameText), Callback = function(v) getgenv().FakeNameText = v end })
 
--- SECTION: SPAM CHAT
 local SecChat = Tab:Section({ Title = "Auto Spam Chat Settings", Box = true, Opened = false })
-SecChat:Toggle({ 
-    Title = "Auto Chat", 
-    Default = getgenv().AutoChat, 
-    Callback = function(v) getgenv().AutoChat = v end 
-})
-SecChat:Input({ 
-    Title = "Message", 
-    Value = tostring(getgenv().ChatText), 
-    Placeholder = tostring(getgenv().ChatText), 
-    Callback = function(v) getgenv().ChatText = v end 
-})
-SecChat:Input({ 
-    Title = "Delay (sec)", 
-    Value = tostring(getgenv().ChatDelay), 
-    Placeholder = tostring(getgenv().ChatDelay), 
-    Callback = function(v) getgenv().ChatDelay = tonumber(v) or getgenv().ChatDelay end 
-})
-SecChat:Toggle({ 
-    Title = "Anti Spam (Random Alfabet)", 
-    Default = getgenv().ChatRandomLetter, 
-    Callback = function(v) getgenv().ChatRandomLetter = v end 
-})
+SecChat:Toggle({ Title = "Auto Chat", Default = getgenv().AutoChat, Callback = function(v) getgenv().AutoChat = v end })
+SecChat:Input({ Title = "Message", Value = tostring(getgenv().ChatText), Placeholder = tostring(getgenv().ChatText), Callback = function(v) getgenv().ChatText = v end })
+SecChat:Input({ Title = "Delay (sec)", Value = tostring(getgenv().ChatDelay), Placeholder = tostring(getgenv().ChatDelay), Callback = function(v) getgenv().ChatDelay = tonumber(v) or getgenv().ChatDelay end })
+SecChat:Toggle({ Title = "Anti Spam (Random Alfabet)", Default = getgenv().ChatRandomLetter, Callback = function(v) getgenv().ChatRandomLetter = v end })
 
 -- ========================================== --
 -- [[ PATHFINDING & SMART GLIDE SYSTEM ]]
@@ -343,15 +234,11 @@ local function SmoothWalkPath(pathTable, currZ)
     if not MyHitbox then return false end
     if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
 
-    local oldGravity = workspace.Gravity
-    workspace.Gravity = 0
-
     local startPos = MyHitbox.Position
     if PlayerMovement and PlayerMovement.Position then startPos = PlayerMovement.Position end
 
     for _, targetPos in ipairs(pathTable) do
         if not getgenv().AutoCollect then break end
-        
         local targetVec3 = Vector3.new(targetPos.X, targetPos.Y, currZ)
         local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetVec3.X, targetVec3.Y)).Magnitude 
         local duration = dist / getgenv().WalkSpeed
@@ -365,9 +252,7 @@ local function SmoothWalkPath(pathTable, currZ)
             local currentPos = startPos:Lerp(targetVec3, alpha)
             
             if PlayerMovement then 
-                pcall(function() 
-                    PlayerMovement.Position = currentPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0 
-                end)
+                pcall(function() PlayerMovement.Position = currentPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0 end)
             else
                 local fixedRot = MyHitbox.CFrame - MyHitbox.CFrame.Position
                 local newCFrame = fixedRot + currentPos
@@ -381,7 +266,6 @@ local function SmoothWalkPath(pathTable, currZ)
     if PlayerMovement then 
         pcall(function() PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.InputActive = true end) 
     end
-    workspace.Gravity = oldGravity
     return true
 end
 
@@ -395,10 +279,7 @@ local function SmartMoveToExact(targetVec3)
     local targetX = math.floor(targetVec3.X / getgenv().GridSize + 0.5)
     local targetY = math.floor(targetVec3.Y / getgenv().GridSize + 0.5)
 
-    if myGridX == targetX and myGridY == targetY then 
-        return SmoothWalkPath({ Vector3.new(targetVec3.X, targetVec3.Y, currZ) }, currZ)
-    end
-    
+    if myGridX == targetX and myGridY == targetY then return SmoothWalkPath({ Vector3.new(targetVec3.X, targetVec3.Y, currZ) }, currZ) end
     local route = FindPathAStar(myGridX, myGridY, targetX, targetY)
     
     if route and #route > 0 then
@@ -407,7 +288,7 @@ local function SmartMoveToExact(targetVec3)
         table.insert(pathTable, Vector3.new(targetVec3.X, targetVec3.Y, currZ))
         return SmoothWalkPath(pathTable, currZ)
     else
-        warn("⚠️ Drops terlalu jauh/buntu! Teleporting...")
+        warn("⚠️ Drops buntu! Teleporting...")
         if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
         local targetFallback = Vector3.new(targetVec3.X, targetVec3.Y, currZ)
         if PlayerMovement then pcall(function() PlayerMovement.Position = targetFallback end) else MyHitbox.CFrame = CFrame.new(targetFallback) end
@@ -418,11 +299,13 @@ local function SmartMoveToExact(targetVec3)
 end
 
 -- ========================================== --
--- [[ LOGIKA SISTEM UTAMA (RenderStepped) ]]
+-- [[ ⚙️ HEARTBEAT: MODFLY & ANTI-BOUNCE ]]
 -- ========================================== --
 
-RunService.RenderStepped:Connect(function(dt)
-    -- [1] MODFLY (Bypass Limiter Pakai Posisi Langsung)
+RunService.Heartbeat:Connect(function(dt)
+    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    
+    -- [1] MODFLY (TRUE BYPASS SPEED LIMIT)
     if getgenv().ModflyEnabled then
         local moveX, moveY = 0, 0
         if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveY = 1 end
@@ -430,58 +313,59 @@ RunService.RenderStepped:Connect(function(dt)
         if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveX = -1 end
         if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveX = 1 end
 
-        local speed = getgenv().WalkSpeed
-        local deltaX = moveX * speed * dt
-        local deltaY = moveY * speed * dt
+        if hrp then
+            -- Hitung CFrame maju murni tanpa physics Roblox/Game
+            local speed = getgenv().WalkSpeed or 45
+            local newCFrame = hrp.CFrame + Vector3.new(moveX * speed * dt, moveY * speed * dt, 0)
+            hrp.CFrame = newCFrame
+            hrp.Velocity = Vector3.zero 
 
-        if PlayerMovement then
-            pcall(function()
-                -- MENGUBAH POSISI LANGSUNG (Nembus batas limiter game)
-                PlayerMovement.Position = PlayerMovement.Position + Vector3.new(deltaX, deltaY, 0)
-                PlayerMovement.VelocityX = 0
-                PlayerMovement.VelocityY = 0
-                PlayerMovement.Grounded = true
-            end)
-        else
-            local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.CFrame = hrp.CFrame + Vector3.new(deltaX, deltaY, 0)
-                hrp.Velocity = Vector3.new(0, 0, 0)
+            if PlayerMovement then
+                pcall(function()
+                    PlayerMovement.InputActive = false -- MATIKAN FISIK GAME BIAR GAK BERANTEM
+                    PlayerMovement.Position = newCFrame.Position
+                    PlayerMovement.VelocityX = 0
+                    PlayerMovement.VelocityY = 0
+                    PlayerMovement.Grounded = true
+                end)
             end
         end
+    else
+        -- Kalo dimatikan, balikin kontrol ke game
+        if PlayerMovement and PlayerMovement.InputActive == false and not (getgenv().AutoDrop or getgenv().AutoTrash or getgenv().AutoCollect) then
+            pcall(function() PlayerMovement.InputActive = true end)
+        end
     end
-    
-    -- [2] ANTI BOUNCE (Dieksekusi se-level dengan Modfly di RenderStepped)
-    if getgenv().AntiBounce then
-        local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+
+    -- [2] ANTI-BOUNCE (RASA MODFLY)
+    if getgenv().AntiBounce and not getgenv().ModflyEnabled then
+        -- Cek user lagi lompat murni atau nggak
+        local isJumping = UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Up)
         
-        -- Hapus Dorongan Magma / Bumper
-        if hrp then
-            for _, v in pairs(hrp:GetChildren()) do
-                if v:IsA("BodyVelocity") or v:IsA("BodyForce") or v:IsA("LinearVelocity") or v:IsA("VectorForce") then
-                    v:Destroy()
+        if not isJumping then
+            if hrp then
+                -- Hapus Vector Force yang mungkin diselipin bumper
+                for _, v in pairs(hrp:GetChildren()) do
+                    if v:IsA("BodyVelocity") or v:IsA("BodyForce") or v:IsA("LinearVelocity") or v:IsA("VectorForce") then v:Destroy() end
+                end
+                
+                -- Kalau kecepatan naiknya (Velocity Y) lebih dari 2 tanpa izin lompat -> BANTING KE 0!
+                if hrp.Velocity.Y > 2 then
+                    hrp.Velocity = Vector3.new(hrp.Velocity.X, -2, hrp.Velocity.Z) 
                 end
             end
             
-            if hrp.Velocity.Y > 20 then
-                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+            if PlayerMovement then
+                pcall(function()
+                    if (PlayerMovement.VelocityY or 0) > 2 then 
+                        PlayerMovement.VelocityY = -2 
+                    end
+                end)
             end
-        end
-        
-        -- Lock di PlayerMovement (Batas Normal Lompat Biasanya di Bawah 20)
-        if PlayerMovement then
-            pcall(function()
-                if PlayerMovement.VelocityY > 20 then 
-                    PlayerMovement.VelocityY = 0 
-                end
-            end)
         end
     end
 
-    -- [3] UI MANAGER
-    if getgenv().AutoDrop or getgenv().AutoTrash then 
-        ManageUIState("Dropping") 
-    end 
+    if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end 
 end)
 
 -- [[ LOGIKA AUTO BAN & AUTO PULL ]]
@@ -643,7 +527,7 @@ task.spawn(function()
     end 
 end)
 
--- [[ 🧲 LOGIKA GLOBAL AUTO LOOT (SMART GLIDE) ]]
+-- [[ 🧲 LOGIKA GLOBAL AUTO LOOT ]]
 getgenv().BlacklistedLoot = getgenv().BlacklistedLoot or {}
 task.spawn(function() 
     while true do 
