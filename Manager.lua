@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v4.5 - MOBILE FLY FIX & AUTO-RESET" 
+getgenv().ScriptVersion = "Manager v4.6 - MOBILE JUMP OVERHAUL & WARP" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -34,6 +34,7 @@ getgenv().AntiBounce = getgenv().AntiBounce or false
 getgenv().ModflyEnabled = getgenv().ModflyEnabled or false
 getgenv().InfJump = getgenv().InfJump or false
 getgenv().SuperSpeed = getgenv().SuperSpeed or false
+getgenv().TargetWarpWorld = getgenv().TargetWarpWorld or "buy"
 
 -- ========================================== --
 -- [[ SERVICES & MODULES ]]
@@ -106,6 +107,7 @@ local RemoteTrashSafe = Remotes:WaitForChild("PlayerItemTrash")
 local RemoteInspect = Remotes:WaitForChild("PlayerInspectPlayer") 
 local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent") 
 local ChatRemote = RS:WaitForChild("CB")
+local TpRemote = RS:WaitForChild("tp")
 
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -119,6 +121,34 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 end)
 
 -- ========================================== --
+-- [[ INPUT TRACKING (PC & MOBILE) ]]
+-- ========================================== --
+getgenv().IsHoldingJump = false
+
+-- PC Keyboard Tracking
+UIS.InputBegan:Connect(function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.Space then getgenv().IsHoldingJump = true end
+end)
+UIS.InputEnded:Connect(function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.Space then getgenv().IsHoldingJump = false end
+end)
+
+-- Mobile Touch Tracking (Memaksa baca tombol lompat di layar)
+task.spawn(function()
+    while true do
+        task.wait(1)
+        pcall(function()
+            local jumpBtn = LP.PlayerGui.TouchGui.TouchControlFrame.JumpButton
+            if jumpBtn and not getgenv().JumpBtnHooked then
+                getgenv().JumpBtnHooked = true
+                jumpBtn.InputBegan:Connect(function() getgenv().IsHoldingJump = true end)
+                jumpBtn.InputEnded:Connect(function() getgenv().IsHoldingJump = false end)
+            end
+        end)
+    end
+end)
+
+-- ========================================== --
 -- [[ WIND UI SETUP ]]
 -- ========================================== --
 
@@ -126,18 +156,28 @@ local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opene
 SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
 SecPlayer:Toggle({ Title = "⛔ Anti Punch / No Knockback", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
 SecPlayer:Toggle({ Title = "✈️ Anti-Gravity (Modfly)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
-
 SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) 
     getgenv().InfJump = v 
-    -- AUTO-RESET: Balikin jump ke 1x doang pas dimatiin
     if not v and PlayerMovement then
         PlayerMovement.MaxJump = 1
         PlayerMovement.RemainingJumps = 1
     end
 end })
-
 SecPlayer:Toggle({ Title = "⚡ Super Speed", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
 SecPlayer:Input({ Title = "Speed Modifier (Isi Angka)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
+
+-- [NEW] WORLD WARP SECTION
+local SecWarp = Tab:Section({ Title = "Teleport / Warp World", Box = true, Opened = true })
+SecWarp:Input({ Title = "Nama World", Value = getgenv().TargetWarpWorld, Placeholder = "buy", Callback = function(v) getgenv().TargetWarpWorld = v end })
+SecWarp:Button({ Title = "🚀 Warp Sekarang!", Callback = function() 
+    pcall(function()
+        if getgenv().TargetWarpWorld ~= "" then
+            TpRemote:FireServer(getgenv().TargetWarpWorld)
+        else
+            warn("Nama World masih kosong!")
+        end
+    end)
+end })
 
 local SecMisc = Tab:Section({ Title = "Server Tools", Box = true, Opened = false })
 SecMisc:Toggle({ Title = "Auto Pull Players", Default = getgenv().AutoPull, Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end })
@@ -312,7 +352,6 @@ local function SmartMoveToExact(targetVec3)
     end
 end
 
-
 -- ========================================== --
 -- [[ ⚙️ HEARTBEAT: MOVEMENT & COMBAT LOGIC ]]
 -- ========================================== --
@@ -325,8 +364,7 @@ RunService.RenderStepped:Connect(function(dt)
     local pMoveX = PlayerMovement.MoveX or 0
 
     pcall(function()
-        -- [1] SENSOR BYPASS (THE NATIVE FIX!)
-        -- Ini matikan total fungsi mental (Deflect) dan hit (Hurt)
+        -- [1] SENSOR BYPASS
         if getgenv().AntiBounce or getgenv().AntiHit then
             PlayerMovement.Sensor = false
         else
@@ -334,7 +372,6 @@ RunService.RenderStepped:Connect(function(dt)
         end
 
         -- [2] SUPER SPEED
-        -- AUTO-RESET: Kalau dimatiin, otomatis balik ke speed normal bawaan Roblox karena if ini terlewat
         if getgenv().SuperSpeed and pMoveX ~= 0 then
             PlayerMovement.VelocityX = pMoveX * (getgenv().WalkSpeed or 45)
         end
@@ -345,27 +382,17 @@ RunService.RenderStepped:Connect(function(dt)
             PlayerMovement.MaxJump = 999
         end
 
-        -- [4] MODFLY (Anti-Gravity) - UPDATED V4.5 (SUPPORT MOBILE JUMP/ANALOG)
+        -- [4] MODFLY (Anti-Gravity) - UPDATED V4.6 (SUPPORT MOBILE UI HOOK)
         if getgenv().ModflyEnabled then
             local flySpeed = (getgenv().WalkSpeed or 45) / 10
             
-            -- Kita numpang deteksi Jump bawaan game (bisa deteksi tombol layar mobile!)
-            if PlayerMovement.Jumping then
+            -- Mengecek variabel universal IsHoldingJump (Trigger dari HP dan PC)
+            if getgenv().IsHoldingJump then
                 PlayerMovement.VelocityY = flySpeed
             elseif UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then
                 PlayerMovement.VelocityY = -flySpeed
             else
-                PlayerMovement.VelocityY = 0 -- Mengunci ketinggian di udara (Melayang)
-            end
-            
-            -- Fallback untuk Joystick / Analog di HP (Arah Bawah/Atas)
-            local hum = char and char:FindFirstChild("Humanoid")
-            if hum and not PlayerMovement.Jumping then
-                if hum.MoveDirection.Z < -0.2 then
-                    PlayerMovement.VelocityY = flySpeed
-                elseif hum.MoveDirection.Z > 0.2 then
-                    PlayerMovement.VelocityY = -flySpeed
-                end
+                PlayerMovement.VelocityY = 0 -- Stay di udara
             end
         end
     end)
