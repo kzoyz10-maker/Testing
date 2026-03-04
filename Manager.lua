@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v3.2 - GLOBAL SMART LOOT + CONFIG SUPPORT" 
+getgenv().ScriptVersion = "Manager v3.3 - GODMODE & MODFLY ADDED" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -28,6 +28,12 @@ getgenv().HideName = getgenv().HideName or false
 getgenv().FakeNameText = getgenv().FakeNameText or "KzoyzPlayer"
 getgenv().AntiStaff = getgenv().AntiStaff or false
 getgenv().CustomZoom = getgenv().CustomZoom or 1000
+
+-- [!] FITUR BARU
+getgenv().AntiHit = getgenv().AntiHit or false
+getgenv().AntiBounce = getgenv().AntiBounce or false
+getgenv().ModflyEnabled = getgenv().ModflyEnabled or false
+getgenv().ModflySpeed = getgenv().ModflySpeed or 45
 
 -- ========================================== --
 -- [[ SERVICES & MODULES ]]
@@ -93,7 +99,7 @@ end
 getgenv().GameInventoryModule = FindInventoryModule()
 
 -- ========================================== --
--- [[ REMOTES ]]
+-- [[ REMOTES & ANTI-HIT HOOK ]]
 -- ========================================== --
 local Remotes = RS:WaitForChild("Remotes")
 local RemoteDropSafe = Remotes:WaitForChild("PlayerDrop") 
@@ -102,12 +108,57 @@ local RemoteInspect = Remotes:WaitForChild("PlayerInspectPlayer")
 local ManagerRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent") 
 local ChatRemote = RS:WaitForChild("CB")
 
+-- [!] HOOK UNTUK ANTI-HIT (MAGMA/LAVA/SPIKES)
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if not checkcaller() and getgenv().AntiHit then
+        if method == "FireServer" and tostring(self.Name) == "PlayerHurtMe" then
+            return nil -- Blockir laporan damage ke server (Godmode)
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
 -- ========================================== --
 -- [[ WIND UI SETUP DENGAN FLAG ]]
 -- ========================================== --
 
--- SECTION: PLAYER CONTROL & SECURITY
-local SecPlayer = Tab:Section({ Title = "Misc", Box = true, Opened = true })
+-- SECTION: PLAYER CONTROL & SECURITY (DITAMBAH FITUR BARU)
+local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
+
+-- [NEW] Anti Hit / Godmode
+SecPlayer:Toggle({ 
+    Title = "🛡️ Anti Hit (Kebal Magma/Lava/Spike)", 
+    Flag = "Mgr_Toggle_AntiHit",
+    Default = getgenv().AntiHit, 
+    Callback = function(v) getgenv().AntiHit = v end 
+})
+
+-- [NEW] Anti Bounce
+SecPlayer:Toggle({ 
+    Title = "⛔ Anti Bounce (Bumper/Pinball)", 
+    Flag = "Mgr_Toggle_AntiBounce",
+    Default = getgenv().AntiBounce, 
+    Callback = function(v) getgenv().AntiBounce = v end 
+})
+
+-- [NEW] Modfly
+SecPlayer:Toggle({ 
+    Title = "✈️ Modfly (Jalan di udara pakai W A S D)", 
+    Flag = "Mgr_Toggle_Modfly",
+    Default = getgenv().ModflyEnabled, 
+    Callback = function(v) getgenv().ModflyEnabled = v end 
+})
+
+SecPlayer:Input({ 
+    Title = "Modfly Speed", 
+    Flag = "Mgr_Input_ModflySpeed",
+    Value = tostring(getgenv().ModflySpeed), 
+    Placeholder = "45", 
+    Callback = function(v) getgenv().ModflySpeed = tonumber(v) or getgenv().ModflySpeed end 
+})
+
 SecPlayer:Toggle({ 
     Title = "Auto Pull Players", 
     Flag = "Mgr_Toggle_AutoPull",
@@ -404,7 +455,56 @@ end
 -- [[ LOGIKA SISTEM UTAMA ]]
 -- ========================================== --
 
-RunService.RenderStepped:Connect(function() if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end end)
+-- [NEW] LOGIKA MODFLY & ANTI-BOUNCE (RUNSERVICE)
+RunService.RenderStepped:Connect(function()
+    -- Handle Modfly
+    if getgenv().ModflyEnabled then
+        local moveX, moveY = 0, 0
+        -- Ambil input dari keyboard
+        if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveY = 1 end
+        if UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then moveY = -1 end
+        if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveX = -1 end
+        if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveX = 1 end
+
+        -- Override PlayerMovement agar terbang tanpa animasi jatuh
+        if PlayerMovement then
+            pcall(function()
+                PlayerMovement.VelocityX = moveX * getgenv().ModflySpeed
+                PlayerMovement.VelocityY = moveY * getgenv().ModflySpeed
+                PlayerMovement.Grounded = true
+            end)
+        else
+            -- Cadangan jika tidak pakai PlayerMovement module
+            local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.Velocity = Vector3.new(moveX * getgenv().ModflySpeed, moveY * getgenv().ModflySpeed, 0)
+            end
+        end
+    end
+    
+    -- Handle Auto UI
+    if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end 
+end)
+
+-- [NEW] LOGIKA ANTI-BOUNCE
+RunService.Heartbeat:Connect(function()
+    if getgenv().AntiBounce then
+        if PlayerMovement then
+            pcall(function()
+                -- Jika karakter terlempar lebih dari kecepatan loncat wajar (75+), nolkan kecepatannya!
+                if PlayerMovement.VelocityY > 75 then 
+                    PlayerMovement.VelocityY = 0 
+                end
+            end)
+        else
+            local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and hrp.Velocity.Y > 75 then
+                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+            end
+        end
+    end
+end)
+
 
 -- [[ LOGIKA AUTO BAN & AUTO PULL ]]
 local function ExecuteBan(targetPlayer)
