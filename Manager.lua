@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v4.4 - PERFECT TOGGLES & SMOOTH FLY" 
+getgenv().ScriptVersion = "Manager v4.5 - MOBILE FLY FIX & AUTO-RESET" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -34,7 +34,6 @@ getgenv().AntiBounce = getgenv().AntiBounce or false
 getgenv().ModflyEnabled = getgenv().ModflyEnabled or false
 getgenv().InfJump = getgenv().InfJump or false
 getgenv().SuperSpeed = getgenv().SuperSpeed or false
-getgenv().IsHoldingSpace = false
 
 -- ========================================== --
 -- [[ SERVICES & MODULES ]]
@@ -120,16 +119,6 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 end)
 
 -- ========================================== --
--- [[ INPUT TRACKING ]]
--- ========================================== --
-UIS.InputBegan:Connect(function(input, gpe)
-    if input.KeyCode == Enum.KeyCode.Space then getgenv().IsHoldingSpace = true end
-end)
-UIS.InputEnded:Connect(function(input, gpe)
-    if input.KeyCode == Enum.KeyCode.Space then getgenv().IsHoldingSpace = false end
-end)
-
--- ========================================== --
 -- [[ WIND UI SETUP ]]
 -- ========================================== --
 
@@ -138,9 +127,9 @@ SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Spike)", Default = get
 SecPlayer:Toggle({ Title = "⛔ Anti Punch / No Knockback", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
 SecPlayer:Toggle({ Title = "✈️ Anti-Gravity (Modfly)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
 
--- [UPDATE V4.4]: Reset Jumps back to normal when turned off
 SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) 
     getgenv().InfJump = v 
+    -- AUTO-RESET: Balikin jump ke 1x doang pas dimatiin
     if not v and PlayerMovement then
         PlayerMovement.MaxJump = 1
         PlayerMovement.RemainingJumps = 1
@@ -345,7 +334,7 @@ RunService.RenderStepped:Connect(function(dt)
         end
 
         -- [2] SUPER SPEED
-        -- Kalau dimatiin, otomatis balik ke speed normal bawaan Roblox karena MoveX gak dikali WalkSpeed kita lagi.
+        -- AUTO-RESET: Kalau dimatiin, otomatis balik ke speed normal bawaan Roblox karena if ini terlewat
         if getgenv().SuperSpeed and pMoveX ~= 0 then
             PlayerMovement.VelocityX = pMoveX * (getgenv().WalkSpeed or 45)
         end
@@ -356,25 +345,26 @@ RunService.RenderStepped:Connect(function(dt)
             PlayerMovement.MaxJump = 999
         end
 
-        -- [4] MODFLY (Anti-Gravity) - UPDATED V4.4 (SMOOTH FLY VIA VELOCITY)
+        -- [4] MODFLY (Anti-Gravity) - UPDATED V4.5 (SUPPORT MOBILE JUMP/ANALOG)
         if getgenv().ModflyEnabled then
-            local flyVelocity = (getgenv().WalkSpeed or 45) / 10
+            local flySpeed = (getgenv().WalkSpeed or 45) / 10
             
-            if getgenv().IsHoldingSpace or UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Up) then
-                PlayerMovement.VelocityY = flyVelocity
+            -- Kita numpang deteksi Jump bawaan game (bisa deteksi tombol layar mobile!)
+            if PlayerMovement.Jumping then
+                PlayerMovement.VelocityY = flySpeed
             elseif UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then
-                PlayerMovement.VelocityY = -flyVelocity
+                PlayerMovement.VelocityY = -flySpeed
             else
-                PlayerMovement.VelocityY = 0 -- Melayang diam (Hold di udara)
+                PlayerMovement.VelocityY = 0 -- Mengunci ketinggian di udara (Melayang)
             end
             
-            -- Mobile Fallback
+            -- Fallback untuk Joystick / Analog di HP (Arah Bawah/Atas)
             local hum = char and char:FindFirstChild("Humanoid")
-            if hum and not getgenv().IsHoldingSpace and not UIS:IsKeyDown(Enum.KeyCode.W) and not UIS:IsKeyDown(Enum.KeyCode.S) then
+            if hum and not PlayerMovement.Jumping then
                 if hum.MoveDirection.Z < -0.2 then
-                    PlayerMovement.VelocityY = flyVelocity
+                    PlayerMovement.VelocityY = flySpeed
                 elseif hum.MoveDirection.Z > 0.2 then
-                    PlayerMovement.VelocityY = -flyVelocity
+                    PlayerMovement.VelocityY = -flySpeed
                 end
             end
         end
