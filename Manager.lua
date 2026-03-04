@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v4.3 - SENSOR BYPASS (NO KNOCKBACK)" 
+getgenv().ScriptVersion = "Manager v4.4 - PERFECT TOGGLES & SMOOTH FLY" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -137,9 +137,18 @@ local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opene
 SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
 SecPlayer:Toggle({ Title = "⛔ Anti Punch / No Knockback", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
 SecPlayer:Toggle({ Title = "✈️ Anti-Gravity (Modfly)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
-SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) getgenv().InfJump = v end })
+
+-- [UPDATE V4.4]: Reset Jumps back to normal when turned off
+SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) 
+    getgenv().InfJump = v 
+    if not v and PlayerMovement then
+        PlayerMovement.MaxJump = 1
+        PlayerMovement.RemainingJumps = 1
+    end
+end })
+
 SecPlayer:Toggle({ Title = "⚡ Super Speed", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
-SecPlayer:Input({ Title = "Speed Modifier (2 Recomended)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
+SecPlayer:Input({ Title = "Speed Modifier (Isi Angka)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
 
 local SecMisc = Tab:Section({ Title = "Server Tools", Box = true, Opened = false })
 SecMisc:Toggle({ Title = "Auto Pull Players", Default = getgenv().AutoPull, Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end })
@@ -328,7 +337,7 @@ RunService.RenderStepped:Connect(function(dt)
 
     pcall(function()
         -- [1] SENSOR BYPASS (THE NATIVE FIX!)
-        -- Ini matikan total fungsi mental (Deflect) dan hit (Hurt) langsung dari engine game!
+        -- Ini matikan total fungsi mental (Deflect) dan hit (Hurt)
         if getgenv().AntiBounce or getgenv().AntiHit then
             PlayerMovement.Sensor = false
         else
@@ -336,6 +345,7 @@ RunService.RenderStepped:Connect(function(dt)
         end
 
         -- [2] SUPER SPEED
+        -- Kalau dimatiin, otomatis balik ke speed normal bawaan Roblox karena MoveX gak dikali WalkSpeed kita lagi.
         if getgenv().SuperSpeed and pMoveX ~= 0 then
             PlayerMovement.VelocityX = pMoveX * (getgenv().WalkSpeed or 45)
         end
@@ -346,24 +356,25 @@ RunService.RenderStepped:Connect(function(dt)
             PlayerMovement.MaxJump = 999
         end
 
-        -- [4] MODFLY (Anti-Gravity)
+        -- [4] MODFLY (Anti-Gravity) - UPDATED V4.4 (SMOOTH FLY VIA VELOCITY)
         if getgenv().ModflyEnabled then
-            PlayerMovement.VelocityY = 0
-            
-            local flySpeed = (getgenv().WalkSpeed or 45) * dt
+            local flyVelocity = (getgenv().WalkSpeed or 45) / 10
             
             if getgenv().IsHoldingSpace or UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Up) then
-                PlayerMovement.Position = PlayerMovement.Position + Vector3.new(0, flySpeed, 0)
+                PlayerMovement.VelocityY = flyVelocity
             elseif UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then
-                PlayerMovement.Position = PlayerMovement.Position - Vector3.new(0, flySpeed, 0)
+                PlayerMovement.VelocityY = -flyVelocity
+            else
+                PlayerMovement.VelocityY = 0 -- Melayang diam (Hold di udara)
             end
             
+            -- Mobile Fallback
             local hum = char and char:FindFirstChild("Humanoid")
-            if hum and not getgenv().IsHoldingSpace then
+            if hum and not getgenv().IsHoldingSpace and not UIS:IsKeyDown(Enum.KeyCode.W) and not UIS:IsKeyDown(Enum.KeyCode.S) then
                 if hum.MoveDirection.Z < -0.2 then
-                    PlayerMovement.Position = PlayerMovement.Position + Vector3.new(0, flySpeed, 0)
+                    PlayerMovement.VelocityY = flyVelocity
                 elseif hum.MoveDirection.Z > 0.2 then
-                    PlayerMovement.Position = PlayerMovement.Position - Vector3.new(0, flySpeed, 0)
+                    PlayerMovement.VelocityY = -flyVelocity
                 end
             end
         end
