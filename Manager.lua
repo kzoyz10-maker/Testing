@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v3.3 - GODMODE & MODFLY ADDED" 
+getgenv().ScriptVersion = "Manager v3.4 - FAST MODFLY & MAX ANTI-BOUNCE" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -9,7 +9,7 @@ getgenv().ScriptVersion = "Manager v3.3 - GODMODE & MODFLY ADDED"
 getgenv().DropDelay = getgenv().DropDelay or 2     
 getgenv().TrashDelay = getgenv().TrashDelay or 2    
 getgenv().GridSize = getgenv().GridSize or 4.5 
-getgenv().WalkSpeed = getgenv().WalkSpeed or 45 -- Kecepatan Loot
+getgenv().WalkSpeed = getgenv().WalkSpeed or 45 -- Kecepatan Loot & Modfly
 
 getgenv().AutoCollect = getgenv().AutoCollect or false
 getgenv().AutoDrop = getgenv().AutoDrop or false
@@ -29,11 +29,9 @@ getgenv().FakeNameText = getgenv().FakeNameText or "KzoyzPlayer"
 getgenv().AntiStaff = getgenv().AntiStaff or false
 getgenv().CustomZoom = getgenv().CustomZoom or 1000
 
--- [!] FITUR BARU
 getgenv().AntiHit = getgenv().AntiHit or false
 getgenv().AntiBounce = getgenv().AntiBounce or false
 getgenv().ModflyEnabled = getgenv().ModflyEnabled or false
-getgenv().ModflySpeed = getgenv().ModflySpeed or 45
 
 -- ========================================== --
 -- [[ SERVICES & MODULES ]]
@@ -124,10 +122,9 @@ end)
 -- [[ WIND UI SETUP DENGAN FLAG ]]
 -- ========================================== --
 
--- SECTION: PLAYER CONTROL & SECURITY (DITAMBAH FITUR BARU)
+-- SECTION: PLAYER CONTROL & SECURITY
 local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
 
--- [NEW] Anti Hit / Godmode
 SecPlayer:Toggle({ 
     Title = "🛡️ Anti Hit (Kebal Magma/Lava/Spike)", 
     Flag = "Mgr_Toggle_AntiHit",
@@ -135,28 +132,26 @@ SecPlayer:Toggle({
     Callback = function(v) getgenv().AntiHit = v end 
 })
 
--- [NEW] Anti Bounce
 SecPlayer:Toggle({ 
-    Title = "⛔ Anti Bounce (Bumper/Pinball)", 
+    Title = "⛔ Anti Bounce (Bumper/Magma)", 
     Flag = "Mgr_Toggle_AntiBounce",
     Default = getgenv().AntiBounce, 
     Callback = function(v) getgenv().AntiBounce = v end 
 })
 
--- [NEW] Modfly
 SecPlayer:Toggle({ 
-    Title = "✈️ Modfly (Jalan di udara pakai W A S D)", 
+    Title = "✈️ Modfly (W A S D)", 
     Flag = "Mgr_Toggle_Modfly",
     Default = getgenv().ModflyEnabled, 
     Callback = function(v) getgenv().ModflyEnabled = v end 
 })
 
 SecPlayer:Input({ 
-    Title = "Modfly Speed", 
-    Flag = "Mgr_Input_ModflySpeed",
-    Value = tostring(getgenv().ModflySpeed), 
+    Title = "Kecepatan Walk/Loot/Modfly", 
+    Flag = "Mgr_Input_WalkSpeed",
+    Value = tostring(getgenv().WalkSpeed), 
     Placeholder = "45", 
-    Callback = function(v) getgenv().ModflySpeed = tonumber(v) or getgenv().ModflySpeed end 
+    Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
 })
 
 SecPlayer:Toggle({ 
@@ -199,13 +194,6 @@ SecCollect:Toggle({
     Flag = "Mgr_Toggle_AutoLoot",
     Default = getgenv().AutoCollect, 
     Callback = function(v) getgenv().AutoCollect = v end 
-})
-SecCollect:Input({ 
-    Title = "Loot Speed", 
-    Flag = "Mgr_Input_LootSpeed",
-    Value = tostring(getgenv().WalkSpeed), 
-    Placeholder = tostring(getgenv().WalkSpeed), 
-    Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
 })
 SecCollect:Button({ Title = "Clear Blacklisted Drops", Callback = function() getgenv().BlacklistedLoot = {} warn("✅ Blacklist Drops Dibersihkan!") end })
 
@@ -455,52 +443,58 @@ end
 -- [[ LOGIKA SISTEM UTAMA ]]
 -- ========================================== --
 
--- [NEW] LOGIKA MODFLY & ANTI-BOUNCE (RUNSERVICE)
+-- [UPDATE] LOGIKA MODFLY (Pakai WalkSpeed) & ANTI-BOUNCE
 RunService.RenderStepped:Connect(function()
     -- Handle Modfly
     if getgenv().ModflyEnabled then
         local moveX, moveY = 0, 0
-        -- Ambil input dari keyboard
         if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveY = 1 end
         if UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then moveY = -1 end
         if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveX = -1 end
         if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveX = 1 end
 
-        -- Override PlayerMovement agar terbang tanpa animasi jatuh
         if PlayerMovement then
             pcall(function()
-                PlayerMovement.VelocityX = moveX * getgenv().ModflySpeed
-                PlayerMovement.VelocityY = moveY * getgenv().ModflySpeed
+                -- [!] Ganti ke WalkSpeed
+                PlayerMovement.VelocityX = moveX * getgenv().WalkSpeed
+                PlayerMovement.VelocityY = moveY * getgenv().WalkSpeed
                 PlayerMovement.Grounded = true
             end)
         else
-            -- Cadangan jika tidak pakai PlayerMovement module
             local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.Velocity = Vector3.new(moveX * getgenv().ModflySpeed, moveY * getgenv().ModflySpeed, 0)
-            end
+            if hrp then hrp.Velocity = Vector3.new(moveX * getgenv().WalkSpeed, moveY * getgenv().WalkSpeed, 0) end
         end
     end
     
-    -- Handle Auto UI
     if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end 
 end)
 
--- [NEW] LOGIKA ANTI-BOUNCE
+-- [UPDATE] LOGIKA ANTI-BOUNCE (Maksimal Ngebanting)
 RunService.Heartbeat:Connect(function()
     if getgenv().AntiBounce then
+        local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+        
+        -- 1. Hapus BodyVelocity/Force yang mungkin didorong magma
+        if hrp then
+            for _, v in pairs(hrp:GetChildren()) do
+                if v:IsA("BodyVelocity") or v:IsA("BodyForce") or v:IsA("BodyThrust") or v:IsA("VectorForce") or v:IsA("LinearVelocity") then
+                    v:Destroy()
+                end
+            end
+            
+            -- 2. Banting velocity fisik
+            if hrp.Velocity.Y > 45 then
+                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+            end
+        end
+        
+        -- 3. Banting velocity PlayerMovement
         if PlayerMovement then
             pcall(function()
-                -- Jika karakter terlempar lebih dari kecepatan loncat wajar (75+), nolkan kecepatannya!
-                if PlayerMovement.VelocityY > 75 then 
+                if PlayerMovement.VelocityY > 45 then 
                     PlayerMovement.VelocityY = 0 
                 end
             end)
-        else
-            local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            if hrp and hrp.Velocity.Y > 75 then
-                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
-            end
         end
     end
 end)
@@ -678,7 +672,6 @@ task.spawn(function()
                 local itemsToLoot = {}
                 local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
                 
-                -- 1. Mengumpulkan semua drop di Map
                 for _, folder in ipairs(TargetFolders) do
                     if folder then
                         for _, obj in ipairs(folder:GetChildren()) do
@@ -690,15 +683,11 @@ task.spawn(function()
                     end
                 end
                 
-                -- 2. Sortir dari yang terdekat
                 if #itemsToLoot > 0 then
                     table.sort(itemsToLoot, function(a, b) return a.dist < b.dist end)
-                    
-                    -- 3. Eksekusi Looting dengan meluncur
                     for _, itemData in ipairs(itemsToLoot) do
                         if not getgenv().AutoCollect then break end
                         
-                        -- Pengecekan apakah barang ada di dalam tembok
                         local endX = math.floor(itemData.position.X / getgenv().GridSize + 0.5)
                         local endY = math.floor(itemData.position.Y / getgenv().GridSize + 0.5)
                         
@@ -706,11 +695,11 @@ task.spawn(function()
                             getgenv().BlacklistedLoot[itemData.instance] = true
                         else
                             SmartMoveToExact(itemData.position)
-                            task.wait(0.05) -- Beri waktu sistem mendeteksi barang terambil
+                            task.wait(0.05) 
                         end
                     end
                 else
-                    task.wait(0.5) -- Kalau nggak ada drop, nunggu sebentar biar nggak lag
+                    task.wait(0.5) 
                 end
             end 
         end
