@@ -99,7 +99,7 @@ local function IsTileBreakable(gridX, gridY)
         local nameStr = tostring(tileString):lower()
         
         if nameStr:find("bedrock") then isBedrockTile = true end
-        if not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") and not nameStr:find("bedrock") and nameStr ~= "0" then
+        if not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("lock") and not nameStr:find("area") and not nameStr:find("door") and not nameStr:find("bedrock") and nameStr ~= "0" then
             hasBreakable = true
         end
     end
