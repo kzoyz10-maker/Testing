@@ -1,7 +1,7 @@
 local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Auto Make Farm v3.0 - TRUE A* & SMART BYPASS" 
+getgenv().ScriptVersion = "Auto Make Farm v4.0 - ANTI FREEZE & SMART BYPASS" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -260,7 +260,7 @@ end
 -- ========================================== --
 -- [[ UI SECTION ]]
 -- ========================================== --
-local SecBuild = Tab:Section({ Title = "🏗️ Auto Make Farm (V3 Smart Bypass)", Box = true, Opened = true })
+local SecBuild = Tab:Section({ Title = "🏗️ Auto Make Farm (V4 Anti Freeze)", Box = true, Opened = true })
 
 SecBuild:Toggle({ 
     Title = "▶ START AUTO BUILD", 
@@ -392,12 +392,5 @@ task.spawn(function()
             end
         end
         task.wait(1)
-    end
-end)
-
-Window:OnClose(function()
-    if getgenv().EnableAutoBuild then
-        getgenv().EnableAutoBuild = false
-        SetModflyState(false)
     end
 end)
