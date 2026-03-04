@@ -32,31 +32,61 @@ local Window = WindUI:CreateWindow({
     
     -- [!] INI DIA RAHASIANYA BIAR GAK HILANG DI PC
     OpenButton = {
-        Title = "Kzoyz HUB", -- Teks yang muncul pas tombol di-hover
-        CornerRadius = UDim.new(1, 0), -- Bikin tombol jadi bulat
+        Title = "Kzoyz HUB", 
+        CornerRadius = UDim.new(1, 0), 
         StrokeThickness = 3,
-        Enabled = true, -- Mengaktifkan tombol ngambang
-        Draggable = true, -- Bisa digeser-geser di layar
-        OnlyMobile = false, -- [PENTING] Set ke false biar di PC / Emulator juga muncul!
+        Enabled = true, 
+        Draggable = true, 
+        OnlyMobile = false, 
         Scale = 1,
         Color = ColorSequence.new(
-            Color3.fromHex("#FFD700"), -- Warna gradasi awal (Gold)
-            Color3.fromHex("#FFA500")  -- Warna gradasi akhir (Orange)
+            Color3.fromHex("#FFD700"), 
+            Color3.fromHex("#FFA500")  
         )
     }
 })
 
--- Fungsi buat Bikin Tab + Langsung Auto-Load Script dari Github
-local function AutoLoadTabFromGithub(TabName, IconName, DescText, LoadLink)
+-- ========================================== --
+-- [[ SISTEM ANTREAN LOAD GITHUB (ANTI-GAGAL) ]]
+-- ========================================== --
+local LoadQueue = {}
+
+local function RegisterTab(TabName, IconName, DescText, LoadLink)
+    -- Bikin tab-nya dulu di UI biar langsung muncul
     local Tab = Window:Tab({
         Title = TabName,
         Icon = IconName,
         Desc = DescText
     })
+    
+    -- Masukkan ke antrean download
+    table.insert(LoadQueue, {
+        Tab = Tab,
+        TabName = TabName,
+        LoadLink = LoadLink
+    })
+end
 
-    task.spawn(function()
+-- ========================================== --
+-- [[ LIST TAB KAMU ]]
+-- ========================================== --
+RegisterTab("Pabrik", "factory", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Pabrik.lua")
+RegisterTab("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autofarm.lua")
+RegisterTab("Manager", "briefcase", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Manager.lua")
+RegisterTab("Auto PTHT", "tractor", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autoplant.lua")
+RegisterTab("Auto Clear World", "plant", "Clear All Blocks", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoclear.lua")
+RegisterTab("Auto Build Farm", "home", "Build Your Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autobuild.lua")
+RegisterTab("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autocollect.lua")
+RegisterTab("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Discord.lua")
+RegisterTab("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Config.lua")
+
+-- ========================================== --
+-- [[ EKSEKUSI ANTREAN SECARA BERTAHAP ]]
+-- ========================================== --
+task.spawn(function()
+    for _, data in ipairs(LoadQueue) do
         local success, scriptCode = pcall(function()
-            return game:HttpGet(LoadLink)
+            return game:HttpGet(data.LoadLink)
         end)
         
         if success and scriptCode then
@@ -64,37 +94,22 @@ local function AutoLoadTabFromGithub(TabName, IconName, DescText, LoadLink)
             
             if func then
                 local runSuccess, runErr = pcall(function()
-                    -- [!] Lempar Tab, Window, dan WindUI biar bisa dipakai untuk sistem Notifikasi & Config
-                    func(Tab, Window, WindUI) 
+                    func(data.Tab, Window, WindUI) 
                 end)
                 
                 if not runSuccess then
-                    WindUI:Notify({ Title = "Error " .. TabName, Content = tostring(runErr), Duration = 5 })
+                    WindUI:Notify({ Title = "Error " .. data.TabName, Content = tostring(runErr), Duration = 5 })
                 end
             else
-                WindUI:Notify({ Title = "Compile Error " .. TabName, Content = tostring(compileErr), Duration = 5 })
+                WindUI:Notify({ Title = "Compile Error " .. data.TabName, Content = tostring(compileErr), Duration = 5 })
             end
         else
-            WindUI:Notify({ Title = "Gagal Memuat " .. TabName, Content = "Link GitHub tidak dapat diakses / bermasalah.", Duration = 5 })
+            WindUI:Notify({ Title = "Gagal Memuat " .. data.TabName, Content = "Link GitHub gagal diakses.", Duration = 5 })
         end
-    end)
-end
-
--- ========================================== --
--- [[ LIST TAB & AUTO LOAD MUNCUL SEMUA ]]
--- ========================================== --
-
-AutoLoadTabFromGithub("Pabrik", "factory", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Pabrik.lua")
-AutoLoadTabFromGithub("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autofarm.lua")
-AutoLoadTabFromGithub("Manager", "briefcase", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Manager.lua")
-AutoLoadTabFromGithub("Auto PTHT", "tractor", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autoplant.lua")
-AutoLoadTabFromGithub("Auto Clear World", "plant", "Clear All Blocks", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoclear.lua")
-AutoLoadTabFromGithub("Auto Build Farm", "home", "Build Your Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autobuild.lua")
-AutoLoadTabFromGithub("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autocollect.lua")
-
--- ========================================== --
--- [[ TAB TAMBAHAN: DISCORD & CONFIG ]]
--- ========================================== --
--- GANTI LINK DI BAWAH DENGAN LINK RAW GITHUB KAMU SENDIRI
-AutoLoadTabFromGithub("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Discord.lua")
-AutoLoadTabFromGithub("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Config.lua")
+        
+        -- [!] INI KUNCINYA: Jeda 0.5 detik antar download biar GitHub & Executor gak kaget
+        task.wait(0.5) 
+    end
+    
+    WindUI:Notify({ Title = "Berhasil!", Content = "Semua Tab berhasil dimuat.", Duration = 3 })
+end)
