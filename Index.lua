@@ -17,7 +17,7 @@ end
 -- ========================================== --
 
 -- [[ LOAD WIND UI ]] --
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.client.lua"))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.client.lua"))()
 
 local Window = WindUI:CreateWindow({
     Title = "Kzoyz HUB " .. getgenv().HubVersion,
