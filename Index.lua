@@ -28,7 +28,22 @@ local Window = WindUI:CreateWindow({
     Transparent = true,
     Theme = "Dark",
     SideBarWidth = 170,
-    HasOutline = true
+    HasOutline = true,
+    
+    -- [!] INI DIA RAHASIANYA BIAR GAK HILANG DI PC
+    OpenButton = {
+        Title = "Kzoyz HUB", -- Teks yang muncul pas tombol di-hover
+        CornerRadius = UDim.new(1, 0), -- Bikin tombol jadi bulat
+        StrokeThickness = 3,
+        Enabled = true, -- Mengaktifkan tombol ngambang
+        Draggable = true, -- Bisa digeser-geser di layar
+        OnlyMobile = false, -- [PENTING] Set ke false biar di PC / Emulator juga muncul!
+        Scale = 0.5,
+        Color = ColorSequence.new(
+            Color3.fromHex("#FFD700"), -- Warna gradasi awal (Gold)
+            Color3.fromHex("#FFA500")  -- Warna gradasi akhir (Orange)
+        )
+    }
 })
 
 -- Fungsi buat Bikin Tab + Langsung Auto-Load Script dari Github
@@ -81,11 +96,3 @@ AutoLoadTabFromGithub("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.gi
 -- GANTI LINK DI BAWAH DENGAN LINK RAW GITHUB KAMU SENDIRI
 AutoLoadTabFromGithub("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Discord.lua")
 AutoLoadTabFromGithub("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Config.lua")
-
--- Notifikasi Edukasi Awal
-task.wait(2)
-WindUI:Notify({ 
-    Title = "Panduan UI", 
-    Content = "Klik tombol [-] untuk mengecilkan menu. Jika tertutup, tekan CTRL Kanan (RightControl) untuk membuka kembali.", 
-    Duration = 8 
-})
