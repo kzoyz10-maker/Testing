@@ -17,7 +17,7 @@ end
 -- ========================================== --
 
 -- [[ LOAD WIND UI ]] --
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.client.lua"))()
 
 local Window = WindUI:CreateWindow({
     Title = "Kzoyz HUB " .. getgenv().HubVersion,
@@ -28,8 +28,7 @@ local Window = WindUI:CreateWindow({
     Transparent = true,
     Theme = "Dark",
     SideBarWidth = 170,
-    HasOutline = true,
-    Keybind = Enum.KeyCode.RightControl -- [!] Keybind aman (CTRL Kanan)
+    HasOutline = true
 })
 
 -- Fungsi buat Bikin Tab + Langsung Auto-Load Script dari Github
