@@ -1,7 +1,7 @@
 local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Auto Clear v4.0 - LERP WALK & FAST BREAK" 
+getgenv().ScriptVersion = "Auto Clear v5.0 - PERSISTENT MODFLY & ANTI-FREEZE" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -27,6 +27,43 @@ local WorldManager = require(RS:WaitForChild("Managers"):WaitForChild("WorldMana
 
 local PlayerMovement
 pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerMovement")) end)
+
+-- ========================================== --
+-- [[ SISTEM MODFLY PERMANEN ]]
+-- ========================================== --
+local ModflyConnection = nil
+
+local function SetModflyState(state)
+    if state then
+        -- 1. Matikan kontrol player biar bot bebas bergerak
+        if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
+        
+        -- 2. Kunci gravitasi dan kecepatan setiap frame biar beneran melayang
+        if not ModflyConnection then
+            ModflyConnection = RunService.Heartbeat:Connect(function()
+                if PlayerMovement then
+                    pcall(function()
+                        PlayerMovement.VelocityX = 0
+                        PlayerMovement.VelocityY = 0
+                        PlayerMovement.Grounded = true -- Manipulasi game mengira kita napak tanah
+                    end)
+                else
+                    -- Fallback buat game normal
+                    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then hrp.Velocity = Vector3.new(0, 0, 0) end
+                end
+            end)
+        end
+    else
+        -- 1. Hentikan penguncian gravitasi
+        if ModflyConnection then
+            ModflyConnection:Disconnect()
+            ModflyConnection = nil
+        end
+        -- 2. Kembalikan kontrol player (INI YANG BIKIN ANTI-FREEZE)
+        if PlayerMovement then pcall(function() PlayerMovement.InputActive = true end) end
+    end
+end
 
 -- ========================================== --
 -- [[ DETEKSI TILE (RADAR PINTAR) ]]
@@ -91,15 +128,16 @@ local function CustomSmartWalk(targetPos)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- Ambil posisi awal dari PlayerMovement (supaya presisi sama server)
     local startPos = (PlayerMovement and PlayerMovement.Position) or hrp.Position
     local distance = (startPos - targetPos).Magnitude
     
-    if distance < 1 then return end -- Kalau udah deket, gausah jalan
+    if distance < 1 then 
+        if PlayerMovement then PlayerMovement.Position = targetPos end
+        return 
+    end
 
-    -- Hitung estimasi waktu berdasarkan WalkSpeed
     local walkTime = distance / getgenv().WalkSpeed
-    local steps = math.floor(walkTime * 45) -- Resolusi step jalan
+    local steps = math.floor(walkTime * 45) 
     
     for i = 1, steps do
         if not getgenv().EnableAutoClear then break end
@@ -108,47 +146,47 @@ local function CustomSmartWalk(targetPos)
         
         if PlayerMovement then
             PlayerMovement.Position = currentLerp
-            PlayerMovement.VelocityX = 0 
-            PlayerMovement.VelocityY = 0 
-            PlayerMovement.Grounded = true
         else
             hrp.CFrame = CFrame.new(currentLerp)
         end
         task.wait(1/45)
     end
     
-    -- Pastikan nyampe pas di titik akhir
-    if PlayerMovement then PlayerMovement.Position = targetPos end
-    task.wait(0.1) -- Tunggu bentar biar server nge-register kita udah sampai
+    if getgenv().EnableAutoClear and PlayerMovement then 
+        PlayerMovement.Position = targetPos 
+    end
 end
 
 -- ========================================== --
 -- [[ UI SECTION ]]
 -- ========================================== --
-local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V4 Ultimate)", Box = true, Opened = true })
+local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V5 Anti-Freeze)", Box = true, Opened = true })
 
 SecClear:Toggle({ 
     Title = "▶ START AUTO CLEAR", 
     Default = getgenv().EnableAutoClear, 
-    Callback = function(v) getgenv().EnableAutoClear = v end 
+    Callback = function(v) 
+        getgenv().EnableAutoClear = v 
+        SetModflyState(v) -- Langsung atur Modfly ON/OFF pas tombol dipencet
+    end 
 })
 
 SecClear:Input({ 
-    Title = "Walk Speed (Kecepatan Jalan)", 
+    Title = "Walk Speed", 
     Value = tostring(getgenv().WalkSpeed), 
     Placeholder = "16", 
     Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
 })
 
 SecClear:Input({ 
-    Title = "Break Delay (Kecepatan Hancurin)", 
+    Title = "Break Delay", 
     Value = tostring(getgenv().ClearDelay), 
     Placeholder = "0.15", 
     Callback = function(v) getgenv().ClearDelay = tonumber(v) or getgenv().ClearDelay end 
 })
 
 SecClear:Input({ 
-    Title = "Hit Count (Berapa kali tonjok)", 
+    Title = "Hit Count", 
     Value = tostring(getgenv().HitCount), 
     Placeholder = "3", 
     Callback = function(v) getgenv().HitCount = tonumber(v) or getgenv().HitCount end 
@@ -168,23 +206,19 @@ task.spawn(function()
                 local targetX, targetY = GetNextExposedBlock()
                 
                 if targetX and targetY then
-                    -- [!] BERDIRI PERSIS 1 BLOK DI ATASNYA
+                    -- Berdiri persis 1 grid di atasnya (Modfly akan menahannya di udara)
                     local standPos = Vector3.new(targetX * getgenv().GridSize, (targetY + 1) * getgenv().GridSize, currZ)
                     
-                    -- Matikan input biar pemain gak ganggu jalan bot
-                    if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
-                    
-                    -- Jalan santai nan mulus pakai Custom Lerp
                     CustomSmartWalk(standPos)
                     
                     if not getgenv().EnableAutoClear then break end
                     
-                    -- [!] SISTEM BREAK PABRIK: Pukul beberapa kali pakai delay & tick
+                    -- Pukul berkali-kali pakai delay & tick
                     for i = 1, getgenv().HitCount do
                         if not getgenv().EnableAutoClear then break end
                         
                         local breakTarget = Vector2.new(targetX, targetY)
-                        local currentTick = tick() -- Anti Cheat Os.time / Tick
+                        local currentTick = tick() 
                         
                         pcall(function()
                             if RemoteBreak:IsA("RemoteEvent") then 
@@ -195,14 +229,22 @@ task.spawn(function()
                         end)
                         task.wait(getgenv().ClearDelay)
                     end
-                    
                 else
+                    -- Map rata, matikan fitur otomatis
                     getgenv().EnableAutoClear = false
-                    if PlayerMovement then pcall(function() PlayerMovement.InputActive = true end) end
-                    WindUI:Notify({ Title = "Auto Clear Selesai", Content = "Semua blok terekspos sudah hancur!", Duration = 5 })
+                    SetModflyState(false) -- Lepas modfly secara otomatis
+                    WindUI:Notify({ Title = "Selesai", Content = "World sudah bersih!", Duration = 5 })
                 end
             end
         end
         task.wait(0.1)
+    end
+end)
+
+-- Antisipasi kalau script dimatikan paksa, kembalikan karakter ke normal
+Window:OnClose(function()
+    if getgenv().EnableAutoClear then
+        getgenv().EnableAutoClear = false
+        SetModflyState(false)
     end
 end)
