@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Manager v3.4 - FAST MODFLY & MAX ANTI-BOUNCE" 
+getgenv().ScriptVersion = "Manager v3.5 - PERFECT FLIGHT & BOUNCE GUARD" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -9,7 +9,7 @@ getgenv().ScriptVersion = "Manager v3.4 - FAST MODFLY & MAX ANTI-BOUNCE"
 getgenv().DropDelay = getgenv().DropDelay or 2     
 getgenv().TrashDelay = getgenv().TrashDelay or 2    
 getgenv().GridSize = getgenv().GridSize or 4.5 
-getgenv().WalkSpeed = getgenv().WalkSpeed or 45 -- Kecepatan Loot & Modfly
+getgenv().WalkSpeed = getgenv().WalkSpeed or 45 -- Berlaku untuk Loot dan Modfly
 
 getgenv().AutoCollect = getgenv().AutoCollect or false
 getgenv().AutoDrop = getgenv().AutoDrop or false
@@ -112,43 +112,38 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
     if not checkcaller() and getgenv().AntiHit then
         if method == "FireServer" and tostring(self.Name) == "PlayerHurtMe" then
-            return nil -- Blockir laporan damage ke server (Godmode)
+            return nil 
         end
     end
     return oldNamecall(self, ...)
 end)
 
 -- ========================================== --
--- [[ WIND UI SETUP DENGAN FLAG ]]
+-- [[ WIND UI SETUP ]]
 -- ========================================== --
 
--- SECTION: PLAYER CONTROL & SECURITY
 local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
 
 SecPlayer:Toggle({ 
     Title = "🛡️ Anti Hit (Kebal Magma/Lava/Spike)", 
-    Flag = "Mgr_Toggle_AntiHit",
     Default = getgenv().AntiHit, 
     Callback = function(v) getgenv().AntiHit = v end 
 })
 
 SecPlayer:Toggle({ 
     Title = "⛔ Anti Bounce (Bumper/Magma)", 
-    Flag = "Mgr_Toggle_AntiBounce",
     Default = getgenv().AntiBounce, 
     Callback = function(v) getgenv().AntiBounce = v end 
 })
 
 SecPlayer:Toggle({ 
     Title = "✈️ Modfly (W A S D)", 
-    Flag = "Mgr_Toggle_Modfly",
     Default = getgenv().ModflyEnabled, 
     Callback = function(v) getgenv().ModflyEnabled = v end 
 })
 
 SecPlayer:Input({ 
     Title = "Kecepatan Walk/Loot/Modfly", 
-    Flag = "Mgr_Input_WalkSpeed",
     Value = tostring(getgenv().WalkSpeed), 
     Placeholder = "45", 
     Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
@@ -156,19 +151,16 @@ SecPlayer:Input({
 
 SecPlayer:Toggle({ 
     Title = "Auto Pull Players", 
-    Flag = "Mgr_Toggle_AutoPull",
     Default = getgenv().AutoPull, 
     Callback = function(v) getgenv().AutoPull = v; if not v then ForceRestoreUI() end end 
 })
 SecPlayer:Toggle({ 
     Title = "Auto Ban Players", 
-    Flag = "Mgr_Toggle_AutoBan",
     Default = getgenv().AutoBan, 
     Callback = function(v) getgenv().AutoBan = v; if not v then ForceRestoreUI() end end 
 })
 SecPlayer:Toggle({ 
     Title = "Enable Anti-Staff (Auto Disconnect)", 
-    Flag = "Mgr_Toggle_AntiStaff",
     Default = getgenv().AntiStaff, 
     Callback = function(v) getgenv().AntiStaff = v end 
 })
@@ -177,7 +169,6 @@ SecPlayer:Toggle({
 local SecCam = Tab:Section({ Title = "Camera Custom Zoom", Box = true, Opened = false })
 SecCam:Input({ 
     Title = "Max Zoom Distance", 
-    Flag = "Mgr_Input_Zoom",
     Value = tostring(getgenv().CustomZoom), 
     Placeholder = tostring(getgenv().CustomZoom), 
     Callback = function(v) getgenv().CustomZoom = tonumber(v) or getgenv().CustomZoom end 
@@ -191,7 +182,6 @@ SecCam:Button({
 local SecCollect = Tab:Section({ Title = "Auto Collect", Box = true, Opened = false })
 SecCollect:Toggle({ 
     Title = "Auto Collect", 
-    Flag = "Mgr_Toggle_AutoLoot",
     Default = getgenv().AutoCollect, 
     Callback = function(v) getgenv().AutoCollect = v end 
 })
@@ -201,20 +191,17 @@ SecCollect:Button({ Title = "Clear Blacklisted Drops", Callback = function() get
 local SecDrop = Tab:Section({ Title = "Auto Drop", Box = true, Opened = false })
 SecDrop:Toggle({ 
     Title = "Auto Drop", 
-    Flag = "Mgr_Toggle_AutoDrop",
     Default = getgenv().AutoDrop, 
     Callback = function(v) getgenv().AutoDrop = v; if not v then ForceRestoreUI() end end 
 })
 SecDrop:Input({ 
     Title = "Drop Amount", 
-    Flag = "Mgr_Input_DropAmt",
     Value = tostring(getgenv().DropAmount), 
     Placeholder = tostring(getgenv().DropAmount), 
     Callback = function(v) getgenv().DropAmount = tonumber(v) or getgenv().DropAmount end 
 })
 SecDrop:Input({ 
     Title = "Drop Delay (sec)", 
-    Flag = "Mgr_Input_DropDelay",
     Value = tostring(getgenv().DropDelay), 
     Placeholder = tostring(getgenv().DropDelay), 
     Callback = function(v) getgenv().DropDelay = tonumber(v) or getgenv().DropDelay end 
@@ -224,20 +211,17 @@ SecDrop:Input({
 local SecTrash = Tab:Section({ Title = "Auto Trash", Box = true, Opened = false })
 SecTrash:Toggle({ 
     Title = "Auto Trash", 
-    Flag = "Mgr_Toggle_AutoTrash",
     Default = getgenv().AutoTrash, 
     Callback = function(v) getgenv().AutoTrash = v; if not v then ForceRestoreUI() end end 
 })
 SecTrash:Input({ 
     Title = "Trash Amount", 
-    Flag = "Mgr_Input_TrashAmt",
     Value = tostring(getgenv().TrashAmount), 
     Placeholder = tostring(getgenv().TrashAmount), 
     Callback = function(v) getgenv().TrashAmount = tonumber(v) or getgenv().TrashAmount end 
 })
 SecTrash:Input({ 
     Title = "Trash Delay (sec)", 
-    Flag = "Mgr_Input_TrashDelay",
     Value = tostring(getgenv().TrashDelay), 
     Placeholder = tostring(getgenv().TrashDelay), 
     Callback = function(v) getgenv().TrashDelay = tonumber(v) or getgenv().TrashDelay end 
@@ -247,13 +231,11 @@ SecTrash:Input({
 local SecStreamer = Tab:Section({ Title = "Custom Username", Box = true, Opened = false })
 SecStreamer:Toggle({ 
     Title = "Spoof Name", 
-    Flag = "Mgr_Toggle_SpoofName",
     Default = getgenv().HideName, 
     Callback = function(v) getgenv().HideName = v end 
 })
 SecStreamer:Input({ 
     Title = "Custom Fake Name", 
-    Flag = "Mgr_Input_FakeName",
     Value = tostring(getgenv().FakeNameText), 
     Placeholder = tostring(getgenv().FakeNameText), 
     Callback = function(v) getgenv().FakeNameText = v end 
@@ -263,27 +245,23 @@ SecStreamer:Input({
 local SecChat = Tab:Section({ Title = "Auto Spam Chat Settings", Box = true, Opened = false })
 SecChat:Toggle({ 
     Title = "Auto Chat", 
-    Flag = "Mgr_Toggle_AutoChat",
     Default = getgenv().AutoChat, 
     Callback = function(v) getgenv().AutoChat = v end 
 })
 SecChat:Input({ 
     Title = "Message", 
-    Flag = "Mgr_Input_ChatText",
     Value = tostring(getgenv().ChatText), 
     Placeholder = tostring(getgenv().ChatText), 
     Callback = function(v) getgenv().ChatText = v end 
 })
 SecChat:Input({ 
     Title = "Delay (sec)", 
-    Flag = "Mgr_Input_ChatDelay",
     Value = tostring(getgenv().ChatDelay), 
     Placeholder = tostring(getgenv().ChatDelay), 
     Callback = function(v) getgenv().ChatDelay = tonumber(v) or getgenv().ChatDelay end 
 })
 SecChat:Toggle({ 
     Title = "Anti Spam (Random Alfabet)", 
-    Flag = "Mgr_Toggle_AntiSpamChat",
     Default = getgenv().ChatRandomLetter, 
     Callback = function(v) getgenv().ChatRandomLetter = v end 
 })
@@ -440,12 +418,11 @@ local function SmartMoveToExact(targetVec3)
 end
 
 -- ========================================== --
--- [[ LOGIKA SISTEM UTAMA ]]
+-- [[ LOGIKA SISTEM UTAMA (RenderStepped) ]]
 -- ========================================== --
 
--- [UPDATE] LOGIKA MODFLY (Pakai WalkSpeed) & ANTI-BOUNCE
-RunService.RenderStepped:Connect(function()
-    -- Handle Modfly
+RunService.RenderStepped:Connect(function(dt)
+    -- [1] MODFLY (Bypass Limiter Pakai Posisi Langsung)
     if getgenv().ModflyEnabled then
         local moveX, moveY = 0, 0
         if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveY = 1 end
@@ -453,52 +430,59 @@ RunService.RenderStepped:Connect(function()
         if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveX = -1 end
         if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveX = 1 end
 
+        local speed = getgenv().WalkSpeed
+        local deltaX = moveX * speed * dt
+        local deltaY = moveY * speed * dt
+
         if PlayerMovement then
             pcall(function()
-                -- [!] Ganti ke WalkSpeed
-                PlayerMovement.VelocityX = moveX * getgenv().WalkSpeed
-                PlayerMovement.VelocityY = moveY * getgenv().WalkSpeed
+                -- MENGUBAH POSISI LANGSUNG (Nembus batas limiter game)
+                PlayerMovement.Position = PlayerMovement.Position + Vector3.new(deltaX, deltaY, 0)
+                PlayerMovement.VelocityX = 0
+                PlayerMovement.VelocityY = 0
                 PlayerMovement.Grounded = true
             end)
         else
             local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.Velocity = Vector3.new(moveX * getgenv().WalkSpeed, moveY * getgenv().WalkSpeed, 0) end
+            if hrp then
+                hrp.CFrame = hrp.CFrame + Vector3.new(deltaX, deltaY, 0)
+                hrp.Velocity = Vector3.new(0, 0, 0)
+            end
         end
     end
     
-    if getgenv().AutoDrop or getgenv().AutoTrash then ManageUIState("Dropping") end 
-end)
-
--- [UPDATE] LOGIKA ANTI-BOUNCE (Maksimal Ngebanting)
-RunService.Heartbeat:Connect(function()
+    -- [2] ANTI BOUNCE (Dieksekusi se-level dengan Modfly di RenderStepped)
     if getgenv().AntiBounce then
         local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         
-        -- 1. Hapus BodyVelocity/Force yang mungkin didorong magma
+        -- Hapus Dorongan Magma / Bumper
         if hrp then
             for _, v in pairs(hrp:GetChildren()) do
-                if v:IsA("BodyVelocity") or v:IsA("BodyForce") or v:IsA("BodyThrust") or v:IsA("VectorForce") or v:IsA("LinearVelocity") then
+                if v:IsA("BodyVelocity") or v:IsA("BodyForce") or v:IsA("LinearVelocity") or v:IsA("VectorForce") then
                     v:Destroy()
                 end
             end
             
-            -- 2. Banting velocity fisik
-            if hrp.Velocity.Y > 45 then
+            if hrp.Velocity.Y > 20 then
                 hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
             end
         end
         
-        -- 3. Banting velocity PlayerMovement
+        -- Lock di PlayerMovement (Batas Normal Lompat Biasanya di Bawah 20)
         if PlayerMovement then
             pcall(function()
-                if PlayerMovement.VelocityY > 45 then 
+                if PlayerMovement.VelocityY > 20 then 
                     PlayerMovement.VelocityY = 0 
                 end
             end)
         end
     end
-end)
 
+    -- [3] UI MANAGER
+    if getgenv().AutoDrop or getgenv().AutoTrash then 
+        ManageUIState("Dropping") 
+    end 
+end)
 
 -- [[ LOGIKA AUTO BAN & AUTO PULL ]]
 local function ExecuteBan(targetPlayer)
