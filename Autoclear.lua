@@ -1,7 +1,7 @@
 local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Auto Clear v7.0 - DYNAMIC PATHING & BUG FIX" 
+getgenv().ScriptVersion = "Auto Clear v8.0 - TRUE A* PATHFINDING & LOCK BYPASS" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -68,22 +68,10 @@ local function IsTileEmpty(gridX, gridY)
         local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
         local nameStr = tostring(tileString):lower()
         if not nameStr:find("bg") and not nameStr:find("background") and not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") then
-            return false
+            return false -- Ada blok padat (Dirt, Bedrock, Lock, dll)
         end
     end
     return true
-end
-
-local function IsBedrockInGrid(gridX, gridY)
-    if gridX < 0 or gridX > 100 or gridY < 0 then return false end
-    if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
-    
-    for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
-        local rawId = type(data) == "table" and data[1] or data
-        local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
-        if tostring(tileString):lower():find("bedrock") then return true end
-    end
-    return false
 end
 
 local function IsTileBreakable(gridX, gridY)
@@ -91,24 +79,29 @@ local function IsTileBreakable(gridX, gridY)
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return false end
     
     local hasBreakable = false
-    local isBedrockTile = false 
+    local isUnbreakableTile = false 
     
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
         local nameStr = tostring(tileString):lower()
         
-        if nameStr:find("bedrock") then isBedrockTile = true end
-        if not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("lock") and not nameStr:find("area") and not nameStr:find("door") and not nameStr:find("bedrock") and nameStr ~= "0" then
+        -- [!] HAK VETO UNTUK BEDROCK, LOCK, DAN AREA
+        if nameStr:find("bedrock") or nameStr:find("lock") or nameStr:find("area") then 
+            isUnbreakableTile = true 
+        end
+        
+        if not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") and not nameStr:find("bedrock") and not nameStr:find("lock") and not nameStr:find("area") and nameStr ~= "0" then
             hasBreakable = true
         end
     end
     
-    if isBedrockTile then return false end
+    if isUnbreakableTile then return false end
     return hasBreakable
 end
 
 local function GetNextExposedBlock()
+    -- Scan dari atas ke bawah
     for y = 100, 0, -1 do 
         local isEven = (y % 2 == 0)
         local startX = isEven and 0 or 100
@@ -127,28 +120,72 @@ local function GetNextExposedBlock()
 end
 
 -- ========================================== --
--- [[ PATHFINDING: CEK JALUR BEDROCK ]]
+-- [[ ALGORITMA A* PATHFINDING PINTAR ]]
 -- ========================================== --
-local function IsPathBlockedByBedrock(startPos, endPos)
-    local distance = (startPos - endPos).Magnitude
-    if distance < getgenv().GridSize then return false end
+local function FindPathAStar(startX, startY, endX, endY)
+    if startX == endX and startY == endY then return {} end
     
-    -- Cek setiap setengah grid (biar gak ada yg kelewatan)
-    local steps = math.ceil(distance / (getgenv().GridSize * 0.5)) 
-    for i = 0, steps do
-        local currentCheck = startPos:Lerp(endPos, i / steps)
-        local gridX = math.floor((currentCheck.X / getgenv().GridSize) + 0.5)
-        local gridY = math.floor((currentCheck.Y / getgenv().GridSize) + 0.5)
+    local openSet, closedSet, cameFrom, gScore, fScore = {}, {}, {}, {}, {}
+    local function heuristic(x, y) return math.abs(x - endX) + math.abs(y - endY) end
+    
+    local startKey = startX .. "," .. startY
+    table.insert(openSet, {x = startX, y = startY, key = startKey})
+    gScore[startKey] = 0
+    fScore[startKey] = heuristic(startX, startY)
+    
+    local iterations = 0
+    while #openSet > 0 do
+        iterations = iterations + 1
+        if iterations > 3000 then break end -- Cegah lag jika jalan buntu murni
         
-        if IsBedrockInGrid(gridX, gridY) then
-            return true -- Ada bedrock ngehalangin!
+        -- Cari node paling efisien
+        local current, currentIndex = openSet[1], 1
+        for i = 2, #openSet do
+            if fScore[openSet[i].key] < fScore[current.key] then
+                current = openSet[i]; currentIndex = i
+            end
+        end
+        
+        -- Kalau sampai di tujuan, buat rutenya
+        if current.x == endX and current.y == endY then
+            local path, currKey = {}, current.key
+            while cameFrom[currKey] do
+                local node = cameFrom[currKey]
+                table.insert(path, 1, {x = current.x, y = current.y})
+                current = node; currKey = node.x .. "," .. node.y
+            end
+            return path
+        end
+        
+        table.remove(openSet, currentIndex)
+        closedSet[current.key] = true
+        
+        -- Cek atas, bawah, kiri, kanan
+        local neighbors = { {x=current.x+1, y=current.y}, {x=current.x-1, y=current.y}, {x=current.x, y=current.y+1}, {x=current.x, y=current.y-1} }
+        for _, n in ipairs(neighbors) do
+            local nKey = n.x .. "," .. n.y
+            if n.x >= 0 and n.x <= 100 and n.y >= 0 and n.y <= 100 and not closedSet[nKey] then
+                -- Bisa dilewati JIKA kosong ATAU jika itu titik tujuan akhirnya
+                if IsTileEmpty(n.x, n.y) or (n.x == endX and n.y == endY) then
+                    local tentativeG = gScore[current.key] + 1
+                    if not gScore[nKey] or tentativeG < gScore[nKey] then
+                        cameFrom[nKey] = current
+                        gScore[nKey] = tentativeG
+                        fScore[nKey] = tentativeG + heuristic(n.x, n.y)
+                        
+                        local inOpen = false
+                        for _, openNode in ipairs(openSet) do if openNode.key == nKey then inOpen = true break end end
+                        if not inOpen then table.insert(openSet, {x = n.x, y = n.y, key = nKey}) end
+                    end
+                end
+            end
         end
     end
-    return false -- Jalur aman
+    return nil -- Rute buntu total
 end
 
 -- ========================================== --
--- [[ FUNGSI MOVEMENT (DINAMIS) ]]
+-- [[ FUNGSI MOVEMENT EXECUTOR ]]
 -- ========================================== --
 local function MoveToPoint(startP, endP)
     local char = LP.Character
@@ -174,22 +211,24 @@ local function MoveToPoint(startP, endP)
     end
 end
 
-local function U_ShapeSmartWalk(startPos, targetPos)
-    local safeHeight = math.max(startPos.Y, targetPos.Y) + (2 * getgenv().GridSize)
-    local waypoint1 = Vector3.new(startPos.X, safeHeight, startPos.Z)
-    local waypoint2 = Vector3.new(targetPos.X, safeHeight, targetPos.Z)
+local function FollowAStarPath(path, currZ)
+    local char = LP.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local startPos = (PlayerMovement and PlayerMovement.Position) or (hrp and hrp.Position)
     
-    MoveToPoint(startPos, waypoint1)
-    if not getgenv().EnableAutoClear then return end
-    MoveToPoint(waypoint1, waypoint2)
-    if not getgenv().EnableAutoClear then return end
-    MoveToPoint(waypoint2, targetPos)
+    for _, node in ipairs(path) do
+        if not getgenv().EnableAutoClear then break end
+        local targetPos = Vector3.new(node.x * getgenv().GridSize, node.y * getgenv().GridSize, currZ)
+        MoveToPoint(startPos, targetPos)
+        startPos = targetPos
+    end
+    if getgenv().EnableAutoClear and PlayerMovement then PlayerMovement.Position = startPos end
 end
 
 -- ========================================== --
 -- [[ UI SECTION ]]
 -- ========================================== --
-local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V7 Dynamic Path)", Box = true, Opened = true })
+local SecClear = Tab:Section({ Title = "🧨 Auto Clear (V8 A* Smart Walk)", Box = true, Opened = true })
 
 SecClear:Toggle({ 
     Title = "▶ START AUTO CLEAR", 
@@ -218,31 +257,33 @@ task.spawn(function()
                 local targetX, targetY, safeSide = GetNextExposedBlock()
                 
                 if targetX and targetY then
-                    -- Tentukan posisi berdiri
+                    -- Tentukan titik berdiri yang paling aman
                     local standX, standY = targetX, targetY
                     if safeSide == "top" then standY = targetY + 1
                     elseif safeSide == "left" then standX = targetX - 1
                     elseif safeSide == "right" then standX = targetX + 1
                     end
                     
-                    local standPos = Vector3.new(standX * getgenv().GridSize, standY * getgenv().GridSize, currZ)
                     local startPos = (PlayerMovement and PlayerMovement.Position) or hrp.Position
+                    local myGridX = math.floor((startPos.X / getgenv().GridSize) + 0.5)
+                    local myGridY = math.floor((startPos.Y / getgenv().GridSize) + 0.5)
+                    local targetPos = Vector3.new(standX * getgenv().GridSize, standY * getgenv().GridSize, currZ)
                     
-                    -- [!] DINAMIS: Cek ada bedrock di tengah jalan atau nggak?
-                    if IsPathBlockedByBedrock(startPos, standPos) then
-                        U_ShapeSmartWalk(startPos, standPos) -- Lewat atas
+                    -- [!] EKSEKUSI A* PATHFINDING
+                    local path = FindPathAStar(myGridX, myGridY, standX, standY)
+                    
+                    if path and #path > 0 then
+                        FollowAStarPath(path, currZ) -- Jalan ngikutin grid layaknya maze/labirin
                     else
-                        MoveToPoint(startPos, standPos) -- Lurus ngebut!
+                        -- Fallback kalau misal rute buntu (misal kehalang lock dari segala arah)
+                        MoveToPoint(startPos, targetPos) 
                     end
                     
-                    -- Pastikan berhenti kalau toggle dimatiin di tengah jalan (pakai 'continue' BUKAN 'break')
                     if not getgenv().EnableAutoClear then continue end
-                    
-                    if PlayerMovement then PlayerMovement.Position = standPos end
                     
                     -- Pukul
                     for i = 1, getgenv().HitCount do
-                        if not getgenv().EnableAutoClear then break end -- Break ini aman karena cuma memutus loop pukulan
+                        if not getgenv().EnableAutoClear then break end
                         local breakTarget = Vector2.new(targetX, targetY)
                         pcall(function()
                             if RemoteBreak:IsA("RemoteEvent") then 
@@ -256,7 +297,7 @@ task.spawn(function()
                 else
                     getgenv().EnableAutoClear = false
                     SetModflyState(false) 
-                    WindUI:Notify({ Title = "Selesai", Content = "World sudah bersih! (Bedrock aman)", Duration = 5 })
+                    WindUI:Notify({ Title = "Selesai", Content = "World sudah bersih! (Semua halangan & lock terhindari)", Duration = 5 })
                 end
             end
         end
