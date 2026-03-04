@@ -1,7 +1,7 @@
 local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Auto Make Farm v2.0 - A* SMART PATHFINDING" 
+getgenv().ScriptVersion = "Auto Make Farm v3.0 - TRUE A* & SMART BYPASS" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS ]]
@@ -90,22 +90,29 @@ end
 -- ========================================== --
 -- [[ RADAR TILE & COLLISION CHECK ]]
 -- ========================================== --
--- Buat ngecek tempat yg mau dipasang blok udah ada isinya belum
 local function IsTileEmptyForPlant(gridX, gridY)
+    if gridX < 0 or gridX > 100 or gridY < 0 then return false end
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return true end
+    
     for layer, data in pairs(RawWorldTiles[gridX][gridY]) do
         local rawId = type(data) == "table" and data[1] or data
         local tileString = rawId
         if type(rawId) == "number" and WorldManager.NumberToStringMap then tileString = WorldManager.NumberToStringMap[rawId] or rawId end
         local nameStr = tostring(tileString):lower()
-        if not string.find(nameStr, "bg") and not string.find(nameStr, "background") and not string.find(nameStr, "air") and not string.find(nameStr, "water") then 
+        
+        -- [!] HAK VETO: Bedrock dan Lock TIDAK BOLEH ditimpa blok!
+        if nameStr:find("bedrock") or nameStr:find("lock") then
+            return false
+        end
+        
+        -- Selain bg, air, water, dan AREA, berarti ada blok padat
+        if not nameStr:find("bg") and not nameStr:find("background") and not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("area") and nameStr ~= "0" then 
             return false 
         end
     end
     return true
 end
 
--- Buat ngecek jalan rute A* (bisa dilewatin atau nggak)
 local function IsTileWalkable(gridX, gridY)
     if gridX < 0 or gridX > 100 or gridY < 0 then return true end
     if not RawWorldTiles[gridX] or not RawWorldTiles[gridX][gridY] then return true end
@@ -115,8 +122,14 @@ local function IsTileWalkable(gridX, gridY)
         local tileString = type(rawId) == "number" and (WorldManager.NumberToStringMap and WorldManager.NumberToStringMap[rawId] or rawId) or rawId
         local nameStr = tostring(tileString):lower()
         
-        if not nameStr:find("bg") and not nameStr:find("background") and not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") then
-            return false -- Ada blok keras yang ngalangin jalan
+        -- [!] HAK VETO: Bedrock dan Lock TIDAK BISA DILEWATI
+        if nameStr:find("bedrock") or nameStr:find("lock") then
+            return false
+        end
+        
+        -- Yg bisa dilewati: bg, air, water, door, dan AREA
+        if not nameStr:find("bg") and not nameStr:find("background") and not nameStr:find("air") and not nameStr:find("water") and not nameStr:find("door") and not nameStr:find("area") and nameStr ~= "0" then
+            return false 
         end
     end
     return true
@@ -188,7 +201,6 @@ local function FindPathAStar(startX, startY, endX, endY)
         for _, n in ipairs(neighbors) do
             local nKey = n.x .. "," .. n.y
             if n.x >= 0 and n.x <= 100 and n.y >= 0 and n.y <= 100 and not closedSet[nKey] then
-                -- Bisa lewat JIKA kosong ATAU target akhirnya (biar bisa sampai pas di atas blok target)
                 if IsTileWalkable(n.x, n.y) or (n.x == endX and n.y == endY) then
                     local tentativeG = gScore[current.key] + 1
                     if not gScore[nKey] or tentativeG < gScore[nKey] then
@@ -204,7 +216,7 @@ local function FindPathAStar(startX, startY, endX, endY)
             end
         end
     end
-    return nil -- Rute buntu total
+    return nil -- Rute Buntu
 end
 
 -- ========================================== --
@@ -248,7 +260,7 @@ end
 -- ========================================== --
 -- [[ UI SECTION ]]
 -- ========================================== --
-local SecBuild = Tab:Section({ Title = "🏗️ Auto Make Farm (A* Smart Walk)", Box = true, Opened = true })
+local SecBuild = Tab:Section({ Title = "🏗️ Auto Make Farm (V3 Smart Bypass)", Box = true, Opened = true })
 
 SecBuild:Toggle({ 
     Title = "▶ START AUTO BUILD", 
@@ -317,43 +329,57 @@ task.spawn(function()
                             break
                         end
                         
-                        -- Cek apakah tempat butuh dipasang block
+                        -- Cek apakah kotak ini aman dan kosong untuk ditaruh blok
                         if IsTileEmptyForPlant(x, y) then
-                            local standX = x
-                            local standY = y + 1 -- Posisi berdiri yang aman 1 blok di atas blok yg mau dipasang
-                            
                             local startPos = (PlayerMovement and PlayerMovement.Position) or (hrp and hrp.Position)
-                            if startPos then
-                                local myGridX = math.floor((startPos.X / getgenv().GridSize) + 0.5)
-                                local myGridY = math.floor((startPos.Y / getgenv().GridSize) + 0.5)
-                                local targetPos = Vector3.new(standX * getgenv().GridSize, standY * getgenv().GridSize, currZ)
-                                
-                                -- [!] Eksekusi pencarian rute aman (A*)
-                                local path = FindPathAStar(myGridX, myGridY, standX, standY)
-                                
-                                if path and #path > 0 then
-                                    FollowAStarPath(path, currZ)
-                                else
-                                    -- Kalau A* nyerah (rute 100% ketutup), terobos lurus sbg fallback
-                                    MoveToPoint(startPos, targetPos)
+                            if not startPos then break end
+                            
+                            local myGridX = math.floor((startPos.X / getgenv().GridSize) + 0.5)
+                            local myGridY = math.floor((startPos.Y / getgenv().GridSize) + 0.5)
+                            
+                            -- [!] CARI POSISI BERDIRI YANG PALING AMAN (Nggak maksain harus dari Atas)
+                            local standPosList = {
+                                {x = x, y = y + 1}, -- Opsi 1: Coba dari Atas
+                                {x = x - 1, y = y}, -- Opsi 2: Coba dari Kiri
+                                {x = x + 1, y = y}  -- Opsi 3: Coba dari Kanan
+                            }
+                            
+                            local validPath = nil
+                            
+                            for _, sPos in ipairs(standPosList) do
+                                -- Kalau titik berdirinya aman (bukan bedrock/lock)
+                                if IsTileWalkable(sPos.x, sPos.y) then
+                                    local path = FindPathAStar(myGridX, myGridY, sPos.x, sPos.y)
+                                    if path then -- A* berhasil nemu jalan (atau kita udah ada di posisi itu)
+                                        validPath = path
+                                        break
+                                    end
                                 end
                             end
                             
-                            task.wait(0.05)
-                            if not getgenv().EnableAutoBuild then break end
-                            
-                            local targetVec = Vector2.new(x, y)
-                            local targetStr = x .. ", " .. y
-                            pcall(function()
-                                if RemotePlace:IsA("RemoteEvent") then 
-                                    RemotePlace:FireServer(targetVec, blockSlot)
-                                    RemotePlace:FireServer(targetStr, blockSlot) 
-                                else 
-                                    RemotePlace:InvokeServer(targetVec, blockSlot) 
-                                end
-                            end)
-                            
-                            task.wait(getgenv().BuildPlaceDelay)
+                            -- Kalau ada jalannya, Eksekusi! Kalau gak ada, SKIP tanpa nembus.
+                            if validPath then
+                                FollowAStarPath(validPath, currZ)
+                                task.wait(0.05)
+                                
+                                if not getgenv().EnableAutoBuild then break end
+                                
+                                local targetVec = Vector2.new(x, y)
+                                local targetStr = x .. ", " .. y
+                                pcall(function()
+                                    if RemotePlace:IsA("RemoteEvent") then 
+                                        RemotePlace:FireServer(targetVec, blockSlot)
+                                        RemotePlace:FireServer(targetStr, blockSlot) 
+                                    else 
+                                        RemotePlace:InvokeServer(targetVec, blockSlot) 
+                                    end
+                                end)
+                                
+                                task.wait(getgenv().BuildPlaceDelay)
+                            else
+                                -- Gak ada jalan gara-gara di-lock / tutup bedrock, bot akan nge-skip ke blok selanjutnya
+                                print("Skipping area karena terhalang Lock/Bedrock di X:", x, "Y:", y)
+                            end
                         end
                     end
                 end
