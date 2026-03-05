@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Auto Farm V63 (HARVEST FAST SWEEP + SMART GLIDE)"
+getgenv().ScriptVersion = "Auto Farm V65 (FULL AUTO HARVEST DETECTION)"
 
 -- ========================================== --
 -- [[ KONFIGURASI AWAL ]]
@@ -35,9 +35,6 @@ pcall(function() PlayerMovement = require(LP.PlayerScripts:WaitForChild("PlayerM
 
 local InventoryMod
 pcall(function() InventoryMod = require(RS:WaitForChild("Modules"):WaitForChild("Inventory")) end)
-
-local UIManager
-pcall(function() UIManager = require(RS:WaitForChild("Managers"):WaitForChild("UIManager")) end)
 
 -- ========================================== --
 -- [[ SISTEM INVENTORY TRANSLATOR ]]
@@ -318,7 +315,7 @@ local function MoveSmartlyTo(targetX, targetY)
 end
 
 -- ========================================== --
--- [[ AUTO HARVEST LOGIC (TYPEWRITER + SWEEP BACK) ]]
+-- [[ AUTO HARVEST LOGIC (AUTO YIELD DETECTION) ]]
 -- ========================================== --
 if getgenv().KzoyzAutoFarmLoop then task.cancel(getgenv().KzoyzAutoFarmLoop) end
 getgenv().KzoyzAutoFarmLoop = task.spawn(function()
@@ -338,7 +335,23 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                                 end
                                 
                                 if type(tileString) == "string" and string.find(string.lower(tileString), "sapling") then
-                                    table.insert(SaplingsData, {x = x, y = y})
+                                    local isReady = false
+                                    
+                                    -- ========================================
+                                    -- LOGIKA DETEKSI OTOMATIS BERDASARKAN HASIL PANEN [n]
+                                    -- ========================================
+                                    if type(data) == "table" and type(data[2]) == "table" then
+                                        local metadata = data[2]
+                                        -- Jika dalam tabel terdapat parameter 'n' (yield) dan itu angka > 0
+                                        -- Berarti sapling ini sudah berbuah dan siap panen!
+                                        if metadata.n and tonumber(metadata.n) and tonumber(metadata.n) > 0 then
+                                            isReady = true
+                                        end
+                                    end
+
+                                    if isReady then
+                                        table.insert(SaplingsData, {x = x, y = y})
+                                    end
                                 end
                             end
                         end
@@ -346,7 +359,7 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                 end
             end
             
-            -- Harvest: Selalu dari X = 0 sampai ke X = 100 buat tiap baris
+            -- Sortir biar jalannya rapi dari kiri ke kanan (X=0 ke X=100) tiap baris
             table.sort(SaplingsData, function(a, b)
                 if a.y == b.y then return a.x < b.x end
                 return a.y < b.y 
@@ -364,15 +377,13 @@ getgenv().KzoyzAutoFarmLoop = task.spawn(function()
                         else RemoteFist:InvokeServer(targetVec) end
                     end)
                     
-                    -- Tidak ada jeda tambahan nunggu jatuh, langsung lanjut
                     task.wait(getgenv().BreakDelay)
                     
-                    -- SWEEP END-OF-ROW: Kalau udah mau pindah baris, nyapu dulu ke awal
+                    -- SWEEP END-OF-ROW: Nyapu balik ke awal kalau mau pindah baris
                     local nextSapling = SaplingsData[i + 1]
                     if not nextSapling or nextSapling.y ~= sapling.y then
                         MoveSmartlyTo(sapling.x + 1, sapling.y)
                         task.wait(0.1)
-                        
                         MoveSmartlyTo(0, sapling.y)
                         task.wait(0.1)
                     end
@@ -394,7 +405,7 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
             local uniqueYs = {}
             local seenYs = {}
 
-            -- Scan area buat nanam
+            -- Scan area kosong buat ditanam
             for x = 0, 100 do
                 local yCol = RawWorldTiles[x]
                 if type(yCol) == "table" then
@@ -403,7 +414,6 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
                             local targetY = y + 1
                             table.insert(tempList, {x = x, y = targetY})
                             
-                            -- Nyimpen daftar Y yang unik biar bisa di-indeks
                             if not seenYs[targetY] then
                                 seenYs[targetY] = true
                                 table.insert(uniqueYs, targetY)
@@ -414,10 +424,9 @@ getgenv().KzoyzAutoPlantLoop = task.spawn(function()
             end
             
             -- SORTIR ZIG-ZAG PINTAR
-            table.sort(uniqueYs) -- Urutin dari baris paling bawah/atas
+            table.sort(uniqueYs) 
             local yDirectionMap = {}
             for index, yValue in ipairs(uniqueYs) do
-                -- Index ganjil = Kiri ke Kanan (True) | Index genap = Kanan ke Kiri (False)
                 yDirectionMap[yValue] = (index % 2 == 1) 
             end
 
