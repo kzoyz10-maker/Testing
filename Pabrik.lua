@@ -1,7 +1,7 @@
 local Tab = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Pabrik v2.9 - FIXED INPUT SYNC & UI RESTORE" 
+getgenv().ScriptVersion = "Pabrik v2.7 - HARVEST SWEEP COLLECT & CONFIG SUPPORT" 
 
 -- ========================================== --
 -- [[ DEFAULT SETTINGS (ANTI-RESET) ]]
@@ -67,7 +67,7 @@ getgenv().KzoyzHeartbeatPabrik = RunService.Heartbeat:Connect(function()
 end)
 
 -- ========================================== --
--- [[ INVENTORY TRANSLATOR (FIXED CONFIG LOAD) ]]
+-- [[ INVENTORY TRANSLATOR ]]
 -- ========================================== --
 getgenv().InventoryCacheNameMap = {}
 
@@ -81,19 +81,9 @@ local function GetItemName(rawId)
     return tostring(rawId)
 end
 
-local function GetReverseIDLookup(targetName)
-    local targetID = getgenv().InventoryCacheNameMap[targetName] or targetName
-    if targetID == targetName and WorldManager and WorldManager.NumberToStringMap then
-        for numId, name in pairs(WorldManager.NumberToStringMap) do
-            if name == targetName then return numId end
-        end
-    end
-    return targetID
-end
-
 local function GetSlotByItemName(targetName)
     if not InventoryMod or not InventoryMod.Stacks then return nil end
-    local targetID = GetReverseIDLookup(targetName)
+    local targetID = getgenv().InventoryCacheNameMap[targetName] or targetName
     for slotIndex, data in pairs(InventoryMod.Stacks) do
         if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
             if not data.Amount or data.Amount > 0 then return slotIndex end
@@ -105,7 +95,7 @@ end
 local function GetItemAmountByItemName(targetName)
     local total = 0
     if not InventoryMod or not InventoryMod.Stacks then return total end
-    local targetID = GetReverseIDLookup(targetName)
+    local targetID = getgenv().InventoryCacheNameMap[targetName] or targetName
     for _, data in pairs(InventoryMod.Stacks) do
         if type(data) == "table" and data.Id and tostring(data.Id) == tostring(targetID) then
             total = total + (data.Amount or 1)
@@ -115,17 +105,8 @@ local function GetItemAmountByItemName(targetName)
 end
 
 local function ScanAvailableItems()
-    local items = {}
-    local dict = {}
+    local items = {}; local dict = {}
     getgenv().InventoryCacheNameMap = {}
-
-    if getgenv().SelectedSeed and getgenv().SelectedSeed ~= "Kosong" then
-        dict[getgenv().SelectedSeed] = true; table.insert(items, getgenv().SelectedSeed)
-    end
-    if getgenv().SelectedBlock and getgenv().SelectedBlock ~= "Kosong" then
-        dict[getgenv().SelectedBlock] = true; table.insert(items, getgenv().SelectedBlock)
-    end
-
     pcall(function()
         if InventoryMod and InventoryMod.Stacks then
             for _, data in pairs(InventoryMod.Stacks) do
@@ -134,8 +115,7 @@ local function ScanAvailableItems()
                         local realId = data.Id
                         local itemName = GetItemName(realId)
                         if not dict[itemName] then 
-                            dict[itemName] = true
-                            table.insert(items, itemName)
+                            dict[itemName] = true; table.insert(items, itemName)
                             getgenv().InventoryCacheNameMap[itemName] = realId
                         end
                     end
@@ -143,20 +123,14 @@ local function ScanAvailableItems()
             end
         end
     end)
-    
     if #items == 0 then table.insert(items, "Kosong"); getgenv().InventoryCacheNameMap["Kosong"] = nil end
     table.sort(items)
     return items
 end
 
 -- ========================================== --
--- [[ WIND UI MAKER ]]
+-- [[ WIND UI MAKER DENGAN SISTEM SELIMUT & FLAG ]]
 -- ========================================== --
--- Deklarasi Variabel Input supaya bisa dibaca oleh ForceSyncInputs
-local InpStartX, InpEndX, InpStartY, InpEndY
-local InpBlockThresh, InpSeedThresh
-local InpBreakX, InpBreakY, InpDropX, InpDropY
-local InpWalkSpeed, InpPlaceDelay, InpBreakDelay, InpHitCount
 
 local SecControl = Tab:Section({ Title = "Pabrik Control", Box = true, Opened = true })
 
@@ -191,54 +165,65 @@ local DropBlock = SecControl:Dropdown({
 SecControl:Button({ Title = "Refresh Inventory", Callback = function() pcall(function() local newItems = ScanAvailableItems(); DropSeed:Refresh(newItems); DropBlock:Refresh(newItems) end) end })
 
 local SecArea = Tab:Section({ Title = "Scan Setup", Box = true, Opened = false })
-InpStartX = SecArea:Input({ 
+SecArea:Input({ 
     Title = "Area Start X", 
     Flag = "Pabrik_Input_StartX",
-    Value = tostring(getgenv().PabrikStartX), Placeholder = tostring(getgenv().PabrikStartX), 
+    Value = tostring(getgenv().PabrikStartX), 
+    Placeholder = tostring(getgenv().PabrikStartX), 
     Callback = function(v) getgenv().PabrikStartX = tonumber(v) or getgenv().PabrikStartX end 
 })
-InpEndX = SecArea:Input({ 
+SecArea:Input({ 
     Title = "Area End X", 
     Flag = "Pabrik_Input_EndX",
-    Value = tostring(getgenv().PabrikEndX), Placeholder = tostring(getgenv().PabrikEndX), 
+    Value = tostring(getgenv().PabrikEndX), 
+    Placeholder = tostring(getgenv().PabrikEndX), 
     Callback = function(v) getgenv().PabrikEndX = tonumber(v) or getgenv().PabrikEndX end 
 })
-InpStartY = SecArea:Input({ 
+SecArea:Input({ 
     Title = "Area Start Y", 
     Flag = "Pabrik_Input_StartY",
-    Value = tostring(getgenv().PabrikStartY), Placeholder = tostring(getgenv().PabrikStartY), 
+    Value = tostring(getgenv().PabrikStartY), 
+    Placeholder = tostring(getgenv().PabrikStartY), 
     Callback = function(v) getgenv().PabrikStartY = tonumber(v) or getgenv().PabrikStartY end 
 })
-InpEndY = SecArea:Input({ 
+SecArea:Input({ 
     Title = "Area End Y", 
     Flag = "Pabrik_Input_EndY",
-    Value = tostring(getgenv().PabrikEndY), Placeholder = tostring(getgenv().PabrikEndY), 
+    Value = tostring(getgenv().PabrikEndY), 
+    Placeholder = tostring(getgenv().PabrikEndY), 
     Callback = function(v) getgenv().PabrikEndY = tonumber(v) or getgenv().PabrikEndY end 
 })
 
 local SecThresh = Tab:Section({ Title = "Threshold Settings", Box = true, Opened = false })
-InpBlockThresh = SecThresh:Input({ 
+SecThresh:Input({ 
     Title = "Block Threshold", 
     Flag = "Pabrik_Input_BlockThresh",
-    Value = tostring(getgenv().BlockThreshold), Placeholder = "20", 
+    Value = tostring(getgenv().BlockThreshold), 
+    Placeholder = tostring(getgenv().BlockThreshold), 
     Callback = function(v) getgenv().BlockThreshold = tonumber(v) or getgenv().BlockThreshold end 
 })
-InpSeedThresh = SecThresh:Input({ 
+SecThresh:Input({ 
     Title = "Keep Seed Amt", 
     Flag = "Pabrik_Input_SeedThresh",
-    Value = tostring(getgenv().KeepSeedAmt), Placeholder = "20", 
+    Value = tostring(getgenv().KeepSeedAmt), 
+    Placeholder = tostring(getgenv().KeepSeedAmt), 
     Callback = function(v) getgenv().KeepSeedAmt = tonumber(v) or getgenv().KeepSeedAmt end 
 })
 
 local SecPos = Tab:Section({ Title = "Location Break & Drop", Box = true, Opened = false })
-InpBreakX = SecPos:Input({ 
-    Title = "Break Pos X", Flag = "Pabrik_Input_BreakX",
-    Value = tostring(getgenv().BreakPosX), Placeholder = tostring(getgenv().BreakPosX), 
+
+local InpBreakX = SecPos:Input({ 
+    Title = "Break Pos X", 
+    Flag = "Pabrik_Input_BreakX",
+    Value = tostring(getgenv().BreakPosX), 
+    Placeholder = tostring(getgenv().BreakPosX), 
     Callback = function(v) getgenv().BreakPosX = tonumber(v) or getgenv().BreakPosX end 
 })
-InpBreakY = SecPos:Input({ 
-    Title = "Break Pos Y", Flag = "Pabrik_Input_BreakY",
-    Value = tostring(getgenv().BreakPosY), Placeholder = tostring(getgenv().BreakPosY), 
+local InpBreakY = SecPos:Input({ 
+    Title = "Break Pos Y", 
+    Flag = "Pabrik_Input_BreakY",
+    Value = tostring(getgenv().BreakPosY), 
+    Placeholder = tostring(getgenv().BreakPosY), 
     Callback = function(v) getgenv().BreakPosY = tonumber(v) or getgenv().BreakPosY end 
 })
 
@@ -247,7 +232,8 @@ SecPos:Button({
     Callback = function() 
         local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) 
         if H then 
-            local newX = math.floor(H.Position.X/4.5+0.5); local newY = math.floor(H.Position.Y/4.5+0.5)
+            local newX = math.floor(H.Position.X/4.5+0.5)
+            local newY = math.floor(H.Position.Y/4.5+0.5)
             getgenv().BreakPosX = newX; getgenv().BreakPosY = newY
             pcall(function() InpBreakX:Set(tostring(newX)) end) 
             pcall(function() InpBreakY:Set(tostring(newY)) end)
@@ -255,14 +241,18 @@ SecPos:Button({
     end
 })
 
-InpDropX = SecPos:Input({ 
-    Title = "Drop Pos X", Flag = "Pabrik_Input_DropX",
-    Value = tostring(getgenv().DropPosX), Placeholder = tostring(getgenv().DropPosX), 
+local InpDropX = SecPos:Input({ 
+    Title = "Drop Pos X", 
+    Flag = "Pabrik_Input_DropX",
+    Value = tostring(getgenv().DropPosX), 
+    Placeholder = tostring(getgenv().DropPosX), 
     Callback = function(v) getgenv().DropPosX = tonumber(v) or getgenv().DropPosX end 
 })
-InpDropY = SecPos:Input({ 
-    Title = "Drop Pos Y", Flag = "Pabrik_Input_DropY",
-    Value = tostring(getgenv().DropPosY), Placeholder = tostring(getgenv().DropPosY), 
+local InpDropY = SecPos:Input({ 
+    Title = "Drop Pos Y", 
+    Flag = "Pabrik_Input_DropY",
+    Value = tostring(getgenv().DropPosY), 
+    Placeholder = tostring(getgenv().DropPosY), 
     Callback = function(v) getgenv().DropPosY = tonumber(v) or getgenv().DropPosY end 
 })
 
@@ -271,7 +261,8 @@ SecPos:Button({
     Callback = function() 
         local H = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) 
         if H then 
-            local newX = math.floor(H.Position.X/4.5+0.5); local newY = math.floor(H.Position.Y/4.5+0.5)
+            local newX = math.floor(H.Position.X/4.5+0.5)
+            local newY = math.floor(H.Position.Y/4.5+0.5)
             getgenv().DropPosX = newX; getgenv().DropPosY = newY
             pcall(function() InpDropX:Set(tostring(newX)) end) 
             pcall(function() InpDropY:Set(tostring(newY)) end)
@@ -280,24 +271,32 @@ SecPos:Button({
 })
 
 local SecSpeed = Tab:Section({ Title = "Speed & Delay", Box = true, Opened = false })
-InpWalkSpeed = SecSpeed:Input({ 
-    Title = "Walk Speed", Flag = "Pabrik_Input_WalkSpeed",
-    Value = tostring(getgenv().WalkSpeed), Placeholder = "16", 
+SecSpeed:Input({ 
+    Title = "Walk Speed", 
+    Flag = "Pabrik_Input_WalkSpeed",
+    Value = tostring(getgenv().WalkSpeed), 
+    Placeholder = tostring(getgenv().WalkSpeed), 
     Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end 
 })
-InpPlaceDelay = SecSpeed:Input({ 
-    Title = "Place Delay (ms)", Flag = "Pabrik_Input_PlaceDelay",
-    Value = tostring(getgenv().PlaceDelay), Placeholder = tostring(getgenv().PlaceDelay), 
+SecSpeed:Input({ 
+    Title = "Place Delay (ms)", 
+    Flag = "Pabrik_Input_PlaceDelay",
+    Value = tostring(getgenv().PlaceDelay), 
+    Placeholder = tostring(getgenv().PlaceDelay), 
     Callback = function(v) getgenv().PlaceDelay = tonumber(v) or getgenv().PlaceDelay end 
 })
-InpBreakDelay = SecSpeed:Input({ 
-    Title = "Break Delay (ms)", Flag = "Pabrik_Input_BreakDelay",
-    Value = tostring(getgenv().BreakDelay), Placeholder = tostring(getgenv().BreakDelay), 
+SecSpeed:Input({ 
+    Title = "Break Delay (ms)", 
+    Flag = "Pabrik_Input_BreakDelay",
+    Value = tostring(getgenv().BreakDelay), 
+    Placeholder = tostring(getgenv().BreakDelay), 
     Callback = function(v) getgenv().BreakDelay = tonumber(v) or getgenv().BreakDelay end 
 })
-InpHitCount = SecSpeed:Input({ 
-    Title = "Hit Count Block", Flag = "Pabrik_Input_HitCount",
-    Value = tostring(getgenv().HitCount), Placeholder = "3", 
+SecSpeed:Input({ 
+    Title = "Hit Count Block", 
+    Flag = "Pabrik_Input_HitCount",
+    Value = tostring(getgenv().HitCount), 
+    Placeholder = tostring(getgenv().HitCount), 
     Callback = function(v) getgenv().HitCount = tonumber(v) or getgenv().HitCount end 
 })
 
@@ -384,6 +383,7 @@ end
 
 local function SmoothWalkPath(pathTable, currZ)
     if #pathTable == 0 then return end
+    
     local HitboxFolder = workspace:FindFirstChild("Hitbox")
     local MyHitbox = HitboxFolder and HitboxFolder:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
     local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
@@ -393,11 +393,13 @@ local function SmoothWalkPath(pathTable, currZ)
 
     local oldGravity = workspace.Gravity
     workspace.Gravity = 0
+
     local startPos = MyHitbox.Position
     if PlayerMovement and PlayerMovement.Position then startPos = PlayerMovement.Position end
 
     for _, targetPos in ipairs(pathTable) do
         if not getgenv().EnablePabrik then break end
+        
         local targetVec3 = Vector3.new(targetPos.X, targetPos.Y, currZ)
         local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetVec3.X, targetVec3.Y)).Magnitude 
         local duration = dist / getgenv().WalkSpeed
@@ -411,7 +413,12 @@ local function SmoothWalkPath(pathTable, currZ)
             local currentPos = startPos:Lerp(targetVec3, alpha)
             
             if PlayerMovement then 
-                pcall(function() PlayerMovement.Position = currentPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0 end)
+                pcall(function() 
+                    PlayerMovement.Position = currentPos
+                    PlayerMovement.VelocityX = 0 
+                    PlayerMovement.VelocityY = 0 
+                    PlayerMovement.VelocityZ = 0 
+                end)
             else
                 local fixedRot = MyHitbox.CFrame - MyHitbox.CFrame.Position
                 local newCFrame = fixedRot + currentPos
@@ -422,7 +429,14 @@ local function SmoothWalkPath(pathTable, currZ)
         startPos = targetVec3
     end
     
-    if PlayerMovement then pcall(function() PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.InputActive = true end) end
+    if PlayerMovement then 
+        pcall(function() 
+            PlayerMovement.VelocityX = 0 
+            PlayerMovement.VelocityY = 0 
+            PlayerMovement.VelocityZ = 0 
+            PlayerMovement.InputActive = true 
+        end)
+    end
     workspace.Gravity = oldGravity
     return true
 end
@@ -444,6 +458,7 @@ local function MoveSmartlyTo(targetX, targetY)
         table.insert(pathTable, Vector3.new(targetX * getgenv().GridSize, targetY * getgenv().GridSize, currZ))
         return SmoothWalkPath(pathTable, currZ)
     else
+        warn("⚠️ Map belum ter-render atau jalan buntu! Menggunakan Fast-Travel...")
         if PlayerMovement then pcall(function() PlayerMovement.InputActive = false end) end
         local targetVec3 = Vector3.new(targetX * getgenv().GridSize, targetY * getgenv().GridSize, currZ)
         if PlayerMovement then pcall(function() PlayerMovement.Position = targetVec3 end) else MyHitbox.CFrame = CFrame.new(targetVec3) end
@@ -521,6 +536,7 @@ end
 local function CheckDropsType(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
     local hasSapling = false; local hasAny = false
+    
     for _, folder in ipairs(TargetFolders) do
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
@@ -532,9 +548,11 @@ local function CheckDropsType(TargetGridX, TargetGridY)
                 end
                 
                 if pos then
-                    local dX = math.floor(pos.X / getgenv().GridSize + 0.5); local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
+                    local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
+                    local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
                     if dX == TargetGridX and dY == TargetGridY then
-                        hasAny = true; local isSapling = false
+                        hasAny = true
+                        local isSapling = false
                         for _, attrValue in pairs(obj:GetAttributes()) do
                             if type(attrValue) == "string" and (string.find(string.lower(attrValue), "sapling") or string.find(string.lower(attrValue), "seed")) then isSapling = true; break end
                         end
@@ -556,6 +574,7 @@ local function CheckDropsType(TargetGridX, TargetGridY)
     return hasAny, hasSapling
 end
 
+-- 🆕 FUNGSI BARU: Deteksi drop spesifik buat disapu pas Harvest
 local function GetExactDropsInGrid(TargetGridX, TargetGridY)
     local TargetFolders = { workspace:FindFirstChild("Drops"), workspace:FindFirstChild("Gems") }
     local exactPositions = {}
@@ -563,9 +582,12 @@ local function GetExactDropsInGrid(TargetGridX, TargetGridY)
         if folder then
             for _, obj in pairs(folder:GetChildren()) do
                 local pos = nil
-                if obj:IsA("BasePart") then pos = obj.Position elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position end
+                if obj:IsA("BasePart") then pos = obj.Position
+                elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position end
+                
                 if pos then
-                    local dX = math.floor(pos.X / getgenv().GridSize + 0.5); local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
+                    local dX = math.floor(pos.X / getgenv().GridSize + 0.5)
+                    local dY = math.floor(pos.Y / getgenv().GridSize + 0.5)
                     if dX == TargetGridX and dY == TargetGridY then table.insert(exactPositions, pos) end
                 end
             end
@@ -609,75 +631,42 @@ local function TrueGhostCollect(targetX, targetY, collectSaplingOnly)
         hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
         if MyHitbox and ExactHitboxCF then MyHitbox.CFrame = ExactHitboxCF; MyHitbox.AssemblyLinearVelocity = Vector3.zero end
         hrp.CFrame = ExactHrpCF
-        if PlayerMovement and ExactPMPos then pcall(function() PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true end) end
+        if PlayerMovement and ExactPMPos then 
+            pcall(function() PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos; PlayerMovement.VelocityX = 0; PlayerMovement.VelocityY = 0; PlayerMovement.VelocityZ = 0; PlayerMovement.Grounded = true end) 
+        end
         RunService.Heartbeat:Wait(); hrp.Anchored = false 
         for _ = 1, 2 do if PlayerMovement and ExactPMPos then pcall(function() PlayerMovement.Position = ExactPMPos; PlayerMovement.OldPosition = ExactPMPos; PlayerMovement.VelocityY = 0; PlayerMovement.Grounded = true end) end; RunService.Heartbeat:Wait() end
     end
     getgenv().IsGhosting = false 
 end
 
--- FIX: Menambahkan Restore UI dalam Loop Drop
 local function DropItemLogic(targetName, dropAmount)
     local slot = GetSlotByItemName(targetName)
     if not slot then return false end
     local dropRemote = RS:WaitForChild("Remotes"):FindFirstChild("PlayerDrop") or RS:WaitForChild("Remotes"):FindFirstChild("PlayerDropItem")
     local promptRemote = RS:WaitForChild("Managers"):WaitForChild("UIManager"):FindFirstChild("UIPromptEvent")
-    
     if dropRemote and promptRemote then
         pcall(function() dropRemote:FireServer(slot) end); task.wait(0.2) 
         pcall(function() promptRemote:FireServer({ ButtonAction = "drp", Inputs = { amt = tostring(dropAmount) } }) end); task.wait(0.1)
-        
-        -- PEMBERSIHAN PROMPT & RESTORE HUD
-        pcall(function() 
-            -- Hapus UI Frame Prompt
-            for _, gui in pairs(LP.PlayerGui:GetDescendants()) do 
-                if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end 
-            end 
-            -- Paksa manager close dan tampilkan ulang HUD
-            if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
-            if UIManager and type(UIManager.ShowHUD) == "function" then UIManager:ShowHUD() end 
-        end)
-        
+        pcall(function() for _, gui in pairs(LP.PlayerGui:GetDescendants()) do if gui:IsA("Frame") and string.find(string.lower(gui.Name), "prompt") then gui.Visible = false end end end)
         return true
     end
     return false
 end
 
 -- ========================================== --
--- [[ TRIK NGAKALIN INPUT WINDUI & LOGIKA UTAMA ]]
+-- [[ LOGIKA UTAMA: SMART PABRIK ]]
 -- ========================================== --
-local function ForceSyncInputs()
-    pcall(function()
-        if InpWalkSpeed and InpWalkSpeed.Value then getgenv().WalkSpeed = tonumber(InpWalkSpeed.Value) or getgenv().WalkSpeed end
-        if InpHitCount and InpHitCount.Value then getgenv().HitCount = tonumber(InpHitCount.Value) or getgenv().HitCount end
-        if InpBlockThresh and InpBlockThresh.Value then getgenv().BlockThreshold = tonumber(InpBlockThresh.Value) or getgenv().BlockThreshold end
-        if InpSeedThresh and InpSeedThresh.Value then getgenv().KeepSeedAmt = tonumber(InpSeedThresh.Value) or getgenv().KeepSeedAmt end
-        if InpStartX and InpStartX.Value then getgenv().PabrikStartX = tonumber(InpStartX.Value) or getgenv().PabrikStartX end
-        if InpEndX and InpEndX.Value then getgenv().PabrikEndX = tonumber(InpEndX.Value) or getgenv().PabrikEndX end
-        if InpStartY and InpStartY.Value then getgenv().PabrikStartY = tonumber(InpStartY.Value) or getgenv().PabrikStartY end
-        if InpEndY and InpEndY.Value then getgenv().PabrikEndY = tonumber(InpEndY.Value) or getgenv().PabrikEndY end
-        if InpBreakX and InpBreakX.Value then getgenv().BreakPosX = tonumber(InpBreakX.Value) or getgenv().BreakPosX end
-        if InpBreakY and InpBreakY.Value then getgenv().BreakPosY = tonumber(InpBreakY.Value) or getgenv().BreakPosY end
-        if InpDropX and InpDropX.Value then getgenv().DropPosX = tonumber(InpDropX.Value) or getgenv().DropPosX end
-        if InpDropY and InpDropY.Value then getgenv().DropPosY = tonumber(InpDropY.Value) or getgenv().DropPosY end
-        if InpPlaceDelay and InpPlaceDelay.Value then getgenv().PlaceDelay = tonumber(InpPlaceDelay.Value) or getgenv().PlaceDelay end
-        if InpBreakDelay and InpBreakDelay.Value then getgenv().BreakDelay = tonumber(InpBreakDelay.Value) or getgenv().BreakDelay end
-    end)
-end
-
 task.spawn(function()
     while true do
         if getgenv().EnablePabrik then
-            
-            -- FIX: Ambil nilai Input secara Real-time dari UI
-            ForceSyncInputs()
-
             if getgenv().SelectedSeed == "Kosong" or getgenv().SelectedBlock == "Kosong" then 
                 task.wait(2)
             else
                 local targetPanen = {}
                 local targetTanam = {}
 
+                -- 1. SCAN WORLD 
                 local sX, eX = math.min(getgenv().PabrikStartX, getgenv().PabrikEndX), math.max(getgenv().PabrikStartX, getgenv().PabrikEndX)
                 local sY, eY = math.min(getgenv().PabrikStartY, getgenv().PabrikEndY), math.max(getgenv().PabrikStartY, getgenv().PabrikEndY)
 
@@ -736,9 +725,11 @@ task.spawn(function()
                     needToFarmBlock = true
                 end
 
+                -- [[ LOGIKA PANEN + SMART SWEEP COLLECT ]]
                 if didHarvest then
                     for i, panen in ipairs(targetPanen) do
                         if not getgenv().EnablePabrik then break end
+                        
                         if MoveSmartlyTo(panen.x, panen.y) then
                             task.wait(0.1)
                             pcall(function() 
@@ -746,18 +737,23 @@ task.spawn(function()
                                 if RemoteBreak:IsA("RemoteEvent") then RemoteBreak:FireServer(targetVec) else RemoteBreak:InvokeServer(targetVec) end
                             end)
                             
+                            -- FIX: Tunggu item jatuh, lalu nge-sweep buat memungut drop-nya!
                             task.wait(getgenv().BreakDelay + 0.3)
                             local exactDrops = GetExactDropsInGrid(panen.x, panen.y)
                             if #exactDrops > 0 then
                                 local MyHitbox = workspace:FindFirstChild("Hitbox") and workspace.Hitbox:FindFirstChild(LP.Name) or (LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"))
-                                if MyHitbox then SmoothWalkPath(exactDrops, MyHitbox.Position.Z); MoveSmartlyTo(panen.x, panen.y) end
+                                if MyHitbox then 
+                                    SmoothWalkPath(exactDrops, MyHitbox.Position.Z)
+                                    MoveSmartlyTo(panen.x, panen.y) -- Normalin posisi biar ga melenceng
+                                end
                             end
                         end
                         
                         local nextPanen = targetPanen[i + 1]
                         if not nextPanen or nextPanen.y ~= panen.y then
                             local stepDir = (panen.y % 2 == 0) and 1 or -1
-                            MoveSmartlyTo(panen.x + stepDir, panen.y); task.wait(0.3) 
+                            MoveSmartlyTo(panen.x + stepDir, panen.y)
+                            task.wait(0.3) 
                         end
                     end
                 end
@@ -767,11 +763,14 @@ task.spawn(function()
                         if not getgenv().EnablePabrik then break end
                         seedSlot = GetSlotByItemName(getgenv().SelectedSeed)
                         if not seedSlot then break end 
+                        
                         if MoveSmartlyTo(spot.x, spot.y) then
                             task.wait(0.1)
                             pcall(function() 
                                 local targetVec = Vector2.new(spot.x, spot.y); local targetStr = spot.x .. ", " .. spot.y
-                                if RemotePlace:IsA("RemoteEvent") then RemotePlace:FireServer(targetVec, seedSlot); RemotePlace:FireServer(targetStr, seedSlot) else RemotePlace:InvokeServer(targetVec, seedSlot) end
+                                if RemotePlace:IsA("RemoteEvent") then 
+                                    RemotePlace:FireServer(targetVec, seedSlot); RemotePlace:FireServer(targetStr, seedSlot) 
+                                else RemotePlace:InvokeServer(targetVec, seedSlot) end
                             end)
                             task.wait(getgenv().PlaceDelay)
                         end
@@ -780,12 +779,15 @@ task.spawn(function()
 
                 if needToFarmBlock and getgenv().EnablePabrik then
                     local blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
+                    
                     if blockSlot then
                         if MoveSmartlyTo(getgenv().BreakPosX, getgenv().BreakPosY) then
                             local BreakTarget = Vector2.new(getgenv().BreakPosX - 1, getgenv().BreakPosY)
+                            
                             while getgenv().EnablePabrik do
                                 local currentBlockAmt = GetItemAmountByItemName(getgenv().SelectedBlock)
                                 blockSlot = GetSlotByItemName(getgenv().SelectedBlock)
+                                
                                 if currentBlockAmt <= getgenv().BlockThreshold or not blockSlot then
                                     local hasAny, _ = CheckDropsType(BreakTarget.X, BreakTarget.Y)
                                     if hasAny then TrueGhostCollect(BreakTarget.X, BreakTarget.Y, false) end
@@ -797,7 +799,8 @@ task.spawn(function()
                                 
                                 for hit = 1, getgenv().HitCount do
                                     if not getgenv().EnablePabrik then break end
-                                    RemoteBreak:FireServer(BreakTarget); task.wait(getgenv().BreakDelay)
+                                    RemoteBreak:FireServer(BreakTarget)
+                                    task.wait(getgenv().BreakDelay)
                                 end
                                 
                                 if getgenv().OnlyCollectSapling then
@@ -818,14 +821,9 @@ task.spawn(function()
                                     local toDrop = current - getgenv().KeepSeedAmt 
                                     if toDrop <= 0 then break end
                                     local dropNow = math.min(toDrop, 200)
-                                    if DropItemLogic(getgenv().SelectedSeed, dropNow) then 
-                                        task.wait(getgenv().DropDelay + 0.3) 
-                                    else 
-                                        break 
-                                    end
+                                    if DropItemLogic(getgenv().SelectedSeed, dropNow) then task.wait(getgenv().DropDelay + 0.3) else break end
                                 end
                                 
-                                -- Pengamanan Ekstra di Akhir Proses Drop
                                 pcall(function() 
                                     if UIManager and type(UIManager.ClosePrompt) == "function" then UIManager:ClosePrompt() end
                                     for _, gui in pairs(LP.PlayerGui:GetDescendants()) do 
