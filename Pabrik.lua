@@ -1,10 +1,12 @@
-local Tab = ...
+local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index (WindUI)!") return end
 
-getgenv().ScriptVersion = "Pabrik v3.0 - ISOLATED VARIABLES & UI RESTORE" 
+getgenv().ScriptVersion = "Pabrik v3.1 - EXCLUSIVE CONFIG & ISOLATED VARIABLES" 
+
+local HttpService = game:GetService("HttpService")
 
 -- ========================================== --
--- [[ DEFAULT SETTINGS (ANTI-BENTROK DENGAN TAB LAIN) ]]
+-- [[ DEFAULT SETTINGS (ANTI-BENTROK) ]]
 -- ========================================== --
 getgenv().PabrikWalkSpeed = getgenv().PabrikWalkSpeed or 16     
 getgenv().PabrikPlaceDelay = getgenv().PabrikPlaceDelay or 0.15  
@@ -150,8 +152,10 @@ local function ScanAvailableItems()
 end
 
 -- ========================================== --
--- [[ WIND UI MAKER ]]
+-- [[ WIND UI MAKER (WITH VARIABLES FOR CONFIG) ]]
 -- ========================================== --
+local TglStart, TglSapling
+local DropSeed, DropBlock
 local InpStartX, InpEndX, InpStartY, InpEndY
 local InpBlockThresh, InpSeedThresh
 local InpBreakX, InpBreakY, InpDropX, InpDropY
@@ -159,23 +163,23 @@ local InpWalkSpeed, InpPlaceDelay, InpBreakDelay, InpHitCount
 
 local SecControl = Tab:Section({ Title = "Pabrik Control", Box = true, Opened = true })
 
-SecControl:Toggle({ 
+TglStart = SecControl:Toggle({ 
     Title = "Start Pabrik", Flag = "Pabrik_Toggle_Start",
     Default = getgenv().EnablePabrik, 
     Callback = function(v) getgenv().EnablePabrik = v end 
 })
-SecControl:Toggle({ 
+TglSapling = SecControl:Toggle({ 
     Title = "Only Collect Sapling", Flag = "Pabrik_Toggle_CollectSapling",
     Default = getgenv().OnlyCollectSapling, 
     Callback = function(v) getgenv().OnlyCollectSapling = v end 
 })
 
-local DropSeed = SecControl:Dropdown({ 
+DropSeed = SecControl:Dropdown({ 
     Title = "Choose Sapling", Flag = "Pabrik_Drop_Seed",
     Options = ScanAvailableItems(), Default = getgenv().SelectedSeed, 
     Callback = function(v) getgenv().SelectedSeed = v end 
 })
-local DropBlock = SecControl:Dropdown({ 
+DropBlock = SecControl:Dropdown({ 
     Title = "Choose Block", Flag = "Pabrik_Drop_Block",
     Options = ScanAvailableItems(), Default = getgenv().SelectedBlock, 
     Callback = function(v) getgenv().SelectedBlock = v end 
@@ -231,6 +235,107 @@ InpWalkSpeed = SecSpeed:Input({ Title = "Walk Speed", Flag = "Pabrik_Input_WalkS
 InpPlaceDelay = SecSpeed:Input({ Title = "Place Delay (ms)", Flag = "Pabrik_Input_PlaceDelay", Value = tostring(getgenv().PabrikPlaceDelay), Placeholder = tostring(getgenv().PabrikPlaceDelay), Callback = function(v) getgenv().PabrikPlaceDelay = tonumber(v) or getgenv().PabrikPlaceDelay end })
 InpBreakDelay = SecSpeed:Input({ Title = "Break Delay (ms)", Flag = "Pabrik_Input_BreakDelay", Value = tostring(getgenv().PabrikBreakDelay), Placeholder = tostring(getgenv().PabrikBreakDelay), Callback = function(v) getgenv().PabrikBreakDelay = tonumber(v) or getgenv().PabrikBreakDelay end })
 InpHitCount = SecSpeed:Input({ Title = "Hit Count Block", Flag = "Pabrik_Input_HitCount", Value = tostring(getgenv().PabrikHitCount), Placeholder = "3", Callback = function(v) getgenv().PabrikHitCount = tonumber(v) or getgenv().PabrikHitCount end })
+
+-- ========================================== --
+-- [[ EXCLUSIVE CONFIG SYSTEM (HANYA TAB PABRIK) ]]
+-- ========================================== --
+local PabrikConfigFolder = "WindUI/KzoyzHub/PabrikConfigs"
+if not isfolder("WindUI") then makefolder("WindUI") end
+if not isfolder("WindUI/KzoyzHub") then makefolder("WindUI/KzoyzHub") end
+if not isfolder(PabrikConfigFolder) then makefolder(PabrikConfigFolder) end
+
+local SecPabrikConfig = Tab:Section({ Title = "📁 Pabrik Exclusive Config", Box = true, Opened = false })
+local PabrikConfigName = "DefaultPabrik"
+
+SecPabrikConfig:Input({ 
+    Title = "Config Name", 
+    Value = PabrikConfigName,
+    Placeholder = "Ketik nama config...",
+    Callback = function(v) PabrikConfigName = v end 
+})
+
+SecPabrikConfig:Button({
+    Title = "Save Pabrik Config",
+    Icon = "save",
+    Callback = function()
+        -- MENYIMPAN MANUAL AGAR TERISOLASI
+        local dataToSave = {
+            EnablePabrik = getgenv().EnablePabrik,
+            OnlyCollectSapling = getgenv().OnlyCollectSapling,
+            SelectedSeed = getgenv().SelectedSeed,
+            SelectedBlock = getgenv().SelectedBlock,
+            PabrikStartX = getgenv().PabrikStartX,
+            PabrikEndX = getgenv().PabrikEndX,
+            PabrikStartY = getgenv().PabrikStartY,
+            PabrikEndY = getgenv().PabrikEndY,
+            BlockThreshold = getgenv().BlockThreshold,
+            KeepSeedAmt = getgenv().KeepSeedAmt,
+            BreakPosX = getgenv().BreakPosX,
+            BreakPosY = getgenv().BreakPosY,
+            DropPosX = getgenv().DropPosX,
+            DropPosY = getgenv().DropPosY,
+            PabrikWalkSpeed = getgenv().PabrikWalkSpeed,
+            PabrikPlaceDelay = getgenv().PabrikPlaceDelay,
+            PabrikBreakDelay = getgenv().PabrikBreakDelay,
+            PabrikHitCount = getgenv().PabrikHitCount
+        }
+        
+        local json = HttpService:JSONEncode(dataToSave)
+        writefile(PabrikConfigFolder .. "/" .. PabrikConfigName .. ".json", json)
+        
+        if WindUI then WindUI:Notify({Title="Saved!", Content="Config Pabrik eksklusif tersimpan!", Icon="check"}) end
+    end
+})
+
+SecPabrikConfig:Button({
+    Title = "Load Pabrik Config",
+    Icon = "folder-open",
+    Callback = function()
+        local path = PabrikConfigFolder .. "/" .. PabrikConfigName .. ".json"
+        if isfile and isfile(path) then
+            local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
+            if success and type(decoded) == "table" then
+                
+                -- LOAD DROP SEED & BLOCK (DENGAN REFRESH CERDAS)
+                if decoded.SelectedSeed ~= nil then getgenv().SelectedSeed = decoded.SelectedSeed end
+                if decoded.SelectedBlock ~= nil then getgenv().SelectedBlock = decoded.SelectedBlock end
+                local newItems = ScanAvailableItems()
+                pcall(function() DropSeed:Refresh(newItems); DropBlock:Refresh(newItems) end)
+                if decoded.SelectedSeed ~= nil then pcall(function() DropSeed:Set(decoded.SelectedSeed) end) end
+                if decoded.SelectedBlock ~= nil then pcall(function() DropBlock:Set(decoded.SelectedBlock) end) end
+                
+                -- LOAD TOGGLES
+                if decoded.EnablePabrik ~= nil then getgenv().EnablePabrik = decoded.EnablePabrik; pcall(function() TglStart:Set(decoded.EnablePabrik) end) end
+                if decoded.OnlyCollectSapling ~= nil then getgenv().OnlyCollectSapling = decoded.OnlyCollectSapling; pcall(function() TglSapling:Set(decoded.OnlyCollectSapling) end) end
+                
+                -- LOAD INPUTS
+                if decoded.PabrikStartX ~= nil then getgenv().PabrikStartX = decoded.PabrikStartX; pcall(function() InpStartX:Set(tostring(decoded.PabrikStartX)) end) end
+                if decoded.PabrikEndX ~= nil then getgenv().PabrikEndX = decoded.PabrikEndX; pcall(function() InpEndX:Set(tostring(decoded.PabrikEndX)) end) end
+                if decoded.PabrikStartY ~= nil then getgenv().PabrikStartY = decoded.PabrikStartY; pcall(function() InpStartY:Set(tostring(decoded.PabrikStartY)) end) end
+                if decoded.PabrikEndY ~= nil then getgenv().PabrikEndY = decoded.PabrikEndY; pcall(function() InpEndY:Set(tostring(decoded.PabrikEndY)) end) end
+                
+                if decoded.BlockThreshold ~= nil then getgenv().BlockThreshold = decoded.BlockThreshold; pcall(function() InpBlockThresh:Set(tostring(decoded.BlockThreshold)) end) end
+                if decoded.KeepSeedAmt ~= nil then getgenv().KeepSeedAmt = decoded.KeepSeedAmt; pcall(function() InpSeedThresh:Set(tostring(decoded.KeepSeedAmt)) end) end
+                
+                if decoded.BreakPosX ~= nil then getgenv().BreakPosX = decoded.BreakPosX; pcall(function() InpBreakX:Set(tostring(decoded.BreakPosX)) end) end
+                if decoded.BreakPosY ~= nil then getgenv().BreakPosY = decoded.BreakPosY; pcall(function() InpBreakY:Set(tostring(decoded.BreakPosY)) end) end
+                if decoded.DropPosX ~= nil then getgenv().DropPosX = decoded.DropPosX; pcall(function() InpDropX:Set(tostring(decoded.DropPosX)) end) end
+                if decoded.DropPosY ~= nil then getgenv().DropPosY = decoded.DropPosY; pcall(function() InpDropY:Set(tostring(decoded.DropPosY)) end) end
+                
+                if decoded.PabrikWalkSpeed ~= nil then getgenv().PabrikWalkSpeed = decoded.PabrikWalkSpeed; pcall(function() InpWalkSpeed:Set(tostring(decoded.PabrikWalkSpeed)) end) end
+                if decoded.PabrikPlaceDelay ~= nil then getgenv().PabrikPlaceDelay = decoded.PabrikPlaceDelay; pcall(function() InpPlaceDelay:Set(tostring(decoded.PabrikPlaceDelay)) end) end
+                if decoded.PabrikBreakDelay ~= nil then getgenv().PabrikBreakDelay = decoded.PabrikBreakDelay; pcall(function() InpBreakDelay:Set(tostring(decoded.PabrikBreakDelay)) end) end
+                if decoded.PabrikHitCount ~= nil then getgenv().PabrikHitCount = decoded.PabrikHitCount; pcall(function() InpHitCount:Set(tostring(decoded.PabrikHitCount)) end) end
+                
+                if WindUI then WindUI:Notify({Title="Loaded!", Content="Config Pabrik eksklusif dimuat!", Icon="refresh-cw"}) end
+            else
+                if WindUI then WindUI:Notify({Title="Error", Content="File config rusak atau tidak valid!", Icon="x"}) end
+            end
+        else
+            if WindUI then WindUI:Notify({Title="Error", Content="Config tidak ditemukan di folder PabrikConfigs!", Icon="x"}) end
+        end
+    end
+})
 
 -- ========================================== --
 -- [[ RADAR INVERTED & 99999 A-STAR (SMART GLIDE) ]]
@@ -331,7 +436,6 @@ local function SmoothWalkPath(pathTable, currZ)
         if not getgenv().EnablePabrik then break end
         local targetVec3 = Vector3.new(targetPos.X, targetPos.Y, currZ)
         local dist = (Vector2.new(startPos.X, startPos.Y) - Vector2.new(targetVec3.X, targetVec3.Y)).Magnitude 
-        -- PAKE VARIABEL TERISOLASI
         local duration = dist / getgenv().PabrikWalkSpeed
         if duration < 0.05 then duration = 0.05 end
 
@@ -576,7 +680,6 @@ end
 -- ========================================== --
 local function ForceSyncInputs()
     pcall(function()
-        -- UDAH DIPISAH SEMUA PAKAI PREFIX "Pabrik"
         if InpWalkSpeed and InpWalkSpeed.Value then getgenv().PabrikWalkSpeed = tonumber(InpWalkSpeed.Value) or getgenv().PabrikWalkSpeed end
         if InpHitCount and InpHitCount.Value then getgenv().PabrikHitCount = tonumber(InpHitCount.Value) or getgenv().PabrikHitCount end
         if InpBlockThresh and InpBlockThresh.Value then getgenv().BlockThreshold = tonumber(InpBlockThresh.Value) or getgenv().BlockThreshold end
@@ -674,7 +777,6 @@ task.spawn(function()
                                 if RemoteBreak:IsA("RemoteEvent") then RemoteBreak:FireServer(targetVec) else RemoteBreak:InvokeServer(targetVec) end
                             end)
                             
-                            -- PAKE VARIABEL PABRIK
                             task.wait(getgenv().PabrikBreakDelay + 0.3)
                             local exactDrops = GetExactDropsInGrid(panen.x, panen.y)
                             if #exactDrops > 0 then
@@ -702,7 +804,6 @@ task.spawn(function()
                                 local targetVec = Vector2.new(spot.x, spot.y); local targetStr = spot.x .. ", " .. spot.y
                                 if RemotePlace:IsA("RemoteEvent") then RemotePlace:FireServer(targetVec, seedSlot); RemotePlace:FireServer(targetStr, seedSlot) else RemotePlace:InvokeServer(targetVec, seedSlot) end
                             end)
-                            -- PAKE VARIABEL PABRIK
                             task.wait(getgenv().PabrikPlaceDelay)
                         end
                     end
