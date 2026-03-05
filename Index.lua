@@ -71,13 +71,13 @@ end
 -- [[ LIST TAB KAMU ]]
 -- ========================================== --
 RegisterTab("Pabrik", "factory", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Pabrik.lua")
-RegisterTab("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autofarm.lua")
+RegisterTab("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autofarm.lua")
 RegisterTab("Manager", "briefcase", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Manager.lua")
 RegisterTab("Auto PTHT", "tractor", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoplant.lua")
 RegisterTab("Auto Clear World", "globe", "Clear All Blocks", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoclear.lua")
 RegisterTab("Auto Build Farm", "map", "Build Your Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autobuild.lua")
-RegisterTab("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autocollect.lua")
-RegisterTab("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Discord.lua")
+RegisterTab("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autocollect.lua")
+RegisterTab("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Discord.lua")
 RegisterTab("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Config.lua")
 
 -- ========================================== --
