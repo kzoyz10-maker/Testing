@@ -10,8 +10,9 @@ local queue_on_tp = queue_on_teleport or (syn and syn.queue_on_teleport) or (flu
 local ConfigManager = Window.ConfigManager
 local ConfigName = "Default"
 
--- Set default world jika belum ada
 getgenv().TargetWarpWorld = getgenv().TargetWarpWorld or "buy"
+getgenv().EnableAutoWarp = getgenv().EnableAutoWarp or false
+getgenv().CancelWarp = false -- Variabel darurat buat ngebatalin
 
 -- ==========================================
 -- SISTEM AUTO-LOAD (MEMBACA FILE)
@@ -21,27 +22,22 @@ local autoLoadPath = "WindUI/KzoyzHub/AutoLoad.txt"
 local function GetAutoLoad()
     if isfile and isfile(autoLoadPath) and readfile then
         local saved = readfile(autoLoadPath)
-        if saved and saved ~= "" then
-            return saved
-        end
+        if saved and saved ~= "" then return saved end
     end
     return "None"
 end
 
 local function SetAutoLoad(name)
-    if writefile then
-        writefile(autoLoadPath, name)
-    end
+    if writefile then writefile(autoLoadPath, name) end
 end
 
 -- ==========================================
--- FUNGSI UTAMA UNTUK WARP (Biar bisa dipanggil otomatis)
+-- FUNGSI UTAMA UNTUK WARP
 -- ==========================================
 local function ExecuteWarp()
     task.spawn(function()
         local targetWorld = getgenv().TargetWarpWorld
         if not targetWorld or targetWorld == "" then
-            if WindUI then WindUI:Notify({ Title = "Error", Content = "Nama World masih kosong!", Icon = "x" }) end
             warn("Nama World masih kosong!")
             return
         end
@@ -49,12 +45,10 @@ local function ExecuteWarp()
         local TpRemote = RS:FindFirstChild("tp")
 
         if TpRemote then
-            -- Kondisi 1: Sedang di Lobby
             print("Mencoba Warp ke: " .. targetWorld)
             if WindUI then WindUI:Notify({ Title = "Warping", Content = "Warp langsung ke: " .. targetWorld, Icon = "plane" }) end
             pcall(function() TpRemote:FireServer(targetWorld) end)
         else
-            -- Kondisi 2: Sedang di World
             print("Lagi di World! Menyiapkan Auto-Warp untuk di Lobby...")
             if WindUI then WindUI:Notify({ Title = "Auto-Warp", Content = "Keluar world... Auto-warp disiapkan!", Icon = "loader" }) end
             
@@ -62,28 +56,20 @@ local function ExecuteWarp()
                 local autoWarpScript = string.format([[
                     task.spawn(function()
                         local target = "%s"
-                        print("Menunggu remote tp untuk auto-warp ke: " .. target)
                         local RS = game:GetService("ReplicatedStorage")
                         local tpRemote = RS:WaitForChild("tp", 15)
                         
                         if tpRemote then
                             task.wait(0.5) 
                             tpRemote:FireServer(target)
-                        else
-                            warn("Gagal Auto-Warp: Remote 'tp' tidak ditemukan di Lobby.")
                         end
                     end)
                 ]], targetWorld)
-                
                 queue_on_tp(autoWarpScript)
-            else
-                warn("Executor kamu nggak support 'queue_on_teleport'. Script Auto-Warp terpaksa dibatalkan.")
             end
 
             local exitRemote = RS:WaitForChild("Remotes"):FindFirstChild("RequestPlayerExitWorld")
-            if exitRemote then
-                pcall(function() exitRemote:InvokeServer() end)
-            end
+            if exitRemote then pcall(function() exitRemote:InvokeServer() end) end
         end
     end)
 end
@@ -93,7 +79,7 @@ end
 -- ==========================================
 Tab:Divider({ Title = "🌍 Teleport / Warp World" })
 
-local WorldInput = Tab:Input({
+Tab:Input({
     Title = "Nama World",
     Flag = "TargetWarp_ConfigFlag", 
     Placeholder = "Contoh: buy, world2...",
@@ -103,10 +89,38 @@ local WorldInput = Tab:Input({
     end
 })
 
+Tab:Toggle({
+    Title = "Izinkan Auto-Warp saat Script Jalan",
+    Desc = "Centang ini jika ingin otomatis warp saat pindah server/dieksekusi",
+    Flag = "EnableAutoWarp_ConfigFlag",
+    Value = getgenv().EnableAutoWarp,
+    Callback = function(value)
+        getgenv().EnableAutoWarp = value
+    end
+})
+
+Tab:Space()
+
 Tab:Button({
-    Title = "🚀 Warp Sekarang!",
+    Title = "🚀 Warp Sekarang! (Manual)",
     Callback = function()
-        ExecuteWarp() -- Memanggil fungsi warp saat diklik manual
+        ExecuteWarp()
+    end
+})
+
+Tab:Button({
+    Title = "🛑 Batalkan Auto-Warp",
+    Desc = "Pencet ini cepat-cepat kalau scriptnya lagi ngitung mundur mau warp!",
+    Color = Color3.fromHex("#ff4830"),
+    Callback = function()
+        getgenv().CancelWarp = true
+        if WindUI then
+            WindUI:Notify({
+                Title = "DIBATALKAN",
+                Content = "Auto-warp berhasil dihentikan!",
+                Icon = "x-circle",
+            })
+        end
     end
 })
 
@@ -119,16 +133,11 @@ local ConfigNameInput = Tab:Input({
     Title = "Config Name",
     Placeholder = "Ketik nama config...",
     Value = ConfigName,
-    Callback = function(value)
-        ConfigName = value
-    end
+    Callback = function(value) ConfigName = value end
 })
-
-Tab:Space()
 
 local AllConfigsDropdown = Tab:Dropdown({
     Title = "Available Configs",
-    Desc = "Pilih config yang sudah kamu simpan sebelumnya",
     Values = ConfigManager:AllConfigs(),
     Value = ConfigName,
     Callback = function(value)
@@ -137,52 +146,31 @@ local AllConfigsDropdown = Tab:Dropdown({
     end
 })
 
-Tab:Space()
-
 Tab:Button({
     Title = "Save / Create Config",
     Icon = "save",
     Callback = function()
         Window.CurrentConfig = ConfigManager:Config(ConfigName)
         if Window.CurrentConfig:Save() then
-            if WindUI then
-                WindUI:Notify({
-                    Title = "Config Saved",
-                    Content = "Berhasil menyimpan config: " .. ConfigName,
-                    Icon = "check",
-                })
-            end
-            
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
             if _G.AutoLoadDropdown then
                 local updatedConfigs = ConfigManager:AllConfigs()
                 table.insert(updatedConfigs, 1, "None")
                 _G.AutoLoadDropdown:Refresh(updatedConfigs)
             end
+            if WindUI then WindUI:Notify({ Title = "Config Saved", Content = "Tersimpan: " .. ConfigName, Icon = "check" }) end
         end
     end
 })
-
-Tab:Space()
 
 Tab:Button({
     Title = "Load Config",
     Icon = "folder-open",
     Callback = function()
         Window.CurrentConfig = ConfigManager:CreateConfig(ConfigName)
-        if Window.CurrentConfig:Load() then
-            if WindUI then
-                WindUI:Notify({
-                    Title = "Config Loaded",
-                    Content = "Berhasil memuat config: " .. ConfigName,
-                    Icon = "refresh-cw",
-                })
-            end
-        end
+        Window.CurrentConfig:Load()
     end
 })
-
-Tab:Space()
 
 Tab:Button({
     Title = "Delete Config",
@@ -190,33 +178,15 @@ Tab:Button({
     Color = Color3.fromHex("#ff4830"),
     Callback = function()
         local configPath = "WindUI/KzoyzHub/config/" .. ConfigName .. ".json"
-        
         if isfile and isfile(configPath) and delfile then
             delfile(configPath)
-            if WindUI then
-                WindUI:Notify({
-                    Title = "Config Deleted",
-                    Content = "Berhasil menghapus config: " .. ConfigName,
-                    Icon = "trash",
-                })
-            end
-            
             ConfigName = "Default"
             ConfigNameInput:Set("Default")
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
-            
             if _G.AutoLoadDropdown then
                 local updatedConfigs = ConfigManager:AllConfigs()
                 table.insert(updatedConfigs, 1, "None")
                 _G.AutoLoadDropdown:Refresh(updatedConfigs)
-            end
-        else
-            if WindUI then
-                WindUI:Notify({
-                    Title = "Error",
-                    Content = "File tidak ditemukan di folder config!",
-                    Icon = "x",
-                })
             end
         end
     end
@@ -233,18 +203,10 @@ table.insert(configListForAuto, 1, "None")
 
 _G.AutoLoadDropdown = Tab:Dropdown({
     Title = "Set Auto-Load Config",
-    Desc = "Pilih config yang otomatis jalan saat script dieksekusi",
     Values = configListForAuto,
     Value = currentAutoLoad,
     Callback = function(value)
         SetAutoLoad(value)
-        if value ~= "None" and WindUI then
-            WindUI:Notify({
-                Title = "Auto-Load Set",
-                Content = "Config '" .. value .. "' akan diload saat script jalan.",
-                Icon = "check",
-            })
-        end
     end
 })
 
@@ -258,29 +220,41 @@ task.spawn(function()
     if autoConfig ~= "None" then
         local checkPath = "WindUI/KzoyzHub/config/" .. autoConfig .. ".json"
         if isfile and isfile(checkPath) then
-            print("[KzoyzHub] Menjalankan Auto-Load Config:", autoConfig)
             Window.CurrentConfig = ConfigManager:CreateConfig(autoConfig)
             
             if Window.CurrentConfig:Load() then
                 ConfigName = autoConfig
                 ConfigNameInput:Set(autoConfig)
                 
-                if WindUI then
-                    WindUI:Notify({
-                        Title = "Auto-Execute",
-                        Content = "Config dimuat! Memulai Auto-Warp...",
-                        Icon = "rocket",
-                    })
+                task.wait(1) -- Tunggu UI nyesuain value
+                
+                -- CEK APAKAH TOGGLE AUTO-WARP DICENTANG
+                if getgenv().EnableAutoWarp then
+                    getgenv().CancelWarp = false -- Reset status batal
+                    
+                    if WindUI then
+                        WindUI:Notify({
+                            Title = "AWAS!",
+                            Content = "Auto-Warp akan jalan dalam 5 DETIK! Pencet 'Batalkan' jika ingin stop.",
+                            Icon = "alert-triangle",
+                            Duration = 5
+                        })
+                    end
+                    
+                    -- Hitung mundur 5 detik, cek terus kalau tombol Batal dipencet
+                    for i = 5, 1, -1 do
+                        if getgenv().CancelWarp then break end
+                        task.wait(1)
+                    end
+                    
+                    -- Kalau setelah 5 detik nggak dibatalin, sikat!
+                    if not getgenv().CancelWarp then
+                        ExecuteWarp()
+                    end
+                else
+                    print("Auto-Load selesai, tapi Auto-Warp mati. Menunggu perintah manual.")
                 end
-                
-                -- Jeda 1 detik biar memastikan value Input-nya udah beneran ke-load
-                task.wait(1)
-                
-                -- LANGSUNG EKSEKUSI WARP SEOLAH-OLAH PENCET TOMBOL
-                ExecuteWarp()
             end
-        else
-            warn("[KzoyzHub] Auto-load gagal: Config tidak ditemukan.")
         end
     end
 end)
