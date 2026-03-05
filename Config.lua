@@ -72,7 +72,11 @@ Tab:Button({
     Icon = "trash",
     Color = Color3.fromHex("#ff4830"),
     Callback = function()
+        -- Kita buat sistem pathing yang lebih rapi dan aman
+        -- Jika gagal, cek F9 (Console) karena kita tambahkan sistem print
         local configPath = Window.Folder .. "/" .. ConfigName .. ".json"
+        
+        print("[DEBUG Kzoyz] Mencoba menghapus file di: ", configPath)
         
         if isfile and isfile(configPath) and delfile then
             delfile(configPath)
@@ -83,16 +87,22 @@ Tab:Button({
                     Icon = "trash",
                 })
             end
+            
+            -- Reset semua value kembali ke Default biar gak nyangkut
+            ConfigName = "Default"
             ConfigNameInput:Set("Default")
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
+            
         else
             if WindUI then
                 WindUI:Notify({
                     Title = "Error",
-                    Content = "Gagal menghapus! File tidak ditemukan.",
+                    Content = "File gagal dihapus! Cek Console (F9).",
                     Icon = "x",
                 })
             end
+            warn("[DEBUG Kzoyz] Gagal menghapus! File tidak ditemukan di path: " .. configPath)
+            warn("[DEBUG Kzoyz] Pastikan ekstensi file benar (.json atau .txt) dan foldernya sesuai.")
         end
     end
 })
