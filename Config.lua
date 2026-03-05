@@ -1,5 +1,5 @@
 local Tab, Window, WindUI = ...
-if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index!") return end
+if type(Tab) ~= "table" then warn("Module must be loaded from Kzoyz Index!") return end
 
 -- ==========================================
 -- SETUP VARIABLES & SERVICES
@@ -12,10 +12,10 @@ local ConfigName = "Default"
 
 getgenv().TargetWarpWorld = getgenv().TargetWarpWorld or "buy"
 getgenv().EnableAutoWarp = getgenv().EnableAutoWarp or false
-getgenv().CancelWarp = false -- Variabel darurat buat ngebatalin
+getgenv().CancelWarp = false -- Emergency variable to cancel warping
 
 -- ==========================================
--- SISTEM AUTO-LOAD (MEMBACA FILE)
+-- AUTO-LOAD SYSTEM (READING FILE)
 -- ==========================================
 local autoLoadPath = "WindUI/KzoyzHub/AutoLoad.txt"
 
@@ -32,25 +32,25 @@ local function SetAutoLoad(name)
 end
 
 -- ==========================================
--- FUNGSI UTAMA UNTUK WARP
+-- MAIN FUNCTION FOR WARP
 -- ==========================================
 local function ExecuteWarp()
     task.spawn(function()
         local targetWorld = getgenv().TargetWarpWorld
         if not targetWorld or targetWorld == "" then
-            warn("Nama World masih kosong!")
+            warn("World name is still empty!")
             return
         end
 
         local TpRemote = RS:FindFirstChild("tp")
 
         if TpRemote then
-            print("Mencoba Warp ke: " .. targetWorld)
-            if WindUI then WindUI:Notify({ Title = "Warping", Content = "Warp langsung ke: " .. targetWorld, Icon = "plane" }) end
+            print("Attempting to Warp to: " .. targetWorld)
+            if WindUI then WindUI:Notify({ Title = "Warping", Content = "Warping directly to: " .. targetWorld, Icon = "plane" }) end
             pcall(function() TpRemote:FireServer(targetWorld) end)
         else
-            print("Lagi di World! Menyiapkan Auto-Warp untuk di Lobby...")
-            if WindUI then WindUI:Notify({ Title = "Auto-Warp", Content = "Keluar world... Auto-warp disiapkan!", Icon = "loader" }) end
+            print("Currently in a World! Preparing Auto-Warp for Lobby...")
+            if WindUI then WindUI:Notify({ Title = "Auto-Warp", Content = "Exiting world... Auto-warp prepared!", Icon = "loader" }) end
             
             if queue_on_tp then
                 local autoWarpScript = string.format([[
@@ -77,12 +77,12 @@ end
 -- ==========================================
 -- UI: WORLD SELECTION & TELEPORT (ADVANCED)
 -- ==========================================
-Tab:Divider({ Title = "🌍 Teleport / Warp World" })
+Tab:Divider({ Title = "Teleport / Warp World" })
 
 Tab:Input({
-    Title = "Nama World",
+    Title = "World Name",
     Flag = "TargetWarp_ConfigFlag", 
-    Placeholder = "Contoh: buy, world2...",
+    Placeholder = "Example: buy, world2...",
     Value = getgenv().TargetWarpWorld,
     Callback = function(value)
         getgenv().TargetWarpWorld = value
@@ -90,8 +90,8 @@ Tab:Input({
 })
 
 Tab:Toggle({
-    Title = "Izinkan Auto-Warp saat Script Jalan",
-    Desc = "Centang ini jika ingin otomatis warp saat pindah server/dieksekusi",
+    Title = "Allow Auto-Warp on Script Start",
+    Desc = "Check this if you want to automatically warp when joining a server/executing",
     Flag = "EnableAutoWarp_ConfigFlag",
     Value = getgenv().EnableAutoWarp,
     Callback = function(value)
@@ -102,22 +102,22 @@ Tab:Toggle({
 Tab:Space()
 
 Tab:Button({
-    Title = "🚀 Warp Sekarang! (Manual)",
+    Title = " Warp Now! (Manual)",
     Callback = function()
         ExecuteWarp()
     end
 })
 
 Tab:Button({
-    Title = "🛑 Batalkan Auto-Warp",
-    Desc = "Pencet ini cepat-cepat kalau scriptnya lagi ngitung mundur mau warp!",
+    Title = "🛑 Cancel AutoWarp",
+    Desc = "Press this quickly if the script is counting down to warp!",
     Color = Color3.fromHex("#ff4830"),
     Callback = function()
         getgenv().CancelWarp = true
         if WindUI then
             WindUI:Notify({
-                Title = "DIBATALKAN",
-                Content = "Auto-warp berhasil dihentikan!",
+                Title = "CANCELLED",
+                Content = "Auto-warp successfully stopped!",
                 Icon = "x-circle",
             })
         end
@@ -127,11 +127,11 @@ Tab:Button({
 -- ==========================================
 -- UI: CONFIG MANAGEMENT
 -- ==========================================
-Tab:Divider({ Title = "⚙️ Config Management" })
+Tab:Divider({ Title = "Config Management" })
 
 local ConfigNameInput = Tab:Input({
     Title = "Config Name",
-    Placeholder = "Ketik nama config...",
+    Placeholder = "Type config name...",
     Value = ConfigName,
     Callback = function(value) ConfigName = value end
 })
@@ -158,7 +158,7 @@ Tab:Button({
                 table.insert(updatedConfigs, 1, "None")
                 _G.AutoLoadDropdown:Refresh(updatedConfigs)
             end
-            if WindUI then WindUI:Notify({ Title = "Config Saved", Content = "Tersimpan: " .. ConfigName, Icon = "check" }) end
+            if WindUI then WindUI:Notify({ Title = "Config Saved", Content = "Saved: " .. ConfigName, Icon = "check" }) end
         end
     end
 })
@@ -195,7 +195,7 @@ Tab:Button({
 -- ==========================================
 -- UI: AUTO-EXECUTE SETTINGS
 -- ==========================================
-Tab:Divider({ Title = "🚀 Auto-Execute" })
+Tab:Divider({ Title = "Auto-Execute" })
 
 local currentAutoLoad = GetAutoLoad()
 local configListForAuto = ConfigManager:AllConfigs()
@@ -211,7 +211,7 @@ _G.AutoLoadDropdown = Tab:Dropdown({
 })
 
 -- ==========================================
--- EKSEKUSI AUTO-LOAD SAAT SCRIPT JALAN
+-- AUTO-LOAD EXECUTION ON SCRIPT START
 -- ==========================================
 task.spawn(function()
     task.wait(1.5) 
@@ -226,33 +226,33 @@ task.spawn(function()
                 ConfigName = autoConfig
                 ConfigNameInput:Set(autoConfig)
                 
-                task.wait(1) -- Tunggu UI nyesuain value
+                task.wait(1) -- Wait for UI to adjust values
                 
-                -- CEK APAKAH TOGGLE AUTO-WARP DICENTANG
+                -- CHECK IF AUTO-WARP TOGGLE IS CHECKED
                 if getgenv().EnableAutoWarp then
-                    getgenv().CancelWarp = false -- Reset status batal
+                    getgenv().CancelWarp = false -- Reset cancel status
                     
                     if WindUI then
                         WindUI:Notify({
-                            Title = "AWAS!",
-                            Content = "Auto-Warp akan jalan dalam 5 DETIK! Pencet 'Batalkan' jika ingin stop.",
+                            Title = "WARNING!",
+                            Content = "Auto-Warp will execute in 5 SECONDS! Press 'Cancel' to stop.",
                             Icon = "alert-triangle",
                             Duration = 5
                         })
                     end
                     
-                    -- Hitung mundur 5 detik, cek terus kalau tombol Batal dipencet
+                    -- 5-second countdown, constantly checking if Cancel button is pressed
                     for i = 5, 1, -1 do
                         if getgenv().CancelWarp then break end
                         task.wait(1)
                     end
                     
-                    -- Kalau setelah 5 detik nggak dibatalin, sikat!
+                    -- If not cancelled after 5 seconds, execute!
                     if not getgenv().CancelWarp then
                         ExecuteWarp()
                     end
                 else
-                    print("Auto-Load selesai, tapi Auto-Warp mati. Menunggu perintah manual.")
+                    print("Auto-Load finished, but Auto-Warp is off. Waiting for manual command.")
                 end
             end
         end
