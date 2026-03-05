@@ -1,8 +1,17 @@
 local Tab, Window, WindUI = ...
 if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index!") return end
 
+-- ==========================================
+-- SETUP VARIABLES & SERVICES
+-- ==========================================
+local RS = game:GetService("ReplicatedStorage")
+local queue_on_tp = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or getgenv().queue_on_teleport
+
 local ConfigManager = Window.ConfigManager
 local ConfigName = "Default"
+
+-- Set default world jika belum ada
+getgenv().TargetWarpWorld = getgenv().TargetWarpWorld or "buy"
 
 -- ==========================================
 -- SISTEM AUTO-LOAD (MEMBACA FILE)
@@ -26,69 +35,71 @@ local function SetAutoLoad(name)
 end
 
 -- ==========================================
--- UI: WORLD SELECTION & TELEPORT
+-- UI: WORLD SELECTION & TELEPORT (ADVANCED)
 -- ==========================================
-Tab:Divider({ Title = "🌍 Game Settings" })
+Tab:Divider({ Title = "🌍 Teleport / Warp World" })
 
--- Sistem Kamus (Mapping): KIRI = Nama di UI, KANAN = Argumen buat remote
-local WorldMap = {
-    ["World Shop (Buy)"] = "buy",
-    ["World 2 (Contoh)"] = "world2", 
-    ["World 3 (Contoh)"] = "world3"
-}
-
-local WorldList = {}
-for name, arg in pairs(WorldMap) do
-    table.insert(WorldList, name)
-end
-
-local SelectedWorldArg = "buy"
-
-Tab:Dropdown({
-    Title = "Select World",
-    Desc = "Pilih world yang ingin dikunjungi",
-    Values = WorldList,
-    Value = "World Shop (Buy)",
+local WorldInput = Tab:Input({
+    Title = "Nama World",
+    Placeholder = "Contoh: buy, world2...",
+    Value = getgenv().TargetWarpWorld,
     Callback = function(value)
-        SelectedWorldArg = WorldMap[value]
+        -- Ini akan otomatis ke-trigger saat kamu nge-load config!
+        getgenv().TargetWarpWorld = value
     end
 })
 
-Tab:Space()
-
 Tab:Button({
-    Title = "Teleport to World",
-    Icon = "map",
+    Title = "🚀 Warp Sekarang!",
     Callback = function()
-        if WindUI then
-            WindUI:Notify({
-                Title = "Teleporting",
-                Content = "Mencoba keluar dari world saat ini...",
-                Icon = "plane",
-            })
-        end
-        
-        -- Keluar dari world pakai pcall biar aman
-        pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestPlayerExitWorld"):InvokeServer()
+        task.spawn(function()
+            local targetWorld = getgenv().TargetWarpWorld
+            if not targetWorld or targetWorld == "" then
+                if WindUI then WindUI:Notify({ Title = "Error", Content = "Nama World masih kosong!", Icon = "x" }) end
+                warn("Nama World masih kosong!")
+                return
+            end
+
+            local TpRemote = RS:FindFirstChild("tp")
+
+            if TpRemote then
+                -- Kondisi 1: Sedang di Lobby (Remote 'tp' ada)
+                print("Mencoba Warp ke: " .. targetWorld)
+                if WindUI then WindUI:Notify({ Title = "Warping", Content = "Warp langsung ke: " .. targetWorld, Icon = "plane" }) end
+                pcall(function() TpRemote:FireServer(targetWorld) end)
+            else
+                -- Kondisi 2: Sedang di World (Remote 'tp' tidak ada)
+                print("Lagi di World! Menyiapkan Auto-Warp untuk di Lobby...")
+                if WindUI then WindUI:Notify({ Title = "Auto-Warp", Content = "Keluar world... Auto-warp disiapkan!", Icon = "loader" }) end
+                
+                if queue_on_tp then
+                    local autoWarpScript = string.format([[
+                        task.spawn(function()
+                            local target = "%s"
+                            print("Menunggu remote tp untuk auto-warp ke: " .. target)
+                            local RS = game:GetService("ReplicatedStorage")
+                            local tpRemote = RS:WaitForChild("tp", 15)
+                            
+                            if tpRemote then
+                                task.wait(0.5) 
+                                tpRemote:FireServer(target)
+                            else
+                                warn("Gagal Auto-Warp: Remote 'tp' tidak ditemukan di Lobby.")
+                            end
+                        end)
+                    ]], targetWorld)
+                    
+                    queue_on_tp(autoWarpScript)
+                else
+                    warn("Executor kamu nggak support 'queue_on_teleport'. Script Auto-Warp terpaksa dibatalkan.")
+                end
+
+                local exitRemote = RS:WaitForChild("Remotes"):FindFirstChild("RequestPlayerExitWorld")
+                if exitRemote then
+                    pcall(function() exitRemote:InvokeServer() end)
+                end
+            end
         end)
-        
-        -- Jeda supaya server sempat memproses
-        task.wait(0.5) 
-        
-        -- Masuk ke world baru
-        pcall(function()
-            local args = { SelectedWorldArg }
-            game:GetService("ReplicatedStorage"):WaitForChild("tp"):FireServer(unpack(args))
-        end)
-        
-        if WindUI then
-            WindUI:Notify({
-                Title = "Success",
-                Content = "Sedang memuat world baru!",
-                Icon = "check",
-            })
-        end
     end
 })
 
@@ -135,7 +146,6 @@ Tab:Button({
                 })
             end
             
-            -- Refresh dropdown config & auto-load
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
             if _G.AutoLoadDropdown then
                 local updatedConfigs = ConfigManager:AllConfigs()
@@ -154,6 +164,8 @@ Tab:Button({
     Callback = function()
         Window.CurrentConfig = ConfigManager:CreateConfig(ConfigName)
         if Window.CurrentConfig:Load() then
+            -- Note: Saat Load dipanggil, value di Input "Nama World" akan otomatis terisi
+            -- dan getgenv().TargetWarpWorld akan terupdate karena Callback tereksekusi.
             if WindUI then
                 WindUI:Notify({
                     Title = "Config Loaded",
@@ -172,7 +184,6 @@ Tab:Button({
     Icon = "trash",
     Color = Color3.fromHex("#ff4830"),
     Callback = function()
-        -- Path khusus Delta
         local configPath = "WindUI/KzoyzHub/config/" .. ConfigName .. ".json"
         
         if isfile and isfile(configPath) and delfile then
@@ -185,7 +196,6 @@ Tab:Button({
                 })
             end
             
-            -- Reset UI
             ConfigName = "Default"
             ConfigNameInput:Set("Default")
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
@@ -237,7 +247,7 @@ _G.AutoLoadDropdown = Tab:Dropdown({
 -- EKSEKUSI AUTO-LOAD SAAT SCRIPT JALAN
 -- ==========================================
 task.spawn(function()
-    task.wait(1) -- Beri waktu WindUI untuk loading elemen
+    task.wait(1.5) -- Beri waktu sedikit lebih lama agar UI benar-benar siap render
     local autoConfig = GetAutoLoad()
     
     if autoConfig ~= "None" then
@@ -247,7 +257,6 @@ task.spawn(function()
             Window.CurrentConfig = ConfigManager:CreateConfig(autoConfig)
             
             if Window.CurrentConfig:Load() then
-                -- Update visual di Input
                 ConfigName = autoConfig
                 ConfigNameInput:Set(autoConfig)
                 
@@ -260,7 +269,7 @@ task.spawn(function()
                 end
             end
         else
-            warn("[KzoyzHub] Auto-load gagal: Config tidak ditemukan di path.")
+            warn("[KzoyzHub] Auto-load gagal: Config tidak ditemukan.")
         end
     end
 end)
