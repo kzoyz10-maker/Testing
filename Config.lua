@@ -35,11 +35,64 @@ local function SetAutoLoad(name)
 end
 
 -- ==========================================
+-- FUNGSI UTAMA UNTUK WARP (Biar bisa dipanggil otomatis)
+-- ==========================================
+local function ExecuteWarp()
+    task.spawn(function()
+        local targetWorld = getgenv().TargetWarpWorld
+        if not targetWorld or targetWorld == "" then
+            if WindUI then WindUI:Notify({ Title = "Error", Content = "Nama World masih kosong!", Icon = "x" }) end
+            warn("Nama World masih kosong!")
+            return
+        end
+
+        local TpRemote = RS:FindFirstChild("tp")
+
+        if TpRemote then
+            -- Kondisi 1: Sedang di Lobby
+            print("Mencoba Warp ke: " .. targetWorld)
+            if WindUI then WindUI:Notify({ Title = "Warping", Content = "Warp langsung ke: " .. targetWorld, Icon = "plane" }) end
+            pcall(function() TpRemote:FireServer(targetWorld) end)
+        else
+            -- Kondisi 2: Sedang di World
+            print("Lagi di World! Menyiapkan Auto-Warp untuk di Lobby...")
+            if WindUI then WindUI:Notify({ Title = "Auto-Warp", Content = "Keluar world... Auto-warp disiapkan!", Icon = "loader" }) end
+            
+            if queue_on_tp then
+                local autoWarpScript = string.format([[
+                    task.spawn(function()
+                        local target = "%s"
+                        print("Menunggu remote tp untuk auto-warp ke: " .. target)
+                        local RS = game:GetService("ReplicatedStorage")
+                        local tpRemote = RS:WaitForChild("tp", 15)
+                        
+                        if tpRemote then
+                            task.wait(0.5) 
+                            tpRemote:FireServer(target)
+                        else
+                            warn("Gagal Auto-Warp: Remote 'tp' tidak ditemukan di Lobby.")
+                        end
+                    end)
+                ]], targetWorld)
+                
+                queue_on_tp(autoWarpScript)
+            else
+                warn("Executor kamu nggak support 'queue_on_teleport'. Script Auto-Warp terpaksa dibatalkan.")
+            end
+
+            local exitRemote = RS:WaitForChild("Remotes"):FindFirstChild("RequestPlayerExitWorld")
+            if exitRemote then
+                pcall(function() exitRemote:InvokeServer() end)
+            end
+        end
+    end)
+end
+
+-- ==========================================
 -- UI: WORLD SELECTION & TELEPORT (ADVANCED)
 -- ==========================================
 Tab:Divider({ Title = "🌍 Teleport / Warp World" })
 
--- INI PERBAIKANNYA: Tambah 'Flag' biar teksnya ikut tersimpan di Config
 local WorldInput = Tab:Input({
     Title = "Nama World",
     Flag = "TargetWarp_ConfigFlag", 
@@ -53,54 +106,7 @@ local WorldInput = Tab:Input({
 Tab:Button({
     Title = "🚀 Warp Sekarang!",
     Callback = function()
-        task.spawn(function()
-            local targetWorld = getgenv().TargetWarpWorld
-            if not targetWorld or targetWorld == "" then
-                if WindUI then WindUI:Notify({ Title = "Error", Content = "Nama World masih kosong!", Icon = "x" }) end
-                warn("Nama World masih kosong!")
-                return
-            end
-
-            local TpRemote = RS:FindFirstChild("tp")
-
-            if TpRemote then
-                -- Kondisi 1: Sedang di Lobby (Remote 'tp' ada)
-                print("Mencoba Warp ke: " .. targetWorld)
-                if WindUI then WindUI:Notify({ Title = "Warping", Content = "Warp langsung ke: " .. targetWorld, Icon = "plane" }) end
-                pcall(function() TpRemote:FireServer(targetWorld) end)
-            else
-                -- Kondisi 2: Sedang di World (Remote 'tp' tidak ada)
-                print("Lagi di World! Menyiapkan Auto-Warp untuk di Lobby...")
-                if WindUI then WindUI:Notify({ Title = "Auto-Warp", Content = "Keluar world... Auto-warp disiapkan!", Icon = "loader" }) end
-                
-                if queue_on_tp then
-                    local autoWarpScript = string.format([[
-                        task.spawn(function()
-                            local target = "%s"
-                            print("Menunggu remote tp untuk auto-warp ke: " .. target)
-                            local RS = game:GetService("ReplicatedStorage")
-                            local tpRemote = RS:WaitForChild("tp", 15)
-                            
-                            if tpRemote then
-                                task.wait(0.5) 
-                                tpRemote:FireServer(target)
-                            else
-                                warn("Gagal Auto-Warp: Remote 'tp' tidak ditemukan di Lobby.")
-                            end
-                        end)
-                    ]], targetWorld)
-                    
-                    queue_on_tp(autoWarpScript)
-                else
-                    warn("Executor kamu nggak support 'queue_on_teleport'. Script Auto-Warp terpaksa dibatalkan.")
-                end
-
-                local exitRemote = RS:WaitForChild("Remotes"):FindFirstChild("RequestPlayerExitWorld")
-                if exitRemote then
-                    pcall(function() exitRemote:InvokeServer() end)
-                end
-            end
-        end)
+        ExecuteWarp() -- Memanggil fungsi warp saat diklik manual
     end
 })
 
@@ -262,10 +268,16 @@ task.spawn(function()
                 if WindUI then
                     WindUI:Notify({
                         Title = "Auto-Execute",
-                        Content = "Config '" .. autoConfig .. "' otomatis dimuat!",
+                        Content = "Config dimuat! Memulai Auto-Warp...",
                         Icon = "rocket",
                     })
                 end
+                
+                -- Jeda 1 detik biar memastikan value Input-nya udah beneran ke-load
+                task.wait(1)
+                
+                -- LANGSUNG EKSEKUSI WARP SEOLAH-OLAH PENCET TOMBOL
+                ExecuteWarp()
             end
         else
             warn("[KzoyzHub] Auto-load gagal: Config tidak ditemukan.")
