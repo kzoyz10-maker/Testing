@@ -78,7 +78,7 @@ RegisterTab("Auto Clear World", "plant", "Clear All Blocks", "https://raw.github
 RegisterTab("Auto Build Farm", "home", "Build Your Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autobuild.lua")
 RegisterTab("Growscan", "monitor", "Sedot Sampe Peot", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autocollect.lua")
 RegisterTab("Discord", "messages-square", "Join Community", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Discord.lua")
-RegisterTab("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Config.lua")
+RegisterTab("Configs", "settings-2", "Save / Load Settings", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Config.lua")
 
 -- ========================================== --
 -- [[ EKSEKUSI ANTREAN SECARA BERTAHAP ]]
