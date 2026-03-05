@@ -135,7 +135,7 @@ end
 local SecControl = Tab:Section({ Title = "Pabrik Control", Box = true, Opened = true })
 
 SecControl:Toggle({ 
-    Title = "Start Pabrik", 
+    Title = "Start Pabrik ..", 
     Flag = "Pabrik_Toggle_Start",
     Default = getgenv().EnablePabrik, 
     Callback = function(v) getgenv().EnablePabrik = v end 
