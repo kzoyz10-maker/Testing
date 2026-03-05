@@ -4,6 +4,99 @@ if type(Tab) ~= "table" then warn("Module harus di-load dari Kzoyz Index!") retu
 local ConfigManager = Window.ConfigManager
 local ConfigName = "Default"
 
+-- ==========================================
+-- SISTEM AUTO-LOAD (MEMBACA FILE)
+-- ==========================================
+local autoLoadPath = "WindUI/KzoyzHub/AutoLoad.txt"
+
+local function GetAutoLoad()
+    if isfile and isfile(autoLoadPath) and readfile then
+        local saved = readfile(autoLoadPath)
+        if saved and saved ~= "" then
+            return saved
+        end
+    end
+    return "None"
+end
+
+local function SetAutoLoad(name)
+    if writefile then
+        writefile(autoLoadPath, name)
+    end
+end
+
+-- ==========================================
+-- UI: WORLD SELECTION & TELEPORT
+-- ==========================================
+Tab:Divider({ Title = "🌍 Game Settings" })
+
+-- Sistem Kamus (Mapping): KIRI = Nama di UI, KANAN = Argumen buat remote
+local WorldMap = {
+    ["World Shop (Buy)"] = "buy",
+    ["World 2 (Contoh)"] = "world2", 
+    ["World 3 (Contoh)"] = "world3"
+}
+
+local WorldList = {}
+for name, arg in pairs(WorldMap) do
+    table.insert(WorldList, name)
+end
+
+local SelectedWorldArg = "buy"
+
+Tab:Dropdown({
+    Title = "Select World",
+    Desc = "Pilih world yang ingin dikunjungi",
+    Values = WorldList,
+    Value = "World Shop (Buy)",
+    Callback = function(value)
+        SelectedWorldArg = WorldMap[value]
+    end
+})
+
+Tab:Space()
+
+Tab:Button({
+    Title = "Teleport to World",
+    Icon = "map",
+    Callback = function()
+        if WindUI then
+            WindUI:Notify({
+                Title = "Teleporting",
+                Content = "Mencoba keluar dari world saat ini...",
+                Icon = "plane",
+            })
+        end
+        
+        -- Keluar dari world pakai pcall biar aman
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestPlayerExitWorld"):InvokeServer()
+        end)
+        
+        -- Jeda supaya server sempat memproses
+        task.wait(0.5) 
+        
+        -- Masuk ke world baru
+        pcall(function()
+            local args = { SelectedWorldArg }
+            game:GetService("ReplicatedStorage"):WaitForChild("tp"):FireServer(unpack(args))
+        end)
+        
+        if WindUI then
+            WindUI:Notify({
+                Title = "Success",
+                Content = "Sedang memuat world baru!",
+                Icon = "check",
+            })
+        end
+    end
+})
+
+-- ==========================================
+-- UI: CONFIG MANAGEMENT
+-- ==========================================
+Tab:Divider({ Title = "⚙️ Config Management" })
+
 local ConfigNameInput = Tab:Input({
     Title = "Config Name",
     Placeholder = "Ketik nama config...",
@@ -41,7 +134,14 @@ Tab:Button({
                     Icon = "check",
                 })
             end
+            
+            -- Refresh dropdown config & auto-load
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
+            if _G.AutoLoadDropdown then
+                local updatedConfigs = ConfigManager:AllConfigs()
+                table.insert(updatedConfigs, 1, "None")
+                _G.AutoLoadDropdown:Refresh(updatedConfigs)
+            end
         end
     end
 })
@@ -72,10 +172,8 @@ Tab:Button({
     Icon = "trash",
     Color = Color3.fromHex("#ff4830"),
     Callback = function()
-        -- Mengarah langsung ke folder config sesuai letak di Delta Workspace
+        -- Path khusus Delta
         local configPath = "WindUI/KzoyzHub/config/" .. ConfigName .. ".json"
-        
-        print("[DEBUG Kzoyz] Mencoba menghapus file di: ", configPath)
         
         if isfile and isfile(configPath) and delfile then
             delfile(configPath)
@@ -87,11 +185,16 @@ Tab:Button({
                 })
             end
             
-            -- Reset semua value biar rapi
+            -- Reset UI
             ConfigName = "Default"
             ConfigNameInput:Set("Default")
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
             
+            if _G.AutoLoadDropdown then
+                local updatedConfigs = ConfigManager:AllConfigs()
+                table.insert(updatedConfigs, 1, "None")
+                _G.AutoLoadDropdown:Refresh(updatedConfigs)
+            end
         else
             if WindUI then
                 WindUI:Notify({
@@ -100,7 +203,64 @@ Tab:Button({
                     Icon = "x",
                 })
             end
-            warn("[DEBUG Kzoyz] Gagal menghapus! Path yang dicari: " .. configPath)
         end
     end
 })
+
+-- ==========================================
+-- UI: AUTO-EXECUTE SETTINGS
+-- ==========================================
+Tab:Divider({ Title = "🚀 Auto-Execute" })
+
+local currentAutoLoad = GetAutoLoad()
+local configListForAuto = ConfigManager:AllConfigs()
+table.insert(configListForAuto, 1, "None") 
+
+_G.AutoLoadDropdown = Tab:Dropdown({
+    Title = "Set Auto-Load Config",
+    Desc = "Pilih config yang otomatis jalan saat script dieksekusi",
+    Values = configListForAuto,
+    Value = currentAutoLoad,
+    Callback = function(value)
+        SetAutoLoad(value)
+        if value ~= "None" and WindUI then
+            WindUI:Notify({
+                Title = "Auto-Load Set",
+                Content = "Config '" .. value .. "' akan diload saat script jalan.",
+                Icon = "check",
+            })
+        end
+    end
+})
+
+-- ==========================================
+-- EKSEKUSI AUTO-LOAD SAAT SCRIPT JALAN
+-- ==========================================
+task.spawn(function()
+    task.wait(1) -- Beri waktu WindUI untuk loading elemen
+    local autoConfig = GetAutoLoad()
+    
+    if autoConfig ~= "None" then
+        local checkPath = "WindUI/KzoyzHub/config/" .. autoConfig .. ".json"
+        if isfile and isfile(checkPath) then
+            print("[KzoyzHub] Menjalankan Auto-Load Config:", autoConfig)
+            Window.CurrentConfig = ConfigManager:CreateConfig(autoConfig)
+            
+            if Window.CurrentConfig:Load() then
+                -- Update visual di Input
+                ConfigName = autoConfig
+                ConfigNameInput:Set(autoConfig)
+                
+                if WindUI then
+                    WindUI:Notify({
+                        Title = "Auto-Execute",
+                        Content = "Config '" .. autoConfig .. "' otomatis dimuat!",
+                        Icon = "rocket",
+                    })
+                end
+            end
+        else
+            warn("[KzoyzHub] Auto-load gagal: Config tidak ditemukan di path.")
+        end
+    end
+end)
