@@ -39,12 +39,13 @@ end
 -- ==========================================
 Tab:Divider({ Title = "🌍 Teleport / Warp World" })
 
+-- INI PERBAIKANNYA: Tambah 'Flag' biar teksnya ikut tersimpan di Config
 local WorldInput = Tab:Input({
     Title = "Nama World",
+    Flag = "TargetWarp_ConfigFlag", 
     Placeholder = "Contoh: buy, world2...",
     Value = getgenv().TargetWarpWorld,
     Callback = function(value)
-        -- Ini akan otomatis ke-trigger saat kamu nge-load config!
         getgenv().TargetWarpWorld = value
     end
 })
@@ -164,8 +165,6 @@ Tab:Button({
     Callback = function()
         Window.CurrentConfig = ConfigManager:CreateConfig(ConfigName)
         if Window.CurrentConfig:Load() then
-            -- Note: Saat Load dipanggil, value di Input "Nama World" akan otomatis terisi
-            -- dan getgenv().TargetWarpWorld akan terupdate karena Callback tereksekusi.
             if WindUI then
                 WindUI:Notify({
                     Title = "Config Loaded",
@@ -247,7 +246,7 @@ _G.AutoLoadDropdown = Tab:Dropdown({
 -- EKSEKUSI AUTO-LOAD SAAT SCRIPT JALAN
 -- ==========================================
 task.spawn(function()
-    task.wait(1.5) -- Beri waktu sedikit lebih lama agar UI benar-benar siap render
+    task.wait(1.5) 
     local autoConfig = GetAutoLoad()
     
     if autoConfig ~= "None" then
