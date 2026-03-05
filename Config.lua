@@ -72,9 +72,8 @@ Tab:Button({
     Icon = "trash",
     Color = Color3.fromHex("#ff4830"),
     Callback = function()
-        -- Kita buat sistem pathing yang lebih rapi dan aman
-        -- Jika gagal, cek F9 (Console) karena kita tambahkan sistem print
-        local configPath = Window.Folder .. "/" .. ConfigName .. ".json"
+        -- Mengarah langsung ke folder config sesuai letak di Delta Workspace
+        local configPath = "WindUI/KzoyzHub/config/" .. ConfigName .. ".json"
         
         print("[DEBUG Kzoyz] Mencoba menghapus file di: ", configPath)
         
@@ -88,7 +87,7 @@ Tab:Button({
                 })
             end
             
-            -- Reset semua value kembali ke Default biar gak nyangkut
+            -- Reset semua value biar rapi
             ConfigName = "Default"
             ConfigNameInput:Set("Default")
             AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
@@ -97,12 +96,11 @@ Tab:Button({
             if WindUI then
                 WindUI:Notify({
                     Title = "Error",
-                    Content = "File gagal dihapus! Cek Console (F9).",
+                    Content = "File tidak ditemukan di folder config!",
                     Icon = "x",
                 })
             end
-            warn("[DEBUG Kzoyz] Gagal menghapus! File tidak ditemukan di path: " .. configPath)
-            warn("[DEBUG Kzoyz] Pastikan ekstensi file benar (.json atau .txt) dan foldernya sesuai.")
+            warn("[DEBUG Kzoyz] Gagal menghapus! Path yang dicari: " .. configPath)
         end
     end
 })
