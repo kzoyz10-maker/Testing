@@ -70,7 +70,7 @@ end
 -- ========================================== --
 -- [[ LIST TAB KAMU ]]
 -- ========================================== --
-RegisterTab("Pabrik", "factory", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Pabrik.lua")
+RegisterTab("Pabrik", "factory", "Pabrik (Factory)", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Pabrik.lua")
 RegisterTab("Auto Farm", "sprout", "Semi Auto Farm", "https://raw.githubusercontent.com/kzoyz10-maker/Testingui/refs/heads/main/Autofarm.lua")
 RegisterTab("Manager", "briefcase", "Farming Manager", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Manager.lua")
 RegisterTab("Auto PTHT", "tractor", "Plant & Harvest", "https://raw.githubusercontent.com/kzoyz10-maker/Testing/refs/heads/main/Autoplant.lua")
