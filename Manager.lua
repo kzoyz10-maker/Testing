@@ -152,17 +152,17 @@ end)
 -- ========================================== --
 
 local SecPlayer = Tab:Section({ Title = "Misc & Player Hacks", Box = true, Opened = true })
-SecPlayer:Toggle({ Title = "🛡️ Anti Hit (Kebal Magma/Spike)", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
-SecPlayer:Toggle({ Title = "⛔ Anti Punch / No Knockback", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
-SecPlayer:Toggle({ Title = "✈️ Anti-Gravity (Modfly)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
-SecPlayer:Toggle({ Title = "🦘 Infinite Jump", Default = getgenv().InfJump, Callback = function(v) 
+SecPlayer:Toggle({ Title = "Anti Hit", Default = getgenv().AntiHit, Callback = function(v) getgenv().AntiHit = v end })
+SecPlayer:Toggle({ Title = "Anti Punch / No Knockback", Default = getgenv().AntiBounce, Callback = function(v) getgenv().AntiBounce = v end })
+SecPlayer:Toggle({ Title = "Anti-Gravity (Modfly)", Default = getgenv().ModflyEnabled, Callback = function(v) getgenv().ModflyEnabled = v end })
+SecPlayer:Toggle({ Title = "Infinite Jump", Default = getgenv().InfJump, Callback = function(v) 
     getgenv().InfJump = v 
     if not v and PlayerMovement then
         PlayerMovement.MaxJump = 1
         PlayerMovement.RemainingJumps = 1
     end
 end })
-SecPlayer:Toggle({ Title = "⚡ Super Speed", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
+SecPlayer:Toggle({ Title = "Super Speed (Recommended 2)", Default = getgenv().SuperSpeed, Callback = function(v) getgenv().SuperSpeed = v end })
 SecPlayer:Input({ Title = "Speed Modifier (Isi Angka)", Value = tostring(getgenv().WalkSpeed), Placeholder = "45", Callback = function(v) getgenv().WalkSpeed = tonumber(v) or getgenv().WalkSpeed end })
 
 -- ========================================== --
@@ -172,7 +172,7 @@ local queue_on_tp = queue_on_teleport or (syn and syn.queue_on_teleport) or (flu
 
 local SecWarp = Tab:Section({ Title = "Teleport / Warp World", Box = true, Opened = true })
 SecWarp:Input({ Title = "Nama World", Value = getgenv().TargetWarpWorld, Placeholder = "buy", Callback = function(v) getgenv().TargetWarpWorld = v end })
-SecWarp:Button({ Title = "🚀 Warp Sekarang!", Callback = function() 
+SecWarp:Button({ Title = "🚀 Warp Now!", Callback = function() 
     task.spawn(function()
         local targetWorld = getgenv().TargetWarpWorld
         if not targetWorld or targetWorld == "" then
